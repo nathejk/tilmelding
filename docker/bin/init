@@ -9,10 +9,10 @@ if [ -z "$program" ]; then
 	exit 1
 fi
 
-if ! [ -x "$(command -v $program)" ]; then
-	echo "Error: ${program} is not installed or not executable" >&2
-	exit 1
-fi
+#if ! [ -x "$(command -v $program)" ]; then
+#	echo "Error: ${program} is not installed or not executable" >&2
+#	exit 1
+#fi
 
 echo "Launching ${program}"
 
