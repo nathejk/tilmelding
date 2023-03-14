@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"nathejk.dk/pkg/types"
+	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/table"
 )
 

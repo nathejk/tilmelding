@@ -4,8 +4,8 @@ import (
 	"io"
 	"os"
 
+	"github.com/seaqrs/tablerow"
 	"nathejk.dk/pkg/streaminterface"
-	"nathejk.dk/pkg/tablerow"
 )
 
 type client struct {

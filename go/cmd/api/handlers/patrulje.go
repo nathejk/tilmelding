@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"nathejk.dk/pkg/types"
+	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/table"
 )
 

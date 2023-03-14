@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"nathejk.dk/pkg/types"
+	"github.com/nathejk/shared-go/types"
 )
 
 type FrontpageQueries interface {

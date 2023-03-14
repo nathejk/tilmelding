@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"log"
 
-	"nathejk.dk/pkg/messages"
+	"github.com/nathejk/shared-go/messages"
+	"github.com/nathejk/shared-go/types"
+	"github.com/seaqrs/tablerow"
 	"nathejk.dk/pkg/streaminterface"
-	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/pkg/types"
 
 	_ "embed"
 )

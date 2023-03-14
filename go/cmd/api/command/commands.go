@@ -10,10 +10,10 @@ import (
 	handlebars "github.com/aymerick/raymond"
 	"github.com/google/uuid"
 
-	"nathejk.dk/pkg/messages"
+	"github.com/nathejk/shared-go/messages"
+	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/pkg/notification"
 	"nathejk.dk/pkg/streaminterface"
-	"nathejk.dk/pkg/types"
 	"nathejk.dk/table"
 )
 

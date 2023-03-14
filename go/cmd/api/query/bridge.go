@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"log"
 
-	"nathejk.dk/pkg/types"
+	"github.com/nathejk/shared-go/types"
 )
 
 type bridge struct {

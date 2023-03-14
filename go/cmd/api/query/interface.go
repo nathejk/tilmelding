@@ -1,7 +1,7 @@
 package query
 
 import (
-	"nathejk.dk/pkg/types"
+	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/table"
 )
 

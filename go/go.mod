@@ -13,6 +13,7 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/json-iterator/go v1.1.12
 	github.com/mailru/easyjson v0.7.7
+	github.com/nathejk/shared-go v0.0.0-20230314112811-87321d4b38b8
 	github.com/nats-io/go-nats v1.7.2 // indirect
 	github.com/nats-io/go-nats-streaming v0.4.4 // indirect
 	github.com/nats-io/nats.go v1.13.0
@@ -22,6 +23,7 @@ require (
 	github.com/onsi/gomega v1.18.1 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/rs/cors v1.6.0
+	github.com/seaqrs/tablerow v0.0.0-20230314111529-f294b4ae08ed
 	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
