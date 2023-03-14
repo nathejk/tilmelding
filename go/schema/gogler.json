@@ -1,0 +1,60 @@
+{
+    "$schema": "http://json-schema.org/draft-06/schema#",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "name": {
+            "type": "string",
+            "minLength": 1
+        },
+        "phone": {
+            "type": "string",
+            "pattern": "^[0-9]{8}$"
+        },
+        "email": {
+            "type": "string",
+            "format": "email"
+        },
+        "address": {
+            "type": "string",
+            "minLength": 1
+        },
+        "postalCode": {
+            "type": "string",
+            "pattern": "^[0-9]{4}"
+        },
+        "group": {
+            "type": "string",
+            "minLength": 1
+        },
+        "friday": {
+            "type": "boolean"
+        },
+        "saturday": {
+            "type": "boolean"
+        },
+        "sunday": {
+            "type": "boolean"
+        },
+        "photo": {
+            "type": "boolean"
+        },
+        "comment": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "name",
+        "phone",
+        "email",
+        "address",
+        "postalCode",
+        "group",
+        "friday",
+        "saturday",
+        "sunday",
+        "comment"
+    ],
+    "title": "Gøgler"
+}
+

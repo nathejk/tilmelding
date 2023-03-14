@@ -1,0 +1,32 @@
+{
+  "name": "tilmelding.nathejk.dk",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "serve": "vue-cli-service serve",
+    "build": "vue-cli-service build"
+  },
+  "dependencies": {
+    "@sum.cumo/vue-datepicker": "^4.0.0",
+    "axios": "^0.21.1",
+    "bootstrap": "^4.6.0",
+    "bootstrap-select": "^1.13.5",
+    "handlebars": "^4.7.7",
+    "jquery": "^3.6.0",
+    "v-calendar": "^2.3.0",
+    "vue": "^2.6.0",
+    "vue-ctk-date-time-picker": "^2.5.0",
+    "vue-moment": "^4.1.0",
+    "vue-resource": "^1.5.1",
+    "vue-router": "^3.5.1"
+  },
+  "devDependencies": {
+    "@vue/cli-plugin-babel": "^3.2.0",
+    "@vue/cli-service": "^4.5.12",
+    "babel-polyfill": "^6.26.0",
+    "node-sass": "^5.0",
+    "sass-loader": "^10.1",
+    "vue-template-compiler": "^2.5.20",
+    "webpack": "^4.46.0"
+  }
+}

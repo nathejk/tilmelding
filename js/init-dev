@@ -1,0 +1,17 @@
+#!/bin/sh
+
+echo
+echo "################################"
+echo "# Init node dev environment"
+echo
+
+sh ./generate-config.sh > public/config.js
+
+# python is a dependency of node-gyp that we need to build node-sass https://www.npmjs.com/package/node-gyp
+apk add g++ make python3
+
+npm config set python "$(which python3)"
+npm install -g npm@latest # upgrade npm to latest version, primarily to avoid warnings in the console
+npm install
+npm ci # installs what is specified in package-lock.json
+npm run serve

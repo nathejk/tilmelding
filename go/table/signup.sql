@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS signup (
+    teamType VARCHAR(99) NOT NULL,
+    startDate VARCHAR(99),
+    isOpen TINYINT UNSIGNED NOT NULL DEFAULT false,
+    maxSeatCount TINYINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (teamType)
+);
