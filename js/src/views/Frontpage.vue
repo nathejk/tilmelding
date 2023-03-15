@@ -34,7 +34,7 @@
         <div class="card-body p-0">
             <p class="card-text">
                     <div class="d-flex justify-content-center">
-                   <iframe width="350" height="200"  src="https://www.youtube.com/embed/5XNelia95mM" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe> 
+                   <iframe width="350" height="200"  src="https://www.youtube.com/embed/pb5-Be3IwTA" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe> 
                     </div>
                     <div class="mt-3 alert alert-warning " role="alert">
       <strong>Spørgsmål?</strong> Har I spørgsmål til jeres tilmelding, så skriv til tilmeld@nathejk.dk.
