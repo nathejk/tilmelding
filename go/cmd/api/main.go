@@ -187,7 +187,7 @@ func main() {
 			w.Write([]byte(data))
 		})
 	*/
-	mux.Handle("/*", http.FileServer(http.Dir("/www")))
+	mux.Handle("/*", http.FileServer(SpaFileSystem(http.Dir("/www"))))
 	//mux.Handle("/gøgler", http.FileServer(http.Dir("/www")))
 	//mux.HandleFunc("/gøgler", IndexHandler("/www/index.html"))
 	//	mux.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
