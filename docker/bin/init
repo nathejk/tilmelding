@@ -1,0 +1,20 @@
+#!/bin/bash
+
+program="${1:-}"
+
+echo execute "$program"
+
+if [ -z "$program" ]; then
+	>&2	echo "Error: expected <program> to be present"
+	exit 1
+fi
+
+#if ! [ -x "$(command -v $program)" ]; then
+#	echo "Error: ${program} is not installed or not executable" >&2
+#	exit 1
+#fi
+
+echo "Launching ${program}"
+
+$program
+echo "${program} Terminated with $?"

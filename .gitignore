@@ -1,0 +1,5 @@
+.DS_Store
+/docker-compose.override.yml
+/attic/
+node_modules/
+web/ui/public/config.js

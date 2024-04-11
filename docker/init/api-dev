@@ -1,0 +1,51 @@
+#!/bin/bash
+
+##
+# @param integer pid to kill
+killpid () {
+    local pid=$1
+    echo "killpid($pid) called"
+    [ "$pid" == "" ] && return
+
+    cpid=$(pgrep -P $pid)
+    if [ "$?" == "0" ]; then
+        while [ -n "$(ps -p $cpid -o pid=)" ]; do
+            echo "Killing child: $cpid"
+            kill -s SIGINT $cpid
+            sleep 1
+        done
+        echo "Child $cpid killed!"
+    fi
+    while [ -n "$(ps -p $pid -o pid=)" ]; do
+        echo "Killing parent: $pid"
+        kill $pid
+        sleep 1
+    done
+    echo "Parent $pid killed!"
+}
+
+program="${1:-}"
+if [ -z "$program" ]; then
+	>&2	echo "Error: expected <program> to execute" 
+	exit 1
+fi
+
+echo $program
+cd /app
+
+while true; do
+    go get -v -d ./... && \
+    go test -timeout 10s ./... && \
+    staticcheck ./... && \
+	go build ./...
+
+    if [ "$?" == "0" ]; then
+        go run $GO_BUILD_FLAGS nathejk.dk/cmd/${program} &
+        pid=$!
+        echo "New pid: $pid"
+    fi
+
+	inotifywait -r --exclude "[^\.(go|sql)]$" --event modify,create,delete,move  ./ || exit 1
+
+    killpid $pid
+done

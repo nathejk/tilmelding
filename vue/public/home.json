@@ -1,0 +1,21 @@
+{
+    "config": {
+        "timeCountdown": "2024-05-02T18:24:00Z",
+        "timeNow": "",
+        "videos": [
+            "/video/anne.mov",
+            "/video/caroline.mov",
+            "/video/jakob.mov",
+            "/video/karsten.mov",
+            "/video/klaus.mov",
+            "/video/michael.mov",
+            "/video/niels.mov",
+            "/video/nj.mov",
+            "/video/pia.mov",
+            "/video/sabrina.mov",
+            "/video/sanne.mov",
+            "/video/signe.mov"
+        ]
+    }
+}
+

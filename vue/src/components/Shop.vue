@@ -1,0 +1,16 @@
+<script setup>
+</script>
+
+<template>
+    <Fieldset class="mt-3" legend="Merchandise">
+        <div class="grid grid-flow-col auto-cols-auto">
+            <div>
+                <p class="m-0">Vi sælger vores fulde sortiment af merchandise om søndagen på selve Nathejk, men hvis I vil have den helt særlige og eksklusive <span class="font-bold">års t-shirt</span> med et særligt tryk på ryggen som relaterer til årets Nathejk så har I kun chancen online. <span class="font-bold">Års t-shirten</span> skal bestilles og betales her inden August måned, hvorefter den vil blive produceret og udleveret sammen med det øvrige salg af merchandise om søndagen på Nathejk,</p>
+            </div>
+            <Image src="/tshirt.jpg" alt="t-shirt" width="250" preview />
+        </div>
+    </Fieldset>
+</template>
+
+<style scoped>
+</style>

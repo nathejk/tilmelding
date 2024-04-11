@@ -1,0 +1,31 @@
+{
+    "config": {
+        "minMemberCount": 3,
+        "maxMemberCount": 7,
+        "memberPrice": 200,
+        "tshirtPrice": 175,
+        "korps": [
+            {"slug":"dds", "label": "Det Danske Spejderkorps"},
+            {"slug":"kfum", "label": "KFUM-Spejderne"},
+            {"slug":"kfuk", "label": "De grønne pigespejdere"}
+        ],
+        "tshirtsizes": [
+            {"slug":"", "label": "Ingen"},
+            {"slug":"XS", "label": "X-Small"},
+            {"slug":"S", "label": "Small"},
+            {"slug":"M", "label": "Medium"},
+            {"slug":"L", "label": "Large"},
+            {"slug":"XL", "label": "X-Large"},
+            {"slug":"XXL", "label": "XX-Large"}
+        ]
+    },
+    "team": {},
+    "contact": {},
+    "members": [
+        {"id":"111-111-111", "name": "Anders And", "address": "Paradisæblevej 3", "postal": "1313 Andeby", "phone":"+45 12345678", "phoneContact": "+45 11223344", "email":"a.and@andeby.dk", "birthday": "2012-01-01", "tshirtsize": "L", "tshirtcount": 1},
+        {"id":"111-111-222", "name": "Fætter Højben", "address": "Paradisæblevej 3", "postal": "1313 Andeby", "phone":"+45 12345678", "phoneContact": "+45 11223344", "email":"a.and@andeby.dk", "birthday": "2012-01-01", "tshirtsize": "L", "tshirtcount": 1}
+    ],
+    "payments": [
+        { "text": "Mobilepay (+45 ×× ×× 38 86)", "date": "15. Maj 2024", "amount": 600 }
+    ]
+}
