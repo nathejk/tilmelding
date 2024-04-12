@@ -24,7 +24,7 @@ services:
     environment:
       DEBUG: "true"
       NODE_ENV: development
-      API_BASEURL: http://tilmeld.dev.nathejk.dk
+      API_BASEURL: http://api.tilmelding.dev.nathejk.dk
     volumes:
     - ./vue:/app
     - ui-node_modules:/app/node_modules
@@ -39,7 +39,11 @@ services:
     environment:
       DB_DSN_RW: bruger:kodeord@tcp(db:3306)/tilmelding?parseTime=true
       #MONOLITH_DB_DSN_RW: root:ib@tcp(dev.nathejk.dk:3306)/nathejk2018?parseTime=true
-      COUNTDOWN: "2023-05-02 20:23:00"
+      COUNTDOWN: "2024-05-02T18:24:00Z"
+      COUNTDOWN_VIDEOS: |
+        /videos/klaus.mov
+        /videos/niels.mov
+        /videos/nj.mov
       #SENIOR_COUNT: 125
       #GO_BUILD_FLAGS: -race
       STAN_DSN: stan://dev.nathejk.dk:4222/nathejk

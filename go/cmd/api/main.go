@@ -19,8 +19,12 @@ var (
 
 // Define a config struct to hold all the configuration settings for our application.
 type config struct {
-	port    int
-	webroot string
+	port      int
+	webroot   string
+	countdown struct {
+		time   string
+		videos []string
+	}
 }
 
 type application struct {
@@ -34,8 +38,10 @@ func main() {
 	var cfg config
 
 	flag.IntVar(&cfg.port, "port", 80, "API server port")
-
 	flag.StringVar(&cfg.webroot, "webroot", getEnv("WEBROOT", "/www"), "Static web root")
+
+	flag.StringVar(&cfg.countdown.time, "countdown", getEnv("COUNTDOWN", ""), "Time for countdown")
+	cfg.countdown.videos = getEnvAsSlice("COUNTDOWN_VIDEOS", []string{}, "\n")
 
 	flag.Parse()
 

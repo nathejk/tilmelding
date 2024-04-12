@@ -13,6 +13,8 @@ func (app *application) routes() http.Handler {
 
 	router.NotFound = http.HandlerFunc(app.NotFoundResponse)
 	router.MethodNotAllowed = http.HandlerFunc(app.MethodNotAllowedResponse)
+
+	router.HandlerFunc(http.MethodGet, "/api/home", app.homeHandler)
 	/*
 		router.HandlerFunc(http.MethodPut, "/api/*filepath", app.cleo.ProxyHandler)
 		router.HandlerFunc(http.MethodGet, "/api/*filepath", app.cleo.ProxyHandler)

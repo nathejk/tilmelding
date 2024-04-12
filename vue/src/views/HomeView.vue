@@ -8,7 +8,7 @@ const videoplayer = ref(null);
 
 async function loadConfig() {
     try {
-        const response = await fetch("/home.json");
+        const response = await fetch("/api/home");
         if (!response.ok) {
             throw new Error("HTTP status " + response.status);
         }

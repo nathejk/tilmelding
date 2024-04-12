@@ -43,8 +43,7 @@ func getEnvAsBool(name string, defaultVal bool) bool {
 //
 //lint:ignore U1000 We will be using this function in the future
 func getEnvAsSlice(name string, defaultVal []string, sep string) []string {
-	valStr := getEnv(name, "")
-
+	valStr := strings.TrimSpace(getEnv(name, ""))
 	if valStr == "" {
 		return defaultVal
 	}
