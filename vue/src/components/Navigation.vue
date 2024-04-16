@@ -23,7 +23,7 @@ const items = ref([]);
 <template>
 
   <div class="card">
-        <Menubar :model="items">
+        <Menubar :model="items" class="rounded-none">
             <template #start>
                 <RouterLink to="/"><i class="pi pi-moon text-yellow-400 rotate-75" style="font-size: 2rem"></i><span class="font-nathejk text-slate-100 text-xl">NATHEJK</span></RouterLink>
             </template>
