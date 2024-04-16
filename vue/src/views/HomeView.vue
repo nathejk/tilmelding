@@ -58,7 +58,7 @@ function download(url) {
   <main class="">
     <div class="bg-slate-900">
       <div class="container mx-auto relative aspect-video">
-        <video ref="videoplayer" autoplay muted clas="transition fading"></video>
+        <video playsinline autoplay muted ref="videoplayer" />
         <Countdown class="absolute inset-0 text-slate-200 p-10 text-xl" :time="config.timeCountdown" v-slot="{days, hours, minutes, seconds}">
             Vi vågner om
             <span v-if="days"><span class="inline-block w-8 text-right">{{ days }}</span> dage</span>
@@ -79,13 +79,13 @@ function download(url) {
             <template #title>Patruljer <small class="font-thin pl-2">12-16 år</small></template>
             <template #content>
               <ul class="list-disc mx-5 mb-5">
-                <li>Der skal være minimum 3 deltagere på holdet - og max 7</li>
+                <li>Der skal være minimum 3 deltagere på holdet - og max 7.</li>
                 <li>Ingen er under 12 år.</li>
                 <li>Ingen er fyldt 17 år.</li>
                 <li>Holdets gennemsnitsalder skal være mindst 13 år.</li>
+                <li>Prisen for deltagelse er 200 kroner per spejder.</li>
                 <li>Tilmelding er først gældende, når beløbet er registreret på Nathejks konto.</li>
               </ul>
-              <p>Pris 200 kroner per spejder.</p>
             </template>
           </Card>
 
@@ -130,14 +130,15 @@ function download(url) {
       <div class="container mx-auto py-5">
         <h1 class="mb-5 font-nathejk font-bold text-5xl text-yellow-500">TILMELDINGSPROCEDURE</h1>
         <div class="text-2xl text-slate-300 leading-loose">
-          <p>Tilmeldingen består af 4 trin</p>
-        <Card class="bg-slate-500">
+          <p>Tilmeldingen består af 5 trin</p>
+        <Card class="bg-slate-600">
           <template #content>
           <ol class="list-decimal text-yellow-500 ml-10">
             <li><span class="text-slate-300 pl-5">Indtast e-mailadresse og klik på link i tilsendt e-mail</span></li>
             <li><span class="text-slate-300 pl-5">Indtast telefonnummer og modtga en PIN-kode</span></li>
             <li><span class="text-slate-300 pl-5">Indtast patruljenavn, spejdergruppe, kontaktperson og ønskede antal deltagere</span></li>
             <li><span class="text-slate-300 pl-5">Gennemfør betaling via MobilePay</span></li>
+            <li><span class="text-slate-300 pl-5">Når betalingen er registreret modtager i en bekræftigelsesmail herom.</span></li>
           </ol>
           </template>
         </Card>
