@@ -74,8 +74,8 @@ function download(url) {
       <div class="container mx-auto py-5">
         <h1 class="mb-5 font-nathejk font-bold text-5xl text-slate-700">REGLER</h1>
 
-        <div class="grid grid-cols-2">
-          <Card class="col mr-5 bg-yellow-400">
+        <div class="grid md:grid-cols-2 gap-10 grid-cols-1">
+          <Card class="col bg-yellow-400">
             <template #title>Patruljer <small class="font-thin pl-2">12-16 år</small></template>
             <template #content>
               <ul class="list-disc mx-5 mb-5">
@@ -89,7 +89,7 @@ function download(url) {
             </template>
           </Card>
 
-          <Card class=" col ml-5 bg-yellow-400">
+          <Card class="col bg-yellow-400">
             <template #title>Seniorer <small class="font-thin pl-2">+15 år</small></template>
             <template #content>
               <ul class="list-disc mx-5">
@@ -148,7 +148,7 @@ function download(url) {
 
   </main>
   <footer class="bg-slate-900 text-slate-100 font-nathejk text-3xl text-center uppercase">
-      <div class="p-52">Vi ses i mørket...</div>
+      <div class="py-52">Vi ses i mørket...</div>
   </footer>
 
 </template>
