@@ -51,6 +51,10 @@ function download(url) {
       link.click();
       document.body.removeChild(link);
     }
+
+function link(url) {
+    window.location.href=url
+}
 </script>
 
 <template>
@@ -60,12 +64,25 @@ function download(url) {
       <div class="container mx-auto relative aspect-video">
         <video playsinline autoplay muted ref="videoplayer" />
         <Countdown class="absolute inset-0 text-slate-200 p-10 text-xl" :time="config.timeCountdown" v-slot="{days, hours, minutes, seconds}">
+        <div v-if="days+hours+minutes+seconds <= 0">
+
+            <div class="flex justify-around ">
+              <div class="self-center">
+                  <Button label="Tilmeld spejderpatrulje"  size="large" severity="warning" @click="link('/indskrivning/patrulje')" />
+              </div>
+              <div class="self-center">
+                  <Button label="Tilmeld seniorklan"  size="large" severity="warning" @click="link('/indskrivning/klan')" />
+              </div>
+            </div>
+        </div>
+        <div v-else>
             Vi vågner om
             <span v-if="days"><span class="inline-block w-8 text-right">{{ days }}</span> dage</span>
             <span v-if="days || hours"><span class="inline-block w-8 text-right">{{ hours }}</span> timer</span>
             <span class="inline-block w-8 text-right">{{ minutes }}</span> minutter og
             <span class="inline-block w-8 text-right">{{ seconds }}</span> sekunder
             og åbner tilmeldingen.
+        </div>
         </Countdown>
       </div>
     </div>

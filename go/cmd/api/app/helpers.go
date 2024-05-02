@@ -24,6 +24,9 @@ func (app *JsonApi) ReadIDParam(r *http.Request) (int64, error) {
 	}
 	return id, nil
 }
+func (app *JsonApi) ReadNamedParam(r *http.Request, param string) string {
+	return httprouter.ParamsFromContext(r.Context()).ByName(param)
+}
 
 // Define an envelope type.
 type Envelope map[string]any
@@ -54,7 +57,7 @@ func (app *JsonApi) ReadJSON(w http.ResponseWriter, r *http.Request, dst any) er
 	// field which cannot be mapped to the target destination, the decoder will return
 	// an error instead of just ignoring the field.
 	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
+	//dec.DisallowUnknownFields()
 
 	// Decode the request body into the target destination.
 	err := dec.Decode(dst)

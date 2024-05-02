@@ -32,7 +32,6 @@ const contact = ref({});
 const members = ref(new List());
 const tshirtCount = computed(() => members.value.filter(v => !v.deleted && v.tshirtSize && v.tshirtSize != "").length)
 const expenses = computed(() => {
-console.log('tshort', tshirtCount.value*config.value.tshirtPrice, tshirtCount, config.value.tshirtPrice)
   return new List(
     { "text": "Deltagere", "count": members.value.length, "unitPrice": config.value.memberPrice, "amount": members.value.length*config.value.memberPrice },
     { "text": "Års t-shirt", "count": tshirtCount, "unitPrice": config.value.tshirtPrice, "amount": tshirtCount.value*config.value.tshirtPrice }
@@ -43,14 +42,13 @@ const payableAmount = computed(() => Math.max(0, expenses.value.sum('amount') - 
 
 onMounted(async () => {
   try {
-    const response = await fetch("/api/patrulje/" + props.teamId);
+    const response = await fetch("/api/klan/" + props.teamId);
     if (!response.ok) {
         throw new Error("HTTP status " + response.status);
     }
     const data = await response.json();
     config.value = data.config
     team.value = data.team
-    contact.value = data.contact
     members.value = new List(...data.members);
     payments.value = new List(...data.payments);
 
@@ -68,57 +66,6 @@ const deleteMemberDialog = ref(false);
 const paymentDialog = ref(false);
 const teamSubmitted = ref(false);
 const memberSubmitted = ref(false);
-
-const confirmDeleteMember = (prod) => {
-    member.value = prod;
-    deleteMemberDialog.value = true;
-};
-const editMember = (prod) => {
-    member.value = {...prod};
-    memberDialog.value = true;
-};
-const openNew = () => {
-    member.value = {};
-    memberSubmitted.value = false;
-    memberDialog.value = true;
-};
-const hideDialog = () => {
-    memberDialog.value = false;
-    memberSubmitted.value = false;
-};
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-const save = async () => {
-    const headers = {
-        "Content-Type": "application/json",
-    }
-    try {
-        const body = JSON.stringify({
-            team: team.value,
-            contact: contact.value,
-            members: members.value,
-        })
-        console.log('body', body)
-        const response = await fetch("/api/patrulje/" + props.teamId, { method: 'PUT', body: body, headers: headers });
-        if (!response.ok) {
-            throw new Error("HTTP status " + response.status);
-        }
-        const data = await response.json();
-        contact.value = data.team
-        //router.replace({ name: 'indskrivning', params: { id: data.teamId } })
-        //router.replace({ path: '/indskrivning/'+ data.team.teamId  })
-
-    paymentDialog.value = true;
-        //const vendor = data.content
-        //next()
-    } catch (error) {
-        console.log("team signup failed", error);
-    }
-    //isLoading.value=true
-    //await sleep(2000)
-    //isLoading.value=false
-    //paymentDialog.value = true;
-}
 
 const mobilepay = ref('');
 const pay = async () => {
@@ -151,6 +98,63 @@ const pay = async () => {
     }
 }
 
+const confirmDeleteMember = (prod) => {
+    member.value = prod;
+    deleteMemberDialog.value = true;
+};
+const editMember = (prod) => {
+    member.value = {...prod};
+    memberDialog.value = true;
+};
+const openNew = () => {
+    member.value = {};
+    memberSubmitted.value = false;
+    memberDialog.value = true;
+};
+const hideDialog = () => {
+    memberDialog.value = false;
+    memberSubmitted.value = false;
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+const save = async () => {
+    const headers = {
+        "Content-Type": "application/json",
+    }
+    try {
+        team.value.memberCount = Math.floor(team.value.memberCount);
+        team.value.diet = team.value.vegitarian ? 'vegetar' : '';
+        const body = JSON.stringify({
+            team: team.value,
+            contact: contact.value,
+            members: members.value,
+        })
+        console.log('body', body)
+        const response = await fetch("/api/klan/" + props.teamId, { method: 'PUT', body: body, headers: headers });
+        if (!response.ok) {
+            throw new Error("HTTP status " + response.status);
+        }
+        const data = await response.json();
+        contact.value = data.team
+        //router.replace({ name: 'indskrivning', params: { id: data.teamId } })
+        //router.replace({ path: '/indskrivning/'+ data.team.teamId  })
+
+        if (data.team.status =="HOLD") {
+            router.push({ name: 'onhold' })
+        }
+
+    paymentDialog.value = true;
+        //const vendor = data.content
+        //next()
+    } catch (error) {
+        console.log("team signup failed", error);
+    }
+    //isLoading.value=true
+    //await sleep(2000)
+    //isLoading.value=false
+    //paymentDialog.value = true;
+}
+
 const saveMember = () => {
     memberSubmitted.value = true;
 
@@ -170,6 +174,7 @@ const saveMember = () => {
     memberDialog.value = false;
     member.value = { name: '' };
 };
+const initialSignup = computed(() => members.value.length == 0)
 const activeMembers = computed(() => members.value.filter(i => !i.deleted))
 const deleteMember = () => {
     //members.value = members.value.filter(val => val.id !== member.value.id);
@@ -212,15 +217,14 @@ const tshirtSizeLabel = slug => {
 
     <div class="container mx-auto">
         <div class="grid grid-cols-2 gap-4">
-        <Fieldset class="mt-3" legend="Patruljeoplysninger">
-            <p class="m-0">Spejderpatruljen skal bestå af mellem 3 og 7 spejdere, Når I tilmelder patruljen skal i derfor mindst tilmelde 3 spejdere, I kan når som helst eftertilmelde ekstra spejdere sålænge patruljen ikke overstiger 7 spejdere.</p>
+        <Fieldset class="mt-3" legend="Klanoplysninger">
+            <p class="m-0">Klanen skal bestå af mellem {{ config.minMemberCount }} og {{ config.maxMemberCount }} seniore.</p>
             <div class="flex flex-col">
                 <FloatLabel class="mt-7">
                     <InputText id="team-name" v-model.trim="team.name" size="small" class="w-full" required="true" autofocus :invalid="teamSubmitted && !team.name" />
-                    <label for="team-name">Patruljenavn</label>
+                    <label for="team-name">Klannavn</label>
                 </FloatLabel>
                 <small class="p-error mb-2" v-if="teamSubmitted && !team.name">Patruljenavn skal indtastes.</small>
-                <!--small id="member-help">Enter your username to reset your password.</small-->
             </div>
             <div class="flex flex-col">
                 <FloatLabel class="mt-7">
@@ -236,62 +240,36 @@ const tshirtSizeLabel = slug => {
                     <label for="team-korps">Spejderkorps</label>
                 </FloatLabel>
             </div>
-            <div class="flex flex-col">
-                <FloatLabel class="mt-7">
-                    <InputText id="team-liga" v-model.trim="team.liga" size="small" class="w-full" />
-                    <label for="team-liga">Adventurespejdliga nummer</label>
-                </FloatLabel>
-                <small id="team-liga-help">Læs mere om LigaID og tilmeld jer Adventurespejdligaen her: <a href="">adventurespejd.dk</a>.</small>
+            <div class="flex flex-col" v-if="initialSignup">
+                <label class="mt-2">Antal seniore i klanen:</label>
+                <div class="flex flex-wrap gap-3">
+                    <div class="flex items-center">
+                        <RadioButton v-model="team.memberCount" inputId="memberCount-1" name="memberCount" value="1" />
+                        <label for="memberCount-1" class="ml-2">1</label>
+                    </div>
+                    <div class="flex items-center">
+                        <RadioButton v-model="team.memberCount" inputId="memberCount-2" name="memberCount" value="2" />
+                        <label for="memberCount-2" class="ml-2">2</label>
+                    </div>
+                    <div class="flex items-center">
+                        <RadioButton v-model="team.memberCount" inputId="memberCount-3" name="memberCount" value="3" />
+                        <label for="memberCount-3" class="ml-2">3</label>
+                    </div>
+                    <div class="flex items-center">
+                        <RadioButton v-model="team.memberCount" inputId="memberCount-4" name="memberCount" value="4" />
+                        <label for="memberCount-4" class="ml-2">4</label>
+                    </div>
+                </div>
             </div>
         </Fieldset>
-
-        <Fieldset class="mt-3" legend="Kontaktperson">
-            <p class="m-0">Kontaktpersonen er meget vigtig og skal være en person, som kender patruljen godt (fx tropslederen). Nathejks team skal kunne få fat i kontaktpersonen undervejs på løbet, hvis situationen kræver det.</p>
-            <div class="flex flex-col">
-                <FloatLabel class="mt-7">
-                    <InputText id="contact-name" v-model.trim="contact.name" size="small" class="w-full" required="true" :class="{'p-invalid': teamSubmitted && !contact.name}" />
-                    <label for="team-name">Navn</label>
-                </FloatLabel>
-                <small class="p-error mb-2" v-if="teamSubmitted && !contact.name">Kontaktperson skal indtastes.</small>
-                <!--small id="member-help">Enter your username to reset your password.</small-->
-            </div>
-            <div v-if="false" class="flex flex-col">
-                <FloatLabel class="mt-7" >
-                    <InputText id="contact-address" v-model.trim="contact.address" size="small" class="w-full" />
-                    <label for="contact-address">Adresse</label>
-                </FloatLabel>
-            </div>
-            <div v-if="false" class="flex flex-col">
-                <FloatLabel class="mt-7" >
-                    <InputText id="contact-postal" v-model.trim="contact.postal" size="small" class="w-full" />
-                    <label for="contact-postal">Postnummer og by</label>
-                </FloatLabel>
-            </div>
-            <div class="flex flex-col">
-                <FloatLabel class="mt-7" >
-                    <InputText id="contact-phone" v-model.trim="contact.phone" size="small" class="w-full" />
-                    <label for="contact-phone">Telefonnummer</label>
-                </FloatLabel>
-            </div>
-            <div class="flex flex-col">
-                <FloatLabel class="mt-7" >
-                    <InputText id="contact-email" v-model.trim="contact.email" size="small" class="w-full" />
-                    <label for="contact-email">E-mail</label>
-                </FloatLabel>
-            </div>
-            <div class="flex flex-col">
-                <FloatLabel class="mt-7" >
-                    <InputText id="contact-role" v-model.trim="contact.role" size="small" class="w-full" />
-                    <label for="contact-role">Rolle i forhold til patruljen</label>
-                </FloatLabel>
-            </div>
-
-        </Fieldset>
+        <div v-if="initialSignup" class="mx-auto flex items-center ">
+            <Button label="Tilmeld" icon="pi pi-arrow-right" iconPos="right" size="large" @click="save" />
+        </div>
         </div>
 
-        <Shop /> 
+        <Shop v-if="!initialSignup" /> 
 
-<Fieldset class="mt-3" legend="Spejdere">
+<Fieldset class="mt-3" legend="Spejdere" v-if="!initialSignup">
     <div class="card">
         <DataTable :value="activeMembers" size="small" tableStyle="min-width: 50rem">
             <Column field="name" header="Navn">
@@ -334,7 +312,7 @@ const tshirtSizeLabel = slug => {
         </DataTable>
     </div>
 </Fieldset>
-<Fieldset class="mt-3" legend="Betalinger">
+<Fieldset class="mt-3" legend="Betalinger" v-if="!initialSignup">
     <div class="card">
         <div class="grid grid-cols-6 gap-4">
           <div class="col-start-4 text-center">Antal</div><div class="text-center">Pris</div><div class="text-center">Total</div>
@@ -356,7 +334,7 @@ const tshirtSizeLabel = slug => {
     </div>
 </Fieldset>
 
-    <div class="card flex justify-end">
+    <div class="card flex justify-end" v-if="!initialSignup">
 
 <Button class="my-5" :label="payableAmount ? 'Gem ændringer og betal' : 'Gem ændringer'" @click="save" />
 
@@ -372,7 +350,7 @@ const tshirtSizeLabel = slug => {
             <small class="p-error mb-2" v-if="memberSubmitted && !member.name">Navn skal udfyldes.</small>
             <!--small id="member-help">Enter your username to reset your password.</small-->
         </div>
-        <div class="flex flex-col">
+        <div class="flex flex-col"> 
             <FloatLabel class="mt-7">
                 <InputText id="member-address" v-model="member.address" size="small" class="w-full" />
                 <label for="member-address">Adresse</label>
@@ -399,10 +377,9 @@ const tshirtSizeLabel = slug => {
         </div>
         <div class="flex flex-col">
             <FloatLabel class="mt-7">
-                <InputText id="member-phoneContact" v-model="member.phoneContact" size="small" class="w-full" />
-                <label for="member-phoneContact">Telefonnummer på pårørende</label>
+                <InputSwitch id="member-diet" v-model="member.vegitarian" class="filled" />
+                <label for="member-diet">Ønsker vegetarmad</label>
             </FloatLabel>
-            <small id="member-phoneContact-help" class="text-slate-400">Nathejk skal kunne kontakte dette nummer undervejs på løbet, hvis situationen kræver det.</small>
         </div>
         <div class="flex flex-col">
             <FloatLabel class="mt-7">
@@ -441,10 +418,10 @@ const tshirtSizeLabel = slug => {
                     <InputGroupAddon>+45</InputGroupAddon>
                     <InputText size="small" placeholder="Telefonnummer" v-model="mobilepay" />
                 </InputGroup>
-                <Message severity="warn" :closable="false">registrering af indbetalinger sker manuelt.</Message>
+                <Message severity="warn" :closable="false">registrering af indbetalinger sker manuelt, der kan derfor gå noget tid inden betalingen er registreret.</Message>
             </div>
             <template #footer>
-                <Button label="Send betalingslink" icon="pi pi-mobile" text @click="deleteMember" />
+                <Button label="Send betalingslink" icon="pi pi-mobile" text @click="pay" />
             </template>
         </Dialog>
 

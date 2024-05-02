@@ -1,0 +1,30 @@
+{{define "subject"}}Bekræft e-mailadresse{{end}}
+
+{{define "plainBody"}}
+Hej,
+
+Du har netop påbegyndt en tilmelding til Nathejk, for at bekræfte din e-mailadresse
+skal du klikke på følgende link:
+
+https://tilmelding.nathejk.dk/confirm/{{.secret}}
+
+Vi ses i mørket...
+Nathejk
+{{end}}
+
+{{define "htmlBody"}}
+<!doctype html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+</head>
+<body>
+    <p>Hej,</p>
+    <p>Du har netop påbegyndt en tilmelding til Nathejk, for at bekræfte din e-mailadresse skal du klikke på følgende link:</p>
+    <p><a href="https://tilmelding.nathejk.dk/confirm/{{.secret}}">Bekræft</a></p>
+    <p>Vi ses i mørket...<br>Nathejk</p>
+</body>
+</html>
+{{end}}
+
