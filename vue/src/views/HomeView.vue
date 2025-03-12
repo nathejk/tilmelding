@@ -100,7 +100,7 @@ function link(url) {
                 <li>Ingen er under 12 år.</li>
                 <li>Ingen er fyldt 17 år.</li>
                 <li>Holdets gennemsnitsalder skal være mindst 13 år.</li>
-                <li>Prisen for deltagelse er 200 kroner per spejder.</li>
+                <li>Prisen for deltagelse er 250 kroner per spejder.</li>
                 <li>Tilmelding er først gældende, når beløbet er registreret på Nathejks konto.</li>
               </ul>
             </template>
@@ -131,11 +131,11 @@ function link(url) {
           <template #content>
             <div class="flex justify-around ">
               <div class="self-center">
-                  <Button label="Hent spejderinvitation" icon="pi pi-download" size="large" severity="warning" @click="download('/invitation/Patruljeinvitation_Nathejk2024.pdf')" />
+                  <Button label="Hent spejderinvitation" icon="pi pi-download" size="large" severity="warning" @click="download('/invitation/Patruljeinvitation2025.pdf')" />
               </div>
-              <Image src="/invitation/Invitationer2024_collage.png" alt="" />
+              <Image src="/invitation/collage2025.png" alt="" />
               <div class="self-center">
-                  <Button label="Hent seniorinvitation" icon="pi pi-download" size="large" severity="warning" @click="download('/invitation/Seniorinvitation_Nathejk2024.pdf')" />
+                  <Button label="Hent seniorinvitation" icon="pi pi-download" size="large" severity="warning" @click="download('/invitation/Seniorinvitation2025.pdf')" />
               </div>
             </div>
           </template>
