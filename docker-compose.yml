@@ -51,6 +51,7 @@ services:
       DB_DSN: bruger:kodeord@tcp(db:3306)/tilmelding?parseTime=true
       SMS_DSN: cpsms://TOKEN@api.cpsms.dk
       #MONOLITH_DB_DSN_RW: root:ib@tcp(dev.nathejk.dk:3306)/nathejk2018?parseTime=true
+      BASEURL: http://tilmelding.dev.nathejk.dk
       COUNTDOWN: "2024-05-02T18:24:00Z"
       COUNTDOWN_VIDEOS: |
         https://nathejk-countdown.s3.eu-central-1.amazonaws.com/videos/anne.mov
