@@ -187,8 +187,9 @@ func (app *application) signupHandler(w http.ResponseWriter, r *http.Request) {
 
 	app.Background(func() {
 		data := map[string]any{
-			"team":   team,
-			"secret": uuid.New().String(),
+			"team":    team,
+			"secret":  uuid.New().String(),
+			"baseurl": app.config.baseurl,
 		}
 
 		err := app.mailer.Send(string(input.EmailPending), "verify_email.tmpl", data)
