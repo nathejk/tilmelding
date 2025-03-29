@@ -1,8 +1,11 @@
-version: '3.4'
-
 volumes:
   ui-node_modules:
   api:
+
+networks:
+  local:
+  traefik:
+    external: true
 
 services:
   gw:
@@ -11,10 +14,15 @@ services:
     environment:
       PROXY_MAPPINGS: >
         mail:8025
-        tilmeld:ui
+        tilmelding:ui
         sql:phpmyadmin
-    ports:
-    - 80
+    networks:
+    - local
+    - traefik
+    labels:
+      traefik.enable: true
+      traefik.docker.network: traefik
+      traefik.http.routers.tilmelding.rule: Host(`tilmelding.dev.nathejk.dk`) || HostRegexp(`.+\.tilmelding\.dev\.nathejk\.dk`)
 
   ui:
     build:
@@ -30,6 +38,8 @@ services:
     - ui-node_modules:/app/node_modules
     depends_on:
     - gw
+    networks:
+    - local
 
   api:
     build:
@@ -65,6 +75,8 @@ services:
     depends_on:
     - gw
     - db
+    networks:
+    - local
 
   db:
     image: mariadb:10.8
@@ -74,6 +86,8 @@ services:
       MYSQL_USER: bruger
       MYSQL_PASSWORD: kodeord
       TZ: Europe/Copenhagen
+    networks:
+    - local
 
   phpmyadmin:
     image: phpmyadmin
@@ -84,8 +98,12 @@ services:
       PMA_PASSWORD: kodeord
     depends_on:
     - gw
+    networks:
+    - local
 
   mail:
     image: mailhog/mailhog:v1.0.1
     platform: linux/x86_64
     restart: unless-stopped
+    networks:
+    - local
