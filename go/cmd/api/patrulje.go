@@ -74,7 +74,7 @@ func (app *application) showPatruljeHandler(w http.ResponseWriter, r *http.Reque
 	config := TeamConfig{
 		MinMemberCount: 3,
 		MaxMemberCount: 7,
-		MemberPrice:    200,
+		MemberPrice:    250,
 		TShirtPrice:    175,
 		Korps:          Korps(),
 		TShirtSizes:    TShirtSizes(),
