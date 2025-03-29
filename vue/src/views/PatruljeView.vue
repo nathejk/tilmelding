@@ -387,7 +387,7 @@ const tshirtSizeLabel = slug => {
         <div class="flex flex-col">
             <FloatLabel class="mt-7">
                 <InputText type="email" id="member-email" v-model="member.email" size="small" class="w-full" />
-                <label for="member-email">E-mail address</label>
+                <label for="member-email">E-mail adresse</label>
             </FloatLabel>
         </div>
         <div class="flex flex-col">
@@ -418,8 +418,8 @@ const tshirtSizeLabel = slug => {
         </div>
 
         <template #footer>
-            <Button label="Cancel" icon="pi pi-times" text @click="hideDialog"/>
-            <Button label="Save" icon="pi pi-check" text @click="saveMember" />
+            <Button label="Afbryd" icon="pi pi-times" text @click="hideDialog"/>
+            <Button label="Gem" icon="pi pi-check" text @click="saveMember" />
         </template>
     </Dialog>
 
