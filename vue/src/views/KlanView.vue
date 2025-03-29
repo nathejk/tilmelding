@@ -218,13 +218,13 @@ const tshirtSizeLabel = slug => {
     <div class="container mx-auto">
         <div class="grid grid-cols-2 gap-4">
         <Fieldset class="mt-3" legend="Klanoplysninger">
-            <p class="m-0">Klanen skal bestå af mellem {{ config.minMemberCount }} og {{ config.maxMemberCount }} seniore.</p>
+            <p class="m-0">Klanen skal bestå af mellem {{ config.minMemberCount }} og {{ config.maxMemberCount }} banditter.</p>
             <div class="flex flex-col">
                 <FloatLabel class="mt-7">
                     <InputText id="team-name" v-model.trim="team.name" size="small" class="w-full" required="true" autofocus :invalid="teamSubmitted && !team.name" />
                     <label for="team-name">Klannavn</label>
                 </FloatLabel>
-                <small class="p-error mb-2" v-if="teamSubmitted && !team.name">Patruljenavn skal indtastes.</small>
+                <small class="p-error mb-2" v-if="teamSubmitted && !team.name">Klannavn skal indtastes.</small>
             </div>
             <div class="flex flex-col">
                 <FloatLabel class="mt-7">
@@ -241,7 +241,7 @@ const tshirtSizeLabel = slug => {
                 </FloatLabel>
             </div>
             <div class="flex flex-col" v-if="initialSignup">
-                <label class="mt-2">Antal seniore i klanen:</label>
+                <label class="mt-2">Antal banditter i klanen:</label>
                 <div class="flex flex-wrap gap-3">
                     <div class="flex items-center">
                         <RadioButton v-model="team.memberCount" inputId="memberCount-1" name="memberCount" value="1" />
@@ -341,7 +341,7 @@ const tshirtSizeLabel = slug => {
     </div>
     </div>
 
-    <Dialog v-model:visible="memberDialog" :style="{width: '450px'}" header="Spejder" :modal="true">
+    <Dialog v-model:visible="memberDialog" :style="{width: '450px'}" header="Banditter" :modal="true">
         <div class="flex flex-col">
             <FloatLabel class="mt-4">
                 <InputText id="member-fullname" v-model.trim="member.name" size="small" class="w-full" required="true" autofocus :invalid="memberSubmitted && !member.name" />
@@ -365,7 +365,7 @@ const tshirtSizeLabel = slug => {
         <div class="flex flex-col">
             <FloatLabel class="mt-7">
                 <InputText type="email" id="member-email" v-model="member.email" size="small" class="w-full" />
-                <label for="member-email">E-mail address</label>
+                <label for="member-email">E-mail adresse</label>
             </FloatLabel>
         </div>
         <div class="flex flex-col">
@@ -378,7 +378,7 @@ const tshirtSizeLabel = slug => {
         <div class="flex flex-col">
             <FloatLabel class="mt-7">
                 <InputSwitch id="member-diet" v-model="member.vegitarian" class="filled" />
-                <label for="member-diet">Ønsker vegetarmad</label>
+                <label for="member-diet">Ønsker vegetarmad (er også gluten og laktosefri)</label>
             </FloatLabel>
         </div>
         <div class="flex flex-col">
@@ -395,8 +395,8 @@ const tshirtSizeLabel = slug => {
         </div>
 
         <template #footer>
-            <Button label="Cancel" icon="pi pi-times" text @click="hideDialog"/>
-            <Button label="Save" icon="pi pi-check" text @click="saveMember" />
+            <Button label="Afbryd" icon="pi pi-times" text @click="hideDialog"/>
+            <Button label="Gem" icon="pi pi-check" text @click="saveMember" />
         </template>
     </Dialog>
 
