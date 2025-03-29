@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/pkg/tablerow"
@@ -52,7 +51,6 @@ func (c *klan) Consumes() (subjs []streaminterface.Subject) {
 }
 
 func (c *klan) HandleMessage(msg streaminterface.Message) error {
-	log.Printf("klan.go RECEIVED %q", msg.Subject().Subject())
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.klan.*.signedup"):
 		var body messages.NathejkTeamSignedUp
@@ -92,8 +90,6 @@ func (c *klan) HandleMessage(msg streaminterface.Message) error {
 		if err := msg.Body(&body); err != nil {
 			return err
 		}
-		log.Printf("#######3 FROUND %q %q %q %q", body.Name, body.GroupName, body.Korps, body.TeamID)
-		spew.Dump(body)
 		msg.Subject().Parts()
 		query := "UPDATE klan SET name=%q, groupName=%q, korps=%q WHERE teamId=%q"
 		args := []any{body.Name, body.GroupName, body.Korps, body.TeamID}

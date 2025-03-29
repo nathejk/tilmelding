@@ -40,7 +40,6 @@ func (t *confirm) Consumes() []streaminterface.Subject {
 }
 
 func (t *confirm) HandleMessage(msg streaminterface.Message) error {
-	log.Printf("RECEIVED %q", msg.Subject().Subject())
 	switch msg.Subject().Subject() {
 	//case "NATHEJK.year.created":
 	default:

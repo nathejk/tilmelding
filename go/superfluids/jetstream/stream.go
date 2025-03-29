@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/pkg/errors"
@@ -58,11 +57,12 @@ func New(url string) (*stream, error) {
 		log.Printf("s=%q, e=%q", ss, e)
 		return nil, e
 	}
-	_, er := s.js.Publish(ctx, "NATHEJK.new", []byte("hello message 12"))
-	if er != nil {
-		log.Printf("XXXXXXX e=%q", er)
-		return nil, er
-	}
+	/*
+		_, er := s.js.Publish(ctx, "NATHEJK.new", []byte("hello message 12"))
+		if er != nil {
+			log.Printf("XXXXXXX e=%q", er)
+			return nil, er
+		}*/
 
 	log.Printf("Connected to JetStream %q, Stream created 'NATHEJK'", url)
 	return &s, nil
@@ -112,13 +112,34 @@ func (s *stream) Publish(m streaminterface.Message) error {
 	return nil
 }
 
+func (s *stream) LastMessage(subject streaminterface.Subject) (*message, error) {
+	consumer, err := s.js.OrderedConsumer(s.ctx, "NATHEJK", jetstream.OrderedConsumerConfig{
+		FilterSubjects: []string{subject.Subject()},
+		DeliverPolicy:  jetstream.DeliverLastPolicy,
+	})
+	if err != nil {
+		return nil, err
+	}
+	msgs, err := consumer.FetchNoWait(1)
+	if err != nil {
+		return nil, err
+	}
+	for msg := range msgs.Messages() {
+		return createMessage(msg)
+	}
+	if msgs.Error() != nil {
+		return nil, msgs.Error()
+	}
+	return nil, fmt.Errorf("no messages found with subject %q", subject.Subject())
+}
+
 func (s *stream) Subscribe(subjects []streaminterface.Subject, h streaminterface.MessageHandler) (streaminterface.Subscription, error) {
 	domains := map[string][]string{}
 	for _, subject := range subjects {
 		domains[subject.Domain()] = append(domains[subject.Domain()], subject.Domain()+"."+subject.Type())
 	}
 	ccs := consumeContexts{}
-	spew.Dump(domains)
+	//spew.Dump(domains)
 	for stream, fs := range domains {
 		consumer, err := s.js.OrderedConsumer(s.ctx, stream, jetstream.OrderedConsumerConfig{
 			// Filter results from "ORDERS" stream by specific subject
@@ -128,26 +149,10 @@ func (s *stream) Subscribe(subjects []streaminterface.Subject, h streaminterface
 			return nil, err
 		}
 		contxt, err := consumer.Consume(func(msg jetstream.Msg) {
-			var data jetstreamMessage
-			if err := json.Unmarshal(msg.Data(), &data); err != nil {
-				log.Printf("Error consuming subject %q, unmarshal %q", msg.Subject(), err)
-				return
-			}
-			meta, err := msg.Metadata()
+			m, err := createMessage(msg)
 			if err != nil {
-				log.Printf("Error consuming metadata %q", err)
+				log.Println(err)
 				return
-			}
-			m := &message{
-				sequence:      meta.Sequence.Stream,
-				eventID:       data.EventID,
-				correlationID: data.CorrelationID,
-				causationID:   data.CausationID,
-				version:       data.Version,
-				time:          data.Time,
-				subject:       streaminterface.SubjectFromStr(msg.Subject()),
-				body:          data.Body,
-				meta:          data.Meta,
 			}
 			err = h.HandleMessage(m)
 			if err != nil {
@@ -162,7 +167,7 @@ func (s *stream) Subscribe(subjects []streaminterface.Subject, h streaminterface
 		}
 		ccs = append(ccs, contxt)
 		//	s.consumers = append(s.consumers, consumer)
-		log.Printf("Subsribed to jetstream %#v", subjects)
+		//log.Printf("Subsribed to jetstream %#v", subjects)
 	}
 	return ccs, nil
 	/*
@@ -171,6 +176,28 @@ func (s *stream) Subscribe(subjects []streaminterface.Subject, h streaminterface
 			FilterSubjects: []string{"ORDERS.A"},
 		})
 	*/
+}
+func createMessage(msg jetstream.Msg) (*message, error) {
+	var data jetstreamMessage
+	if err := json.Unmarshal(msg.Data(), &data); err != nil {
+		return nil, fmt.Errorf("error unmarshaling message with subject %q: %w", msg.Subject(), err)
+	}
+	meta, err := msg.Metadata()
+	if err != nil {
+		return nil, fmt.Errorf("error getting metadata from message with subject %q: %w", msg.Subject(), err)
+	}
+	m := &message{
+		sequence:      meta.Sequence.Stream,
+		eventID:       data.EventID,
+		correlationID: data.CorrelationID,
+		causationID:   data.CausationID,
+		version:       data.Version,
+		time:          data.Time,
+		subject:       streaminterface.SubjectFromStr(msg.Subject()),
+		body:          data.Body,
+		meta:          data.Meta,
+	}
+	return m, nil
 }
 func (s *stream) Create(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

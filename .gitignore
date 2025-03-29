@@ -2,4 +2,5 @@
 /docker-compose.override.yml
 /attic/
 node_modules/
+vue/public/videos
 web/ui/public/config.js

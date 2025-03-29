@@ -74,7 +74,7 @@ func (m *message) RawMeta() interface{} {
 }
 
 func (m *message) Sequence() uint64 {
-	return 0
+	return m.sequence
 }
 
 func (m *message) SetBody(v interface{}) error {

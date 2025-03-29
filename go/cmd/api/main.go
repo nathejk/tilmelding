@@ -90,17 +90,26 @@ func main() {
 
 	//logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
 	logger := jsonlog.New(os.Stdout, jsonlog.LevelInfo)
+	logger.PrintInfo("Starting API...", nil)
 
 	js, err := jetstream.New(cfg.jetstream.dsn)
 	if err != nil {
 		log.Printf("Error connecting %q", err)
 	}
+	logger.PrintInfo("Jetstream connected", nil)
+	/*msg, err := js.LastMessage(streaminterface.SubjectFromStr("NATHEJK.2024.>"))
+	if err != nil {
+		log.Fatalf("Last message: %q", err)
+	}
+	log.Printf("Last message (%d) %v", msg.Sequence(), msg)
+	*/
 
 	db := NewDatabase(cfg.db)
 	if err := db.Open(); err != nil {
 		logger.PrintFatal(err, nil)
 	}
 	defer db.Close()
+	logger.PrintInfo("Database connected", nil)
 
 	sqlw := sqlpersister.New(db.DB())
 
@@ -134,6 +143,7 @@ func main() {
 		sms:       smsclient,
 		logger:    logger,
 	}
+	logger.PrintInfo("Application initialized", nil)
 
 	logger.PrintFatal(app.Serve(fmt.Sprintf(":%d", cfg.port), app.routes()), nil)
 }
