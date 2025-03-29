@@ -269,7 +269,7 @@ const tshirtSizeLabel = slug => {
 
         <Shop v-if="!initialSignup" /> 
 
-<Fieldset class="mt-3" legend="Spejdere" v-if="!initialSignup">
+<Fieldset class="mt-3" legend="Banditter" v-if="!initialSignup">
     <div class="card">
         <DataTable :value="activeMembers" size="small" tableStyle="min-width: 50rem">
             <Column field="name" header="Navn">
@@ -341,7 +341,7 @@ const tshirtSizeLabel = slug => {
     </div>
     </div>
 
-    <Dialog v-model:visible="memberDialog" :style="{width: '450px'}" header="Banditter" :modal="true">
+    <Dialog v-model:visible="memberDialog" :style="{width: '450px'}" header="Bandit" :modal="true">
         <div class="flex flex-col">
             <FloatLabel class="mt-4">
                 <InputText id="member-fullname" v-model.trim="member.name" size="small" class="w-full" required="true" autofocus :invalid="memberSubmitted && !member.name" />
