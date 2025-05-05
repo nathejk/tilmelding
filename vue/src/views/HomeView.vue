@@ -63,7 +63,7 @@ function link(url) {
     <div class="bg-slate-900">
       <div class="container mx-auto relative aspect-video">
         <video playsinline autoplay muted ref="videoplayer" />
-        <Countdown class="absolute inset-0 text-slate-200 p-10 text-xl" :time="config.timeCountdown" v-slot="{days, hours, minutes, seconds}">
+        <Countdown class="absolute inset-0 text-slate-200 p-10 text-xl" :time="config.timeCountdown" v-slot="{days, hours, minutes, seconds}" v-if="false">
         <div v-if="days+hours+minutes+seconds <= 0">
 
             <div class="flex justify-around ">
