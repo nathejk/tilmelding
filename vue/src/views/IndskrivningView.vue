@@ -14,7 +14,7 @@ const props = defineProps({
 })
 
 const router = useRouter()
-const contact = ref({type: props.teamType })
+const contact = ref({})
 const step = ref(0);
 
 onMounted(async () => {
@@ -46,7 +46,7 @@ const signup = async (next) => {
     try {
         const body = JSON.stringify({
             teamId: contact.value.teamId,
-            type: contact.value.type,
+            type: props.teamType,
             emailPending: contact.value.emailPending,
             phonePending: contact.value.phonePending,
             name: contact.value.name,
@@ -96,8 +96,8 @@ const validatePincode = async () => {
 
     <div class="container mx-auto py-5 max-w-screen-md">
         <h1 class="font-nathejk text-4xl text-slate-700 pb-5">
-            <span v-if="contact.type == 'spejder'">Tilmelding af spejderpatrulje</span>
-            <span v-if="contact.type == 'senior'">Tilmelding af seniorklan</span>
+            <span v-if="props.teamType == 'spejder'">Tilmelding af spejderpatrulje</span>
+            <span v-if="props.teamType == 'senior'">Tilmelding af seniorklan</span>
         </h1>
         <Stepper linear :activeStep="step">
     <StepperPanel header="Kontaktoplysninger">
