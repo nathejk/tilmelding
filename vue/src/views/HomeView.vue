@@ -70,7 +70,7 @@ function link(url) {
               <div class="self-center">
                   <Button label="Tilmeld spejderpatrulje"  size="large" severity="warning" @click="link('/indskrivning/patrulje')" />
               </div>
-              <div class="self-center">
+              <div class="self-center" v-if="false">
                   <Button label="Tilmeld seniorklan"  size="large" severity="warning" @click="link('/indskrivning/klan')" />
               </div>
             </div>
