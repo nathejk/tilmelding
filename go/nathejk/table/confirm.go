@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS confirm (
 
 func (t *confirm) Consumes() []streaminterface.Subject {
 	return []streaminterface.Subject{
-		streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.*.*.mail.%s.sent", "2024", types.PingTypeSignup)),
+		streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.*.*.mail.%s.sent", "2025", types.PingTypeSignup)),
 	}
 }
 

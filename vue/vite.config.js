@@ -14,6 +14,10 @@ export default defineConfig({
     port: 80,
     proxy: {
       '/api':'http://api',
+      '/callback': {
+        target: 'http://api',
+        changeOrigin: true,
+      },
     },
   },
   plugins: [

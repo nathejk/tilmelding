@@ -48,8 +48,8 @@ func (c *patrulje) Consumes() (subjs []streaminterface.Subject) {
 	return []streaminterface.Subject{
 		//streaminterface.SubjectFromStr("monolith:nathejk_team"),
 		//streaminterface.SubjectFromStr("nathejk"),
-		streaminterface.SubjectFromStr("NATHEJK:2024.patrulje.*.updated"),
-		streaminterface.SubjectFromStr("NATHEJK:2024.patrulje.*.signedup"),
+		streaminterface.SubjectFromStr("NATHEJK:2025.patrulje.*.updated"),
+		streaminterface.SubjectFromStr("NATHEJK:2025.patrulje.*.signedup"),
 	}
 }
 

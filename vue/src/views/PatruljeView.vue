@@ -88,6 +88,7 @@ const hideDialog = () => {
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+const canSave = computed(() => members.value.length >= 3 && members.value.length <= 7)
 const save = async () => {
     const headers = {
         "Content-Type": "application/json",
@@ -108,7 +109,11 @@ const save = async () => {
         //router.replace({ name: 'indskrivning', params: { id: data.teamId } })
         //router.replace({ path: '/indskrivning/'+ data.team.teamId  })
 
-    paymentDialog.value = true;
+        if (data.paymentLink && data.paymentLink != "") {
+            location.href = data.paymentLink
+        } else {
+            router.push({ name: 'thankyou' })
+        }
         //const vendor = data.content
         //next()
     } catch (error) {
@@ -358,7 +363,7 @@ const tshirtSizeLabel = slug => {
 
     <div class="card flex justify-end">
 
-<Button class="my-5" :label="payableAmount ? 'Gem ændringer og betal' : 'Gem ændringer'" @click="save" />
+<Button class="my-5" :disabled="!canSave" :label="payableAmount ? 'Gem ændringer og betal' : 'Gem ændringer'" @click="save" />
 
     </div>
     </div>

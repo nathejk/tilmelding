@@ -95,7 +95,7 @@ type Contact struct {
 func (m TeamModel) RequestedSeniorCount() int {
 	query := `SELECT COUNT(memberId) FROM senior WHERE year=%d`
 	var count int
-	_ = m.DB.QueryRow(query, 2024).Scan(&count)
+	_ = m.DB.QueryRow(query, 2025).Scan(&count)
 	return count
 }
 

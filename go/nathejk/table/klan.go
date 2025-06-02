@@ -44,8 +44,8 @@ func (c *klan) Consumes() (subjs []streaminterface.Subject) {
 	return []streaminterface.Subject{
 		//streaminterface.SubjectFromStr("monolith:nathejk_team"),
 		//streaminterface.SubjectFromStr("nathejk"),
-		streaminterface.SubjectFromStr("NATHEJK:2024.klan.*.updated"),
-		streaminterface.SubjectFromStr("NATHEJK:2024.klan.*.signedup"),
+		streaminterface.SubjectFromStr("NATHEJK.2025.klan.*.updated"),
+		streaminterface.SubjectFromStr("NATHEJK.2025.klan.*.signedup"),
 		streaminterface.SubjectFromStr("NATHEJK.*.klan.*.status.changed"),
 	}
 }

@@ -36,7 +36,7 @@ func (c *team) Signup(teamType types.TeamType, body *messages.NathejkTeamSignedU
 		body.Pincode = fmt.Sprintf("%d", rand.IntN(9000)+1000)
 	}
 
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.signedup", "2024", teamType, body.TeamID)))
+	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.signedup", "2025", teamType, body.TeamID)))
 	msg.SetBody(body)
 	meta := messages.Metadata{Producer: "tilmelding-api"}
 	msg.SetMeta(&meta)
@@ -48,7 +48,7 @@ func (c *team) Signup(teamType types.TeamType, body *messages.NathejkTeamSignedU
 }
 
 func (c *team) UpdatePatrulje(teamID types.TeamID, team Patrulje, contact Contact, members []Spejder) error {
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.patrulje.%s.updated", "2024", teamID)))
+	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.patrulje.%s.updated", "2025", teamID)))
 	msg.SetBody(&messages.NathejkTeamUpdated{
 		TeamID:            teamID,
 		Type:              types.TeamTypePatrulje,
@@ -70,7 +70,7 @@ func (c *team) UpdatePatrulje(teamID types.TeamID, team Patrulje, contact Contac
 
 	for _, m := range members {
 		if m.Deleted {
-			msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.deleted", "2024", m.MemberID)))
+			msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.deleted", "2025", m.MemberID)))
 			msg.SetBody(&messages.NathejkMemberDeleted{
 				MemberID: m.MemberID,
 				TeamID:   teamID,
@@ -86,7 +86,7 @@ func (c *team) UpdatePatrulje(teamID types.TeamID, team Patrulje, contact Contac
 		if m.MemberID == "" {
 			m.MemberID = types.MemberID(uuid.New().String())
 		}
-		msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.updated", "2024", m.MemberID)))
+		msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.updated", "2025", m.MemberID)))
 		msg.SetBody(&messages.NathejkScoutUpdated{
 			MemberID:     m.MemberID,
 			TeamID:       teamID,
@@ -109,7 +109,7 @@ func (c *team) UpdatePatrulje(teamID types.TeamID, team Patrulje, contact Contac
 }
 
 func (c *team) UpdateKlan(teamID types.TeamID, team Klan, members []Senior) error {
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.updated", "2024", teamID)))
+	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.updated", "2025", teamID)))
 	msg.SetBody(&messages.NathejkKlanUpdated{
 		TeamID:    teamID,
 		Name:      team.Name,
@@ -126,15 +126,17 @@ func (c *team) UpdateKlan(teamID types.TeamID, team Klan, members []Senior) erro
 		return nil
 	}
 	if c.q.RequestedSeniorCount() > 115 {
-		msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2024", teamID)))
+		msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2025", teamID)))
 		msg.SetBody(&messages.NathejkKlanStatusChanged{TeamID: teamID, Status: types.SignupStatusOnHold})
 		msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
-		if err := c.p.Publish(msg); err != nil {
-			return err
+		if (klan.Status != types.SignupStatusPay) && (klan.Status != types.SignupStatusPaid) {
+			if err := c.p.Publish(msg); err != nil {
+				return err
+			}
 		}
 	}
 	if klan.Status == "" {
-		msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2024", teamID)))
+		msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2025", teamID)))
 		msg.SetBody(&messages.NathejkKlanStatusChanged{TeamID: teamID, Status: types.SignupStatusPay})
 		msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 		if err := c.p.Publish(msg); err != nil {
@@ -149,7 +151,7 @@ func (c *team) UpdateKlan(teamID types.TeamID, team Klan, members []Senior) erro
 
 	for _, m := range members {
 		if m.Deleted {
-			msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.deleted", "2024", m.MemberID)))
+			msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.deleted", "2025", m.MemberID)))
 			msg.SetBody(&messages.NathejkMemberDeleted{
 				MemberID: m.MemberID,
 				TeamID:   teamID,
@@ -165,7 +167,7 @@ func (c *team) UpdateKlan(teamID types.TeamID, team Klan, members []Senior) erro
 		if m.MemberID == "" {
 			m.MemberID = types.MemberID(uuid.New().String())
 		}
-		msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.updated", "2024", m.MemberID)))
+		msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.updated", "2025", m.MemberID)))
 		msg.SetBody(&messages.NathejkSeniorUpdated{
 			MemberID:   m.MemberID,
 			TeamID:     teamID,
@@ -198,7 +200,7 @@ func (c *team) ConfirmEmail(secret string) error {
 		body.Pincode = "1222"
 	}
 
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.patrulje.%s.signedup", "2024", body.TeamID)))
+	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.patrulje.%s.signedup", "2025", body.TeamID)))
 	msg.SetBody(body)
 	meta := messages.Metadata{Producer: "tilmelding-api"}
 	msg.SetMeta(&meta)

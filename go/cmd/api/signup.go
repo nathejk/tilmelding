@@ -196,7 +196,7 @@ func (app *application) signupHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			app.logger.PrintError(err, nil)
 		}
-		msg := app.jetstream.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.mail.%s.sent", "2024", input.TeamType, team.TeamID, types.PingTypeSignup)))
+		msg := app.jetstream.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.mail.%s.sent", "2025", input.TeamType, team.TeamID, types.PingTypeSignup)))
 		msg.SetBody(&messages.NathejkMailSent{
 			PingType:  types.PingTypeSignup,
 			TeamID:    team.TeamID,

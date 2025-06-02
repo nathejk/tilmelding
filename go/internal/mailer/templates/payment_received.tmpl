@@ -1,0 +1,30 @@
+{{define "subject"}}Betaling modtaget{{end}}
+
+{{define "plainBody"}}
+Hej,
+
+Vi har registreret din betaling til Nathejk.
+
+Hvis du vil ændre i tilmeldingen så brug dette link:
+{{.payment.ReturnUrl}}
+
+Vi ses i mørket...
+Nathejk
+{{end}}
+
+{{define "htmlBody"}}
+<!doctype html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+</head>
+<body>
+    <p>Hej,</p>
+    <p>Vi har registret din betaling til Nathejk.</p>
+    <p>Hvis du vil ændre i tilmeldingen så <a href="{{.payment.ReturnUrl}}">brug dette link</a></p>
+    <p>Vi ses i mørket...<br>Nathejk</p>
+</body>
+</html>
+{{end}}
+

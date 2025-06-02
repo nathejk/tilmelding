@@ -6,12 +6,19 @@ import (
 	"time"
 
 	"github.com/nathejk/shared-go/types"
+	"nathejk.dk/nathejk/table/payment"
 )
 
 var (
 	ErrRecordNotFound = errors.New("record not found")
 	ErrEditConflict   = errors.New("edit conflict")
 )
+
+type PaymentInterface interface {
+	GetAll(types.TeamID) ([]payment.Payment, payment.Metadata, error)
+	GetByReference(string) (*payment.Payment, error)
+	AmountPaidByTeamID(types.TeamID) int
+}
 
 type Models struct {
 	Teams interface {
@@ -47,9 +54,10 @@ type Models struct {
 		GetByID(types.TeamID) (*Signup, error)
 		ConfirmBySecret(string) (types.TeamID, error)
 	}
+	Payment PaymentInterface
 }
 
-func NewModels(db *sql.DB) Models {
+func NewModels(db *sql.DB, payment PaymentInterface) Models {
 	return Models{
 		Teams:       TeamModel{DB: db},
 		Members:     MemberModel{DB: db},
@@ -57,5 +65,6 @@ func NewModels(db *sql.DB) Models {
 		Tokens:      TokenModel{DB: db},
 		Users:       UserModel{DB: db},
 		Signup:      SignupModel{DB: db},
+		Payment:     payment,
 	}
 }

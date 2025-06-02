@@ -5,7 +5,10 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
+	jsonapi "nathejk.dk/cmd/api/app"
+	"nathejk.dk/internal/payment/mobilepay"
 )
 
 func (app *application) routes() http.Handler {
@@ -22,8 +25,15 @@ func (app *application) routes() http.Handler {
 	router.HandlerFunc(http.MethodPut, "/api/patrulje/:id", app.updatePatruljeHandler)
 	router.HandlerFunc(http.MethodGet, "/api/klan/:id", app.showKlanHandler)
 	router.HandlerFunc(http.MethodPut, "/api/klan/:id", app.updateKlanHandler)
-	router.HandlerFunc(http.MethodGet, "/confirm/:id", app.confirmSignupHandler)
 	router.HandlerFunc(http.MethodPut, "/api/pay/:id", app.sendMobilepaySmsHandler)
+	router.HandlerFunc(http.MethodGet, "/api/payment/:ref", app.showPaymentHandler)
+
+	callback := httprouter.New()
+	callback.NotFound = http.HandlerFunc(app.NotFoundResponse)
+	callback.MethodNotAllowed = http.HandlerFunc(app.MethodNotAllowedResponse)
+	callback.HandlerFunc(http.MethodGet, "/callback/mobilepay/:ref", app.mobilepayCallbackHandler)
+	callback.HandlerFunc(http.MethodGet, "/callback/email/:id", app.confirmSignupHandler)
+
 	/*
 		router.HandlerFunc(http.MethodPut, "/api/*filepath", app.cleo.ProxyHandler)
 		router.HandlerFunc(http.MethodGet, "/api/*filepath", app.cleo.ProxyHandler)
@@ -35,9 +45,37 @@ func (app *application) routes() http.Handler {
 	mux.Handle("/", http.FileServer(SpaFileSystem(http.Dir(app.config.webroot))))
 	mux.HandleFunc("/api/v1/healthcheck", app.HealthcheckHandler)
 	mux.Handle("/api/", app.Metrics(router))
-	mux.Handle("/confirm/", router)
+	mux.Handle("/callback/", callback)
 	mux.Handle("/debug/vars", expvar.Handler())
 
+	mux.HandleFunc("/mobilepay", func(w http.ResponseWriter, r *http.Request) {
+		key := uuid.New().String()
+		payment, err := app.payment.CreatePayment(key, mobilepay.Payment{
+			Customer:           mobilepay.Customer{PhoneNumber: "4540733886"},
+			Amount:             mobilepay.Amount{Currency: mobilepay.CurrencyDKK, Value: 1000},
+			PaymentMethod:      mobilepay.PaymentMethod{Type: "WALLET"},
+			PaymentDescription: "Nathejk tilmelding",
+			Reference:          mobilepay.PaymentReference(key),
+			UserFlow:           "WEB_REDIRECT",
+			ReturnUrl:          "https://nathejk.dk",
+			Receipt: mobilepay.Receipt{
+				OrderLines: []mobilepay.OrderLine{},
+				BottomLine: mobilepay.BottomLine{
+					Currency: mobilepay.CurrencyDKK,
+				},
+			},
+		})
+		if err != nil {
+			app.ServerErrorResponse(w, r, err)
+		}
+		env := jsonapi.Envelope{
+			"payment": payment,
+		}
+		err = app.WriteJSON(w, http.StatusOK, env, nil)
+		if err != nil {
+			app.ServerErrorResponse(w, r, err)
+		}
+	})
 	return mux
 }
 

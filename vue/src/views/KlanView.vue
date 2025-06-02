@@ -143,7 +143,12 @@ const save = async () => {
             router.push({ name: 'onhold' })
         }
 
-    paymentDialog.value = true;
+        if (data.paymentLink && data.paymentLink != "") {
+            location.href = data.paymentLink
+        } else {
+            router.push({ name: 'thankyou' })
+        }
+    //paymentDialog.value = true;
         //const vendor = data.content
         //next()
     } catch (error) {

@@ -11,10 +11,12 @@ require (
 	github.com/json-iterator/go v1.1.12
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/lib/pq v1.10.7
-	github.com/nathejk/shared-go v0.0.0-20240429125154-33d35273bce4
+	github.com/moul/http2curl v1.0.0
+	github.com/nathejk/shared-go v0.0.0-20250602103950-9d8401a085c0
 	github.com/nats-io/nats.go v1.34.1
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.1
+	github.com/tdewolff/minify/v2 v2.23.3
 	github.com/wneessen/go-mail v0.6.2
 	golang.org/x/crypto v0.33.0
 )
@@ -28,6 +30,7 @@ require (
 	github.com/nats-io/nkeys v0.4.7 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/tdewolff/parse/v2 v2.7.23 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.22.0 // indirect

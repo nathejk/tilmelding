@@ -25,6 +25,7 @@ const router = createRouter({
     { path: '/indskrivning/:teamId', component: () => import('../views/IndskrivningView.vue'), props: true },
     { path: '/venteliste', name: 'onhold', component: () => import('../views/VentelisteView.vue') },
     { path: '/tak', name: 'thankyou', component: () => import('../views/ThankyouView.vue') },
+    { path: '/betaling/:reference', name: 'payment', component: () => import('../views/PaymentView.vue'), props: true },
   ]
 })
 

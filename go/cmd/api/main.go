@@ -14,6 +14,7 @@ import (
 	"nathejk.dk/internal/data"
 	"nathejk.dk/internal/jsonlog"
 	"nathejk.dk/internal/mailer"
+	"nathejk.dk/internal/payment/mobilepay"
 	"nathejk.dk/internal/sms"
 	"nathejk.dk/internal/vcs"
 	"nathejk.dk/nathejk/commands"
@@ -36,6 +37,9 @@ type config struct {
 	countdown struct {
 		time   string
 		videos []string
+	}
+	payment struct {
+		dsn string
 	}
 	db struct {
 		dsn          string
@@ -61,6 +65,7 @@ type application struct {
 	commands  commands.Commands
 	mailer    mailer.Mailer
 	sms       sms.Sender
+	payment   mobilepay.Client
 	logger    *jsonlog.Logger
 }
 
@@ -86,6 +91,7 @@ func main() {
 	flag.StringVar(&cfg.smtp.Sender, "smtp-sender", "Nathejk <kontakt@nathejk.dk>", "SMTP sender")
 
 	flag.StringVar(&cfg.countdown.time, "countdown", getEnv("COUNTDOWN", ""), "Time for countdown")
+	flag.StringVar(&cfg.payment.dsn, "payment-dsn", getEnv("PAYMENT_DSN", ""), "DSN specifing a valid payment provider")
 	cfg.countdown.videos = getEnvAsSlice("COUNTDOWN_VIDEOS", []string{}, "\n")
 
 	flag.Parse()
@@ -115,14 +121,16 @@ func main() {
 
 	sqlw := sqlpersister.New(db.DB())
 
+	tablePayment := table.NewPayment(sqlw, db.DB())
+
 	mux := xstream.NewMux(js)
-	mux.AddConsumer(table.NewSignup(sqlw), table.NewConfirm(sqlw), table.NewKlan(sqlw), table.NewSenior(sqlw), table.NewPatrulje(sqlw), table.NewPatruljeStatus(sqlw) /*table.NewPatruljeMerged(sqlw),*/, table.NewSpejder(sqlw), table.NewSpejderStatus(sqlw))
+	mux.AddConsumer(table.NewSignup(sqlw), table.NewConfirm(sqlw), table.NewKlan(sqlw), table.NewSenior(sqlw), table.NewPatrulje(sqlw), table.NewPatruljeStatus(sqlw) /*table.NewPatruljeMerged(sqlw),*/, table.NewSpejder(sqlw), table.NewSpejderStatus(sqlw), tablePayment)
 	//mux.AddConsumer(table.NewSpejder(sqlw), table.NewSpejderStatus(sqlw))
 	if err := mux.Run(context.Background()); err != nil {
 		logger.PrintFatal(err, nil)
 	}
 
-	models := data.NewModels(db.DB())
+	models := data.NewModels(db.DB(), tablePayment)
 
 	expvar.NewString("version").Set(version)
 	expvar.NewInt("timestamp").Set(time.Now().Unix())
@@ -133,14 +141,19 @@ func main() {
 		logger.PrintFatal(err, nil)
 	}
 
+	payment, err := mobilepay.New(cfg.payment.dsn)
+	if err != nil {
+		logger.PrintFatal(err, nil)
+	}
 	app := &application{
 		JsonApi: app.JsonApi{
 			Logger: logger,
 		},
 		config:    cfg,
+		payment:   payment,
 		models:    models,
 		jetstream: js,
-		commands:  commands.New(js, models),
+		commands:  commands.New(js, models, payment),
 		mailer:    mailer.NewFromConfig(cfg.smtp),
 		sms:       smsclient,
 		logger:    logger,
