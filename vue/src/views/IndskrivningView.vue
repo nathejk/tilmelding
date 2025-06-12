@@ -97,7 +97,9 @@ const validatePincode = async () => {
     <div class="container mx-auto py-5 max-w-screen-md">
         <h1 class="font-nathejk text-4xl text-slate-700 pb-5">
             <span v-if="props.teamType == 'spejder'">Tilmelding af spejderpatrulje</span>
-            <span v-if="props.teamType == 'senior'">Tilmelding af seniorklan</span>
+            <span v-else-if="props.teamType == 'senior'">Tilmelding af seniorklan</span>
+            <span v-else-if="props.teamType == 'gøgler'">Tilmelding af gøgler</span>
+            <span v-else>Tilmelding af hjælper</span>
         </h1>
         <Stepper linear :activeStep="step">
     <StepperPanel header="Kontaktoplysninger">

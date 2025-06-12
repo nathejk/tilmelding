@@ -73,6 +73,9 @@ function link(url) {
               <div class="self-center" v-if="false">
                   <Button label="Tilmeld seniorklan"  size="large" severity="warning" @click="link('/indskrivning/klan')" />
               </div>
+              <div class="self-center" v-if="false">
+                  <Button label="Tilmeld gøgler"  size="large" severity="warning" @click="link('/indskrivning/badut')" />
+              </div>
             </div>
         </div>
         <div v-else>

@@ -1,12 +1,14 @@
 package data
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"time"
 
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/nathejk/table/payment"
+	"nathejk.dk/nathejk/table/personnel"
 )
 
 var (
@@ -18,6 +20,10 @@ type PaymentInterface interface {
 	GetAll(types.TeamID) ([]payment.Payment, payment.Metadata, error)
 	GetByReference(string) (*payment.Payment, error)
 	AmountPaidByTeamID(types.TeamID) int
+}
+type PersonnelInterface interface {
+	GetAll(context.Context, personnel.Filter) ([]personnel.Staff, error)
+	GetByID(context.Context, types.UserID) (*personnel.Staff, error)
 }
 
 type Models struct {
@@ -54,10 +60,11 @@ type Models struct {
 		GetByID(types.TeamID) (*Signup, error)
 		ConfirmBySecret(string) (types.TeamID, error)
 	}
-	Payment PaymentInterface
+	Payment   PaymentInterface
+	Personnel PersonnelInterface
 }
 
-func NewModels(db *sql.DB, payment PaymentInterface) Models {
+func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterface) Models {
 	return Models{
 		Teams:       TeamModel{DB: db},
 		Members:     MemberModel{DB: db},
@@ -66,5 +73,6 @@ func NewModels(db *sql.DB, payment PaymentInterface) Models {
 		Users:       UserModel{DB: db},
 		Signup:      SignupModel{DB: db},
 		Payment:     payment,
+		Personnel:   personnel,
 	}
 }

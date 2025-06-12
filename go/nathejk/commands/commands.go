@@ -18,11 +18,15 @@ type Commands struct {
 		Request(amount mobilepay.Amount, desc string, phone types.PhoneNumber, email types.EmailAddress, returnUrl, orderForeignKey, orderType string) (string, error)
 		Capture(reference string) error
 	}
+	Personnel interface {
+		UpdatePerson(types.UserID, types.TeamType, Person) error
+	}
 }
 
 func New(stream streaminterface.Publisher, models data.Models, pp mobilepay.Client) Commands {
 	return Commands{
-		Team:    NewTeam(stream, models.Teams),
-		Payment: NewPayment(stream, models.Teams, pp),
+		Team:      NewTeam(stream, models.Teams),
+		Payment:   NewPayment(stream, models.Teams, pp),
+		Personnel: NewPersonnel(stream, models.Teams),
 	}
 }

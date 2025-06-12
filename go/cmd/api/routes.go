@@ -25,6 +25,8 @@ func (app *application) routes() http.Handler {
 	router.HandlerFunc(http.MethodPut, "/api/patrulje/:id", app.updatePatruljeHandler)
 	router.HandlerFunc(http.MethodGet, "/api/klan/:id", app.showKlanHandler)
 	router.HandlerFunc(http.MethodPut, "/api/klan/:id", app.updateKlanHandler)
+	router.HandlerFunc(http.MethodGet, "/api/personnel/:id", app.showPersonnelHandler)
+	router.HandlerFunc(http.MethodPut, "/api/personnel/:id", app.updatePersonnelHandler)
 	router.HandlerFunc(http.MethodPut, "/api/pay/:id", app.sendMobilepaySmsHandler)
 	router.HandlerFunc(http.MethodGet, "/api/payment/:ref", app.showPaymentHandler)
 

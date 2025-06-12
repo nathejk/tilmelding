@@ -53,3 +53,15 @@ type Senior struct {
 	Diet       string             `json:"diet"`
 	TShirtSize string             `json:"tshirtsize"`
 }
+
+type Person struct {
+	ID          types.UserID       `json:"personId"`
+	Name        string             `json:"name"`
+	Email       types.EmailAddress `json:"email"`
+	Phone       types.PhoneNumber  `json:"phone"`
+	TshirtSize  string             `json:"tshirtSize"`
+	Group       string             `json:"group"`
+	Korps       types.CorpsSlug    `json:"korps"`
+	Klan        string             `json:"klan"`
+	Additionals map[string]any     `json:"additionals"`
+}
