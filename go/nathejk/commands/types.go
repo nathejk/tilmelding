@@ -36,7 +36,7 @@ type Spejder struct {
 	PostalCode   string             `json:"postalCode"`
 	Email        types.EmailAddress `json:"email"`
 	Phone        types.PhoneNumber  `json:"phone"`
-	PhoneContact types.PhoneNumber  `json:"phoneCantact"`
+	PhoneContact types.PhoneNumber  `json:"phoneContact"`
 	Birthday     types.Date         `json:"birthday"`
 	TShirtSize   string             `json:"tshirtsize"`
 }

@@ -52,7 +52,7 @@ onMounted(async () => {
     team.value = data.team
     contact.value = data.contact
     members.value = new List(...data.members);
-    payments.value = new List(...data.payments);
+    payments.value = new List(...data.payments.filter(p => p.status != 'requested'));
 
     console.log("found", data)
   } catch (error) {
@@ -385,7 +385,7 @@ const tshirtSizeLabel = slug => {
         </div>
         <div class="flex flex-col">
             <FloatLabel class="mt-7">
-                <InputText id="member-postal" v-model="member.postal" size="small" class="w-full" />
+                <InputText id="member-postal" v-model="member.postalCode" size="small" class="w-full" />
                 <label for="member-postal">Postnummer</label>
             </FloatLabel>
         </div>
