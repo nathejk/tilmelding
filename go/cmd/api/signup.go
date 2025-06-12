@@ -68,7 +68,13 @@ func (app *application) signupPincodeHandler(w http.ResponseWriter, r *http.Requ
 	if team.Pincode != input.Pincode {
 		app.InvalidCredentialsResponse(w, r)
 	}
-	page := fmt.Sprintf("/%s/%s", team.TeamType, input.TeamID)
+	page := ""
+	switch team.TeamType {
+	case types.TeamTypeBadut:
+		page = fmt.Sprintf("/%s/%s", "badut", input.TeamID)
+	default:
+		page = fmt.Sprintf("/%s/%s", team.TeamType, input.TeamID)
+	}
 	err = app.WriteJSON(w, http.StatusCreated, jsonapi.Envelope{"team": map[string]string{"teamPage": page}}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
