@@ -201,7 +201,7 @@ const tshirtSizeLabel = slug => {
           <div class="col-start-1 col-span-5 font-bold">At betale</div><div class="font-bold text-right">{{ payableAmount }},-</div>
           <Divider class=" col-end-7" />
         </div>
-        <p>Deltagerbetalingen bliver ikke refunderet ved afbud uanset grund - vi kan have brugt pengene ud fra en forventning om, at du kommer. Det er dog helt frem til ganske kort før løbsstart muligt at skifte ud blandt deltagerne. Betalingen bliver naturligvis refunderet, hvis holdet ikke deltager, fordi Nathejks team har besluttet det.</p>
+        <p>Deltagerbetalingen bliver ikke refunderet ved afbud uanset grund - vi kan have brugt pengene ud fra en forventning om, at du kommer.</p>
     </div>
 </Fieldset>
 

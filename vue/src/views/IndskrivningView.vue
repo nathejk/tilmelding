@@ -12,6 +12,8 @@ const props = defineProps({
     teamId: {type: String, required: false},
     teamType: {type: String, required: false, default:'spejder'},
 })
+const teamType = computed(() => contact.value.teamType || props.teamType);
+
 
 const router = useRouter()
 const contact = ref({})
@@ -57,8 +59,7 @@ const signup = async (next) => {
         }
         const data = await response.json();
         contact.value = data.team
-        //router.replace({ name: 'indskrivning', params: { id: data.teamId } })
-        router.replace({ path: '/indskrivning/'+ data.team.teamId  })
+        router.replace({ path: '/indskrivning/'+ data.team.teamId })
 
         //const vendor = data.content
         next()
@@ -96,10 +97,10 @@ const validatePincode = async () => {
 
     <div class="container mx-auto py-5 max-w-screen-md">
         <h1 class="font-nathejk text-4xl text-slate-700 pb-5">
-            <span v-if="props.teamType == 'spejder'">Tilmelding af spejderpatrulje</span>
-            <span v-else-if="props.teamType == 'senior'">Tilmelding af seniorklan</span>
-            <span v-else-if="props.teamType == 'gøgler'">Tilmelding af gøgler</span>
-            <span v-else>Tilmelding af hjælper</span>
+            <span v-if="teamType == 'spejder'">Tilmelding af spejderpatrulje</span>
+            <span v-else-if="teamType == 'senior'">Tilmelding af seniorklan</span>
+            <span v-else-if="teamType == 'gøgler'">Tilmelding af gøgler</span>
+            <span v-else>Tilmelding</span>
         </h1>
         <Stepper linear :activeStep="step">
     <StepperPanel header="Kontaktoplysninger">
