@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS personnel (
     phone VARCHAR(99) NOT NULL,
     groupName VARCHAR(99) NOT NULL DEFAULT "",
     korps VARCHAR(9) NOT NULL DEFAULT "",
-    klan VARCHAR(99) NOT NULL DEFAULT "",
+    klan VARCHAR(999) NOT NULL DEFAULT "",
     tshirtSize VARCHAR(9) NOT NULL DEFAULT '',
     createdAt VARCHAR(99) NOT NULL,
     updatedAt VARCHAR(99) NOT NULL,
