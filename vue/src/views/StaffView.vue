@@ -41,7 +41,7 @@ const staffer = ref({ tshirtSize: '', additionals: {}});
 const tshirtCount = computed(() => staffer.value.tshirtSize != '' ? 1 : 0)
 const expenses = computed(() => {
   return new List(
-    { "text": "Deltagere", "count": 1, "unitPrice": config.value.memberPrice, "amount": config.value.memberPrice },
+    { "text": "Deltager", "count": 1, "unitPrice": config.value.memberPrice, "amount": config.value.memberPrice },
     { "text": "Års t-shirt", "count": tshirtCount, "unitPrice": config.value.tshirtPrice, "amount": tshirtCount.value*config.value.tshirtPrice }
   );
 })
