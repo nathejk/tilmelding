@@ -100,6 +100,7 @@ const validatePincode = async () => {
             <span v-if="teamType == 'spejder'">Tilmelding af spejderpatrulje</span>
             <span v-else-if="teamType == 'senior'">Tilmelding af seniorklan</span>
             <span v-else-if="teamType == 'gøgler'">Tilmelding af gøgler</span>
+            <span v-else-if="teamType == 'friend'">Hjælpertilmelding</span>
             <span v-else>Tilmelding</span>
         </h1>
         <Stepper linear :activeStep="step">
