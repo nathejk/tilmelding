@@ -45,24 +45,24 @@ func New(url string) (*stream, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	_ = cancel
-	//defer cancel()
-	ss, e := s.js.CreateStream(ctx, jetstream.StreamConfig{
-		Name:     "NATHEJK",
-		Subjects: []string{"NATHEJK.>"},
-	})
-	if e != nil {
-		log.Printf("s=%q, e=%q", ss, e)
-		return nil, e
-	}
 	/*
-		_, er := s.js.Publish(ctx, "NATHEJK.new", []byte("hello message 12"))
-		if er != nil {
-			log.Printf("XXXXXXX e=%q", er)
-			return nil, er
-		}*/
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		_ = cancel
+		//defer cancel()
+		ss, e := s.js.CreateStream(ctx, jetstream.StreamConfig{
+			Name:     "NATHEJK",
+			Subjects: []string{"NATHEJK.>"},
+		})
+		if e != nil {
+			log.Printf("s=%q, e=%q", ss, e)
+			return nil, e
+		}
+		/*
+			_, er := s.js.Publish(ctx, "NATHEJK.new", []byte("hello message 12"))
+			if er != nil {
+				log.Printf("XXXXXXX e=%q", er)
+				return nil, er
+			}*/
 
 	log.Printf("Connected to JetStream %q, Stream created 'NATHEJK'", url)
 	return &s, nil

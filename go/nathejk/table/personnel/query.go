@@ -52,13 +52,14 @@ func (q *querier) GetByID(ctx context.Context, staffID types.UserID) (*Staff, er
 		return nil, tables.ErrRecordNotFound
 	}
 
-	query := `SELECT t.userId, t.name, t.phone, t.email, t.groupName, t.korps, t.klan, t.signupStatus, t.tshirtSize, t.additionals
+	query := `SELECT t.userId, t.userType, t.name, t.phone, t.email, t.groupName, t.korps, t.klan, t.signupStatus, t.tshirtSize, t.additionals
 		FROM personnel t
 		WHERE t.userId = ?`
 	var t Staff
 	var additionals []byte
 	err := q.db.QueryRow(query, staffID).Scan(
 		&t.ID,
+		&t.Type,
 		&t.Name,
 		&t.Phone,
 		&t.Email,

@@ -31,7 +31,6 @@ func (app *application) showPersonnelHandler(w http.ResponseWriter, r *http.Requ
 		}
 		return
 	}
-
 	config := TeamConfig{
 		MinMemberCount: 1,
 		MaxMemberCount: 1,
@@ -39,6 +38,9 @@ func (app *application) showPersonnelHandler(w http.ResponseWriter, r *http.Requ
 		TShirtPrice:    175,
 		Korps:          Korps(),
 		TShirtSizes:    TShirtSizes(),
+	}
+	if personnel.Type == "friend" {
+		config.MemberPrice = 0
 	}
 	//contact, _ := app.models.Teams.GetContact(teamId)
 
@@ -66,13 +68,13 @@ func (app *application) updatePersonnelHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	_, err := app.models.Personnel.GetByID(ctx, userID)
+	personnel, err := app.models.Personnel.GetByID(ctx, userID)
 	if err != nil {
 		log.Printf("Signup.GetByID  %q", err)
 		app.BadRequestResponse(w, r, err)
 		return
 	}
-	err = app.commands.Personnel.UpdatePerson(userID, types.TeamTypeBadut, input.Person)
+	err = app.commands.Personnel.UpdatePerson(userID, personnel.Type, input.Person)
 	if err != nil {
 		log.Printf("UpdatePerson  %q", err)
 		app.BadRequestResponse(w, r, err)
@@ -83,7 +85,10 @@ func (app *application) updatePersonnelHandler(w http.ResponseWriter, r *http.Re
 		tshirtCount++
 	}
 	paymentLink := ""
-	totalAmount := tshirtCount*175 + 100
+	totalAmount := tshirtCount * 175
+	if personnel.Type != "friend" {
+		totalAmount = totalAmount + 100
+	}
 	paidAmount := app.models.Payment.AmountPaidByTeamID(types.TeamID(userID))
 	dueAmount := totalAmount - paidAmount
 	if dueAmount > 0 {

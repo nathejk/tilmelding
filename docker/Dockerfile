@@ -5,7 +5,7 @@ FROM golang:1.23 AS api-dev
 RUN mkdir -p /app/docker/bin
 WORKDIR /app
 
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 RUN set -eux; \
 	apt -qq update && \
     apt install -qq -y --no-install-recommends \

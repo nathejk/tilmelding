@@ -21,6 +21,9 @@ func (*consumer) Consumes() []streaminterface.Subject {
 		streaminterface.SubjectFromStr("NATHEJK.*.gøgler.*.signedup"),
 		streaminterface.SubjectFromStr("NATHEJK.*.gøgler.*.updated"),
 		streaminterface.SubjectFromStr("NATHEJK.*.gøgler.*.status.changed"),
+		streaminterface.SubjectFromStr("NATHEJK.*.friend.*.signedup"),
+		streaminterface.SubjectFromStr("NATHEJK.*.friend.*.updated"),
+		streaminterface.SubjectFromStr("NATHEJK.*.friend.*.status.changed"),
 	}
 }
 
