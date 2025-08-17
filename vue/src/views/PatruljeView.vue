@@ -417,7 +417,7 @@ const tshirtSizeLabel = slug => {
         </div>
         <div class="flex flex-col">
             <FloatLabel class="mt-7">
-                <Dropdown v-model="member.tshirtSize" inputId="member-tshirt" :options="config.tshirtSizes" optionValue="slug" optionLabel="label"  class="w-full filled md:w-14rem" />
+                <Dropdown v-model="member.tshirtSize" :disabled="true" inputId="member-tshirt" :options="config.tshirtSizes" optionValue="slug" optionLabel="label"  class="w-full filled md:w-14rem" />
                 <label for="member-tshirt">Vælg t-shirt</label>
             </FloatLabel>
         </div>

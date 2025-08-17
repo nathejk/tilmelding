@@ -16,7 +16,7 @@ function update() {
             <div class="flex flex-col" v-if="props.options">
                 <FloatLabel class="mt-7">
                     <label for="shop-tshirt">Køb t-shirt</label>
-                    <Dropdown v-model="model" inputId="shop-tshirt" :options="props.options" optionValue="slug" optionLabel="label"  class="w-full filled md:w-14rem" />
+                    <Dropdown v-model="model" :disabled="true" inputId="shop-tshirt" :options="props.options" optionValue="slug" optionLabel="label"  class="w-full filled md:w-14rem" />
                 </FloatLabel>
             </div>
             </div>
