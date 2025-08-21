@@ -30,11 +30,11 @@ const config = ref({});
 const team = ref({});
 const contact = ref({});
 const members = ref(new List());
-const tshirtCount = computed(() => members.value.filter(v => !v.deleted && v.tshirtSize && v.tshirtSize != "").length)
+const tshirtCount = computed(() => activeMembers.value.filter(v => !v.deleted && v.tshirtSize && v.tshirtSize != "").length)
 const expenses = computed(() => {
 console.log('tshort', tshirtCount.value*config.value.tshirtPrice, tshirtCount, config.value.tshirtPrice)
   return new List(
-    { "text": "Deltagere", "count": members.value.length, "unitPrice": config.value.memberPrice, "amount": members.value.length*config.value.memberPrice },
+    { "text": "Deltagere", "count": activeMembers.value.length, "unitPrice": config.value.memberPrice, "amount": activeMembers.value.length*config.value.memberPrice },
     { "text": "Års t-shirt", "count": tshirtCount, "unitPrice": config.value.tshirtPrice, "amount": tshirtCount.value*config.value.tshirtPrice }
   );
 })
@@ -88,7 +88,7 @@ const hideDialog = () => {
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const canSave = computed(() => members.value.length >= 3 && members.value.length <= 7)
+const canSave = computed(() => activeMembers.value.length >= 3 && activeMembers.value.length <= 7)
 const save = async () => {
     const headers = {
         "Content-Type": "application/json",
@@ -333,7 +333,7 @@ const tshirtSizeLabel = slug => {
             </Column>
             <template #footer>
                 <div class="text-end	">
-                    <Button icon="pi pi-plus" outlined rounded @click="openNew" :disabled="members.length >= config.maxMemberCount" />
+                    <Button icon="pi pi-plus" outlined rounded @click="openNew" :disabled="activeMembers.length >= config.maxMemberCount" />
                 </div>
             </template>
         </DataTable>

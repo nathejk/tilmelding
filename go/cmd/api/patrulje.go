@@ -116,16 +116,21 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	var tshirtCount = 0
+	var activeMemberCount = 0
 	for _, member := range input.Members {
+		if member.Deleted {
+			continue
+		}
 		if len(member.TShirtSize) > 0 {
 			tshirtCount++
 		}
+		activeMemberCount++
 	}
-	paymentLink := ""
-	totalAmount := tshirtCount*175 + len(input.Members)*250
+	totalAmount := tshirtCount*175 + activeMemberCount*250
 	paidAmount := app.models.Payment.AmountPaidByTeamID(teamID)
 	dueAmount := totalAmount - paidAmount
 	log.Printf("total=%d paid=%d due=%d\n", totalAmount, paidAmount, dueAmount)
+	paymentLink := ""
 	if dueAmount > 0 {
 		signup, _ := app.models.Signup.GetByID(teamID)
 		if (input.Contact.Phone == "") && (signup != nil) && (signup.Phone != nil) {
