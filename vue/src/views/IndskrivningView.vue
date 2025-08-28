@@ -38,7 +38,8 @@ onMounted(async () => {
     }
 })
 
-const complete = computed(() => !!contact.value.name && /^[^@]+@\w+(\.\w+)+\w$/.test(contact.value.emailPending) && !!contact.value.phonePending)
+const emailvalidation = /^[a-zA-Z0-9._%+-]+@((xn--)?[a-zA-Z0-9\u00A0-\uFFFF-]+(\.[a-zA-Z0-9\u00A0-\uFFFF-]+)*\.[a-zA-Z\u00A0-\uFFFF]{2,})$/;
+const complete = computed(() => !!contact.value.name && emailvalidation.test(contact.value.emailPending) && !!contact.value.phonePending)
 const emailValidated = computed(() => !!contact.value.email && contact.value.email == contact.value.emailPending)
 
 const signup = async (next) => {
