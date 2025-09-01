@@ -22,7 +22,7 @@ services:
     labels:
       traefik.enable: true
       traefik.docker.network: traefik
-      traefik.http.routers.tilmelding.rule: Host(`tilmelding.dev.nathejk.dk`) || HostRegexp(`.+\.tilmelding\.dev\.nathejk\.dk`)
+      traefik.http.routers.tilmelding.rule: Host(`tilmelding.local.nathejk.dk`) || HostRegexp(`.+\.tilmelding\.local\.nathejk\.dk`)
 
   ui:
     build:

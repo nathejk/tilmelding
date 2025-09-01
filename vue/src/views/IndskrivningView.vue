@@ -100,7 +100,7 @@ const validatePincode = async () => {
         <h1 class="font-nathejk text-4xl text-slate-700 pb-5">
             <span v-if="teamType == 'spejder'">Tilmelding af spejderpatrulje</span>
             <span v-else-if="teamType == 'senior'">Tilmelding af seniorklan</span>
-            <span v-else-if="teamType == 'gøgler'">Tilmelding af gøgler</span>
+            <span v-else-if="teamType == 'gøgler'">Tilmelding af gøgler <Tag value="Lukket" severity="danger" /></span>
             <span v-else-if="teamType == 'friend'">Hjælpertilmelding</span>
             <span v-else>Tilmelding</span>
         </h1>
@@ -128,7 +128,7 @@ const validatePincode = async () => {
                 </div>
             </div>
             <div class="flex pt-4 justify-end">
-                <Button label="Videre" icon="pi pi-arrow-right" iconPos="right" @click="signup(nextCallback)" :disabled="!complete"/>
+                <Button v-if="teamType != 'gøgler'" label="Videre" icon="pi pi-arrow-right" iconPos="right" @click="signup(nextCallback)" :disabled="!complete"/>
             </div>
         </template>
     </StepperPanel>
