@@ -34,7 +34,7 @@ type Spejder struct {
 	City          string             `json:"city"`
 	Email         string             `json:"email"`
 	Phone         string             `json:"phone"`
-	PhoneParent   string             `json:"phoneParent"`
+	PhoneParent   string             `json:"phoneContact"`
 	Birthday      types.Date         `json:"birthday"`
 	Returning     bool               `json:"returning"`
 	TShirtSize    string             `json:"tshirtSize"`
