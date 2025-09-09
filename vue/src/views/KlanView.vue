@@ -49,6 +49,7 @@ onMounted(async () => {
     const data = await response.json();
     config.value = data.config
     team.value = data.team
+    data.members.map(m => m.vegitarian = m.diet == "vegetar")
     members.value = new List(...data.members);
     payments.value = new List(...data.payments);
 

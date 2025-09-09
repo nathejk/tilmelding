@@ -57,8 +57,19 @@ func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) 
 func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
 	var input struct {
-		Team    commands.Klan     `json:"team"`
-		Members []commands.Senior `json:"members"`
+		Team    commands.Klan `json:"team"`
+		Members []struct {
+			MemberID   types.MemberID     `json:"memberId"`
+			Deleted    bool               `json:"deleted"`
+			Name       string             `json:"name"`
+			Address    string             `json:"address"`
+			PostalCode string             `json:"postalCode"`
+			Email      types.EmailAddress `json:"email"`
+			Phone      types.PhoneNumber  `json:"phone"`
+			Birthday   types.Date         `json:"birthday"`
+			Vegitarian bool               `json:"vegitarian"`
+			TShirtSize string             `json:"tshirtsize"`
+		} `json:"members"`
 	}
 	if err := app.ReadJSON(w, r, &input); err != nil {
 		log.Printf("ReadJSON %q", err)
@@ -66,13 +77,32 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	var seniors []commands.Senior
+	for _, m := range input.Members {
+		diet := ""
+		if m.Vegitarian {
+			diet = "vegetar"
+		}
+		seniors = append(seniors, commands.Senior{
+			MemberID:   m.MemberID,
+			Deleted:    m.Deleted,
+			Name:       m.Name,
+			Address:    m.Address,
+			PostalCode: m.PostalCode,
+			Email:      m.Email,
+			Phone:      m.Phone,
+			Birthday:   m.Birthday,
+			TShirtSize: m.TShirtSize,
+			Diet:       diet,
+		})
+	}
 	_, err := app.models.Teams.GetKlan(teamID)
 	if err != nil {
 		log.Printf("Signup.GetByID  %q", err)
 		app.BadRequestResponse(w, r, err)
 		return
 	}
-	err = app.commands.Team.UpdateKlan(teamID, input.Team, input.Members)
+	err = app.commands.Team.UpdateKlan(teamID, input.Team, seniors)
 	if err != nil {
 		log.Printf("UpdateKlan  %q", err)
 		app.BadRequestResponse(w, r, err)
