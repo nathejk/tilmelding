@@ -48,8 +48,9 @@ func (c *patrulje) Consumes() (subjs []streaminterface.Subject) {
 	return []streaminterface.Subject{
 		//streaminterface.SubjectFromStr("monolith:nathejk_team"),
 		//streaminterface.SubjectFromStr("nathejk"),
-		streaminterface.SubjectFromStr("NATHEJK:2025.patrulje.*.updated"),
-		streaminterface.SubjectFromStr("NATHEJK:2025.patrulje.*.signedup"),
+		streaminterface.SubjectFromStr("NATHEJK.2025.patrulje.*.signedup"),
+		streaminterface.SubjectFromStr("NATHEJK.2025.patrulje.*.updated"),
+		streaminterface.SubjectFromStr("NATHEJK.2025.patrulje.*.numberassigned"),
 	}
 }
 
@@ -104,6 +105,19 @@ func (c *patrulje) HandleMessage(msg streaminterface.Message) error {
 		if err != nil {
 			log.Fatalf("Error consuming sql %q", err)
 		}
+
+	case msg.Subject().Match("NATHEJK.*.patrulje.*.numberassigned"):
+		var body messages.NathejkPatrolNumberAssigned
+		if err := msg.Body(&body); err != nil {
+			return err
+		}
+		query := "UPDATE patrulje SET teamNumber=%q WHERE teamId=%q"
+		args := []any{body.TeamNumber, body.TeamID}
+
+		if err := c.w.Consume(fmt.Sprintf(query, args...)); err != nil {
+			log.Fatalf("Error consuming sql %q", err)
+		}
+
 	default:
 		log.Printf("Unhandled message %q", msg.Subject().Subject())
 		/*

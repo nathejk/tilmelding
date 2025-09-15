@@ -4,12 +4,14 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
 	"nathejk.dk/internal/payment/mobilepay"
 	"nathejk.dk/nathejk/commands"
+	"nathejk.dk/nathejk/table/patrulje"
 )
 
 type SlugLabel struct {
@@ -91,6 +93,28 @@ func (app *application) showPatruljeHandler(w http.ResponseWriter, r *http.Reque
 		app.ServerErrorResponse(w, r, err)
 	}
 }
+
+func (app *application) assignNumberHandler(w http.ResponseWriter, r *http.Request) {
+	teams, _ := app.models.Patrulje.GetAll(r.Context(), patrulje.Filter{YearSlug: "2025"})
+	log.Printf("Assigning numbers to %d teams", len(teams))
+	for _, team := range teams {
+		if team.TeamNumber != "" {
+			log.Printf("%s already got number %q", team.TeamID, team.TeamNumber)
+			continue
+		}
+		payments, _, _ := app.models.Payment.GetAll(team.TeamID)
+		if len(payments) == 0 {
+			log.Printf("%s have no registered payments", team.TeamID)
+			continue
+		}
+		log.Printf("%s ASSIGNING NUMBER", team.TeamID)
+		_ = app.commands.Team.AssignNumber(team.TeamID)
+		time.Sleep(time.Second)
+		p, _ := app.models.Teams.GetPatrulje(team.TeamID)
+		log.Printf("%s Got number %q", team.TeamID, p.Number)
+	}
+}
+
 func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
 	var input struct {

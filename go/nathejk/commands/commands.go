@@ -13,6 +13,7 @@ type Commands struct {
 		Signup(types.TeamType, *messages.NathejkTeamSignedUp) error
 		UpdatePatrulje(types.TeamID, Patrulje, Contact, []Spejder) error
 		UpdateKlan(types.TeamID, Klan, []Senior) error
+		AssignNumber(types.TeamID) error
 	}
 	Payment interface {
 		Request(amount mobilepay.Amount, desc string, phone types.PhoneNumber, email types.EmailAddress, returnUrl, orderForeignKey, orderType string) (string, error)

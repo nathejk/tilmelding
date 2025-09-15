@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"math/rand/v2"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/nathejk/shared-go/messages"
@@ -15,6 +16,8 @@ type teamQuerier interface {
 	//ConfirmBySecret(string) (*data.Confirm, error)
 	GetKlan(types.TeamID) (*data.Klan, error)
 	RequestedSeniorCount() int
+	GetPatrulje(types.TeamID) (*data.Patrulje, error)
+	GetLastPatruljeID() (*types.TeamID, error)
 }
 type team struct {
 	p streaminterface.Publisher
@@ -105,6 +108,38 @@ func (c *team) UpdatePatrulje(teamID types.TeamID, team Patrulje, contact Contac
 		}
 	}
 
+	return nil
+}
+
+func (c *team) AssignNumber(teamID types.TeamID) error {
+	lastTeamID, _ := c.q.GetLastPatruljeID()
+	nr := 1
+	if lastTeamID != nil {
+		patrulje, _ := c.q.GetPatrulje(*lastTeamID)
+		if len(patrulje.Number) > 0 {
+			i, err := strconv.Atoi(patrulje.Number)
+			if err != nil {
+				return fmt.Errorf("unable to find next number %#v", err)
+			}
+			nr = i + 1
+		}
+	}
+	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK.%s.patrulje.%s.numberassigned", "2025", teamID)))
+	msg.SetBody(&messages.NathejkPatrolNumberAssigned{
+		TeamID:     teamID,
+		TeamNumber: fmt.Sprintf("%d", nr),
+	})
+	msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
+	if err := c.p.Publish(msg); err != nil {
+		return err
+	}
+	//	klan, _ := c.q.GetKlan(teamID)
+	//	if klan.Status == types.SignupStatusOnHold {
+	//
+	// The team is on waiting list, do not do anything
+	//
+	//		return nil
+	//	}
 	return nil
 }
 

@@ -133,6 +133,21 @@ func (m TeamModel) GetPatruljer(filters Filters) ([]*Patrulje, Metadata, error) 
 	return patruljer, metadata, nil
 }
 
+func (m TeamModel) GetLastPatruljeID() (*types.TeamID, error) {
+	var teamID types.TeamID
+
+	query := `SELECT teamId FROM patrulje WHERE teamNumber != "" ORDER BY length(teamNumber) desc, teamNumber DESC LIMIT 1`
+	err := m.DB.QueryRow(query).Scan(&teamID)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+	return &teamID, nil
+}
 func (m TeamModel) GetPatrulje(teamID types.TeamID) (*Patrulje, error) {
 	if len(teamID) == 0 {
 		return nil, ErrRecordNotFound

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nathejk/shared-go/types"
+	"nathejk.dk/nathejk/table/patrulje"
 	"nathejk.dk/nathejk/table/payment"
 	"nathejk.dk/nathejk/table/personnel"
 )
@@ -25,6 +26,10 @@ type PersonnelInterface interface {
 	GetAll(context.Context, personnel.Filter) ([]personnel.Staff, error)
 	GetByID(context.Context, types.UserID) (*personnel.Staff, error)
 }
+type PatruljeInterface interface {
+	GetAll(context.Context, patrulje.Filter) ([]*patrulje.Patrulje, error)
+	GetByID(context.Context, types.TeamID) (*patrulje.Patrulje, error)
+}
 
 type Models struct {
 	Teams interface {
@@ -35,6 +40,7 @@ type Models struct {
 		GetKlan(types.TeamID) (*Klan, error)
 		GetContact(types.TeamID) (*Contact, error)
 		RequestedSeniorCount() int
+		GetLastPatruljeID() (*types.TeamID, error)
 	}
 	Members interface {
 		GetSpejdere(Filters) ([]*Spejder, Metadata, error)
@@ -62,9 +68,10 @@ type Models struct {
 	}
 	Payment   PaymentInterface
 	Personnel PersonnelInterface
+	Patrulje  PatruljeInterface
 }
 
-func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterface) Models {
+func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterface, patrulje PatruljeInterface) Models {
 	return Models{
 		Teams:       TeamModel{DB: db},
 		Members:     MemberModel{DB: db},
@@ -74,5 +81,6 @@ func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterfac
 		Signup:      SignupModel{DB: db},
 		Payment:     payment,
 		Personnel:   personnel,
+		Patrulje:    patrulje,
 	}
 }

@@ -12,7 +12,7 @@ require (
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/lib/pq v1.10.7
 	github.com/moul/http2curl v1.0.0
-	github.com/nathejk/shared-go v0.0.0-20250612000024-ded22e9fd096
+	github.com/nathejk/shared-go v0.0.0-20250904085635-4e5edbc6ac16
 	github.com/nats-io/nats.go v1.34.1
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.1

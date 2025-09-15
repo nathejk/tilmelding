@@ -29,6 +29,7 @@ func (app *application) routes() http.Handler {
 	router.HandlerFunc(http.MethodPut, "/api/personnel/:id", app.updatePersonnelHandler)
 	router.HandlerFunc(http.MethodPut, "/api/pay/:id", app.sendMobilepaySmsHandler)
 	router.HandlerFunc(http.MethodGet, "/api/payment/:ref", app.showPaymentHandler)
+	router.HandlerFunc(http.MethodGet, "/api/assignnumbers", app.assignNumberHandler)
 
 	callback := httprouter.New()
 	callback.NotFound = http.HandlerFunc(app.NotFoundResponse)
