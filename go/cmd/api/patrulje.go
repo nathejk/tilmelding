@@ -102,8 +102,9 @@ func (app *application) assignNumberHandler(w http.ResponseWriter, r *http.Reque
 			log.Printf("%s already got number %q", team.TeamID, team.TeamNumber)
 			continue
 		}
-		payments, _, _ := app.models.Payment.GetAll(team.TeamID)
-		if len(payments) == 0 {
+
+		amountPaid := app.models.Payment.AmountPaidByTeamID(team.TeamID)
+		if amountPaid == 0 {
 			log.Printf("%s have no registered payments", team.TeamID)
 			continue
 		}
