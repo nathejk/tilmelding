@@ -1,6 +1,6 @@
 #
 # DEV - BASE
-FROM golang:1.23 AS api-dev
+FROM golang:1.25 AS api-dev
 
 RUN mkdir -p /app/docker/bin
 WORKDIR /app
