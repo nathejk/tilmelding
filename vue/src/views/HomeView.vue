@@ -118,7 +118,7 @@ function link(url) {
           </Card>
 
           <Card class="col bg-yellow-400">
-            <template #title>Seniorer <small class="font-thin pl-2">+15 år</small></template>
+            <template #title>Seniorer <small class="font-thin pl-2">+16 år</small></template>
             <template #content>
               <ul class="list-disc mx-5">
                 <li>Et sjak kan være op til 4 personer.</li>
@@ -133,7 +133,6 @@ function link(url) {
 
       </div>
     </div>
-    
 
     <div class="bg-slate-100">
       <div class="container mx-auto py-5">
