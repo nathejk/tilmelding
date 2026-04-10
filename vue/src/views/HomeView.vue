@@ -143,7 +143,7 @@ function link(url) {
               <div class="self-center">
                   <Button label="Hent spejderinvitation" icon="pi pi-download" size="large" severity="warning" @click="download('/invitation/Patruljeinvitation2025.pdf')" />
               </div>
-              <Image src="/invitation/collage2025.png" alt="" />
+              <Image src="/invitation/collage2026.png" alt="" />
               <div class="self-center">
                   <Button label="Hent seniorinvitation" icon="pi pi-download" size="large" severity="warning" @click="download('/invitation/Seniorinvitation2025.pdf')" />
               </div>
