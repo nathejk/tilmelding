@@ -6,6 +6,8 @@ networks:
   local:
   traefik:
     external: true
+  jetstream:
+    external: true
 
 services:
   gw:
@@ -47,7 +49,7 @@ services:
       target: base
       dockerfile: docker/Dockerfile
     environment:
-      JETSTREAM_DSN: nats://dev.nathejk.dk:4222
+      JETSTREAM_DSN: nats://jetstream:4222
       DB_DSN: bruger:kodeord@tcp(db:3306)/tilmelding?parseTime=true
       SMS_DSN: cpsms://TOKEN@api.cpsms.dk
       #MONOLITH_DB_DSN_RW: root:ib@tcp(dev.nathejk.dk:3306)/nathejk2018?parseTime=true
@@ -79,6 +81,7 @@ services:
     - db
     networks:
     - local
+    - jetstream
 
   db:
     image: mariadb:10.8
