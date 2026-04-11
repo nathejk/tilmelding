@@ -60,7 +60,7 @@ function link(url) {
 <template>
   <Navigation class="dark" />
   <main class="">
-    <div class="bg-slate-600">
+    <div class="bg-slate-600" v-if="false">
       <div class="container mx-auto py-10">
         <h1 class="mb-5 font-nathejk font-bold text-5xl text-yellow-500">TILMELDING LUKKET FOR I ÅR</h1>
         <div class="text-2xl text-slate-300 leading-loose">
@@ -68,7 +68,7 @@ function link(url) {
         </div>
       </div>
     </div>
-    <div class="bg-slate-900" v-if="false">
+    <div class="bg-slate-900">
       <div class="container mx-auto relative aspect-video">
         <video playsinline autoplay muted ref="videoplayer" />
         <Countdown class="absolute inset-0 text-slate-200 p-10 text-xl" :time="config.timeCountdown" v-slot="{days, hours, minutes, seconds}">
