@@ -19,8 +19,8 @@ services:
         tilmelding:ui
         sql:phpmyadmin
     networks:
-    - local
-    - traefik
+      - local
+      - traefik
     labels:
       traefik.enable: true
       traefik.docker.network: traefik
@@ -36,12 +36,12 @@ services:
       NODE_ENV: development
       API_BASEURL: http://api.tilmelding.dev.nathejk.dk
     volumes:
-    - ./vue:/app
-    - ui-node_modules:/app/node_modules
+      - ./vue:/app
+      - ui-node_modules:/app/node_modules
     depends_on:
-    - gw
+      - gw
     networks:
-    - local
+      - local
 
   api:
     build:
@@ -55,7 +55,7 @@ services:
       #MONOLITH_DB_DSN_RW: root:ib@tcp(dev.nathejk.dk:3306)/nathejk2018?parseTime=true
       PAYMENT_DSN: mobilepay://client_id:client_secret@apitest.vipps.no?Ocp-Apim-Subscription-Key#MSN
       BASEURL: http://tilmelding.dev.nathejk.dk
-      COUNTDOWN: "2024-05-02T18:24:00Z"
+      COUNTDOWN: "2026-05-02T18:24:00Z"
       COUNTDOWN_VIDEOS: |
         https://nathejk-countdown.s3.eu-central-1.amazonaws.com/videos/anne.mov
         https://nathejk-countdown.s3.eu-central-1.amazonaws.com/videos/caroline.mov
@@ -74,14 +74,14 @@ services:
       SMTP_HOST: mail
       SMTP_PORT: 1025
     volumes:
-    - ./go:/app
-    - api:/go
+      - ./go:/app
+      - api:/go
     depends_on:
-    - gw
-    - db
+      - gw
+      - db
     networks:
-    - local
-    - jetstream
+      - local
+      - jetstream
 
   db:
     image: mariadb:10.8
@@ -92,7 +92,7 @@ services:
       MYSQL_PASSWORD: kodeord
       TZ: Europe/Copenhagen
     networks:
-    - local
+      - local
 
   phpmyadmin:
     image: phpmyadmin
@@ -102,13 +102,13 @@ services:
       PMA_USER: bruger
       PMA_PASSWORD: kodeord
     depends_on:
-    - gw
+      - gw
     networks:
-    - local
+      - local
 
   mail:
     image: mailhog/mailhog:v1.0.1
     platform: linux/x86_64
     restart: unless-stopped
     networks:
-    - local
+      - local

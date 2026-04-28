@@ -10,6 +10,7 @@ import (
 	"nathejk.dk/nathejk/table/patrulje"
 	"nathejk.dk/nathejk/table/payment"
 	"nathejk.dk/nathejk/table/personnel"
+	"nathejk.dk/nathejk/table/signup"
 )
 
 var (
@@ -62,25 +63,28 @@ type Models struct {
 		Update(*User) error
 		GetForToken(string, string) (*User, error)
 	}
-	Signup interface {
-		GetByID(types.TeamID) (*Signup, error)
-		ConfirmBySecret(string) (types.TeamID, error)
-	}
+	/*
+		Signup interface {
+			GetByID(types.TeamID) (*Signup, error)
+			ConfirmBySecret(string) (types.TeamID, error)
+		}*/
 	Payment   PaymentInterface
 	Personnel PersonnelInterface
 	Patrulje  PatruljeInterface
+	Signup    signup.Queries
 }
 
-func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterface, patrulje PatruljeInterface) Models {
+func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterface, patrulje PatruljeInterface, s signup.Queries) Models {
 	return Models{
 		Teams:       TeamModel{DB: db},
 		Members:     MemberModel{DB: db},
 		Permissions: PermissionModel{DB: db},
 		Tokens:      TokenModel{DB: db},
 		Users:       UserModel{DB: db},
-		Signup:      SignupModel{DB: db},
-		Payment:     payment,
-		Personnel:   personnel,
-		Patrulje:    patrulje,
+		//Signup:      SignupModel{DB: db},
+		Payment:   payment,
+		Personnel: personnel,
+		Patrulje:  patrulje,
+		Signup:    s,
 	}
 }

@@ -26,7 +26,7 @@ type Spejder struct {
 	ID            types.MemberID     `json:"id"`
 	MemberID      types.MemberID     `json:"memberId"`
 	InitialTeamID types.TeamID       `json:"teamId"`
-	CurrentTeamID types.TeamID       `json:"teamId"`
+	CurrentTeamID types.TeamID       `json:"activeTeamId"`
 	Status        types.MemberStatus `json:"status"`
 	Name          string             `json:"name"`
 	Address       string             `json:"address"`
@@ -45,9 +45,9 @@ func (m MemberModel) GetSpejdere(filters Filters) ([]*Spejder, Metadata, error) 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	query := `Select 
-  s.memberId, 
-  s.teamId, 
+	query := `Select
+  s.memberId,
+  s.teamId,
   IF(ss.status IS NULL, IF(ps.startedUts > 0, 'started', 'paid'), ss.status) AS status,
   name,
   address,
@@ -112,9 +112,9 @@ func (m MemberModel) GetSeniore(filters Filters) ([]*Senior, Metadata, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	query := `Select 
-  s.memberId, 
-  s.teamId, 
+	query := `Select
+  s.memberId,
+  s.teamId,
   name,
   address,
   postalCode,
@@ -208,8 +208,8 @@ func (m TeamModel) GetSpejder(teamID types.TeamID) (*Patrulje, error) {
 		return nil, ErrRecordNotFound
 	}
 
-	query := `SELECT p.teamId, p.teamNumber, p.name, p.groupName, p.korps, p.memberCount, IF(pm.parentTeamId IS NOT NULL, "JOIN", IF(startedUts > 0, "STARTED",  signupStatus)) 
-		FROM patrulje p 
+	query := `SELECT p.teamId, p.teamNumber, p.name, p.groupName, p.korps, p.memberCount, IF(pm.parentTeamId IS NOT NULL, "JOIN", IF(startedUts > 0, "STARTED",  signupStatus))
+		FROM patrulje p
 		JOIN patruljestatus ps ON p.teamId = ps.teamID
 		LEFT JOIN patruljemerged pm ON p.teamId = pm.teamId
 		WHERE p.teamId = ?`

@@ -18,16 +18,17 @@ func (app *application) routes() http.Handler {
 	router.MethodNotAllowed = http.HandlerFunc(app.MethodNotAllowedResponse)
 
 	router.HandlerFunc(http.MethodGet, "/api/home", app.homeHandler)
-	router.HandlerFunc(http.MethodPost, "/api/signup", app.signupHandler)
-	router.HandlerFunc(http.MethodPost, "/api/signup/pincode", app.signupPincodeHandler)
+	router.HandlerFunc(http.MethodPost, "/api/signup", app.createSignupHandler)
+	router.HandlerFunc(http.MethodPost, "/api/signup/pincode", app.validatePhoneNumberHandler)
 	router.HandlerFunc(http.MethodGet, "/api/signup/:id", app.showSignupHandler)
+
 	router.HandlerFunc(http.MethodGet, "/api/patrulje/:id", app.showPatruljeHandler)
 	router.HandlerFunc(http.MethodPut, "/api/patrulje/:id", app.updatePatruljeHandler)
 	router.HandlerFunc(http.MethodGet, "/api/klan/:id", app.showKlanHandler)
 	router.HandlerFunc(http.MethodPut, "/api/klan/:id", app.updateKlanHandler)
 	router.HandlerFunc(http.MethodGet, "/api/personnel/:id", app.showPersonnelHandler)
 	router.HandlerFunc(http.MethodPut, "/api/personnel/:id", app.updatePersonnelHandler)
-	router.HandlerFunc(http.MethodPut, "/api/pay/:id", app.sendMobilepaySmsHandler)
+	//router.HandlerFunc(http.MethodPut, "/api/pay/:id", app.sendMobilepaySmsHandler)
 	router.HandlerFunc(http.MethodGet, "/api/payment/:ref", app.showPaymentHandler)
 	router.HandlerFunc(http.MethodGet, "/api/assignnumbers", app.assignNumberHandler)
 
@@ -35,7 +36,7 @@ func (app *application) routes() http.Handler {
 	callback.NotFound = http.HandlerFunc(app.NotFoundResponse)
 	callback.MethodNotAllowed = http.HandlerFunc(app.MethodNotAllowedResponse)
 	callback.HandlerFunc(http.MethodGet, "/callback/mobilepay/:ref", app.mobilepayCallbackHandler)
-	callback.HandlerFunc(http.MethodGet, "/callback/email/:id", app.confirmSignupHandler)
+	callback.HandlerFunc(http.MethodGet, "/callback/email/:id", app.validateEmailCallbackHandler)
 
 	/*
 		router.HandlerFunc(http.MethodPut, "/api/*filepath", app.cleo.ProxyHandler)

@@ -31,7 +31,7 @@ func (app *application) mobilepayCallbackHandler(w http.ResponseWriter, r *http.
 			"payment": payment,
 		}
 
-		err = app.mailer.Send(string(payment.ReceiptEmail), "payment_received.tmpl", data)
+		_, err = app.mailer.Send(string(payment.ReceiptEmail), "payment_received.tmpl", data)
 		if err != nil {
 			app.logger.PrintError(err, nil)
 			return

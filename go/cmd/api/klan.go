@@ -119,7 +119,7 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 	paidAmount := app.models.Payment.AmountPaidByTeamID(teamID)
 	dueAmount := totalAmount - paidAmount
 	if dueAmount > 0 {
-		signup, _ := app.models.Signup.GetByID(teamID)
+		signup, _ := app.models.Signup.GetByID(r.Context(), teamID)
 
 		phone := types.PhoneNumber("")
 		if (signup != nil) && (signup.Phone != nil) {

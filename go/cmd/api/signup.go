@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
-	"github.com/davecgh/go-spew/spew"
-	"github.com/google/uuid"
-	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
-	"nathejk.dk/superfluids/streaminterface"
+	"nathejk.dk/nathejk/table/signup"
 )
 
 /*
@@ -34,7 +32,7 @@ func (app *application) showSignupHandler(w http.ResponseWriter, r *http.Request
 		app.NotFoundResponse(w, r)
 		return
 	}
-	team, err := app.models.Signup.GetByID(id)
+	team, err := app.models.Signup.GetByID(r.Context(), id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -51,83 +49,104 @@ func (app *application) showSignupHandler(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (app *application) signupPincodeHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) validatePhoneNumberHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		TeamID  types.TeamID `json:"teamId"`
 		Pincode string       `json:"pincode"`
+		//PhoneNumber types.PhoneNumber `json:"phone"`
 	}
 	if err := app.ReadJSON(w, r, &input); err != nil {
 		app.BadRequestResponse(w, r, err)
 		return
 	}
-	team, err := app.models.Signup.GetByID(input.TeamID)
+	payload := jsonapi.Envelope{"ok": true}
+	err := app.commands.Signup.VerifyPhone(r.Context(), input.TeamID, input.Pincode)
 	if err != nil {
-		app.BadRequestResponse(w, r, err)
-		return
+		payload["ok"] = false
+		payload["error"] = err.Error()
 	}
-	if team.Pincode != input.Pincode {
-		app.InvalidCredentialsResponse(w, r)
-	}
-	page := ""
-	switch team.TeamType {
-	case types.TeamTypeBadut:
-		page = fmt.Sprintf("/%s/%s", "badut", input.TeamID)
-	default:
-		page = fmt.Sprintf("/%s/%s", team.TeamType, input.TeamID)
-	}
-	err = app.WriteJSON(w, http.StatusCreated, jsonapi.Envelope{"team": map[string]string{"teamPage": page}}, nil)
+	err = app.WriteJSON(w, http.StatusCreated, payload, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
+	/*
+		team, err := app.models.Signup.GetByID(r.Context(), input.TeamID)
+		if err != nil {
+			app.BadRequestResponse(w, r, err)
+			return
+		}
+		if team.Pincode != input.Pincode {
+			app.InvalidCredentialsResponse(w, r)
+		}
+		page := ""
+		switch team.TeamType {
+		case types.TeamTypeBadut:
+			page = fmt.Sprintf("/%s/%s", "badut", input.TeamID)
+		default:
+			page = fmt.Sprintf("/%s/%s", team.TeamType, input.TeamID)
+		}
+		err = app.WriteJSON(w, http.StatusCreated, jsonapi.Envelope{"team": map[string]string{"teamPage": page}}, nil)
+		if err != nil {
+			app.ServerErrorResponse(w, r, err)
+		}
+	*/
 }
 
-func (app *application) sendMobilepaySmsHandler(w http.ResponseWriter, r *http.Request) {
+/*
+	func (app *application) sendMobilepaySmsHandler(w http.ResponseWriter, r *http.Request) {
+		teamID := types.TeamID(app.ReadNamedParam(r, "id"))
+		if teamID == "" {
+			log.Println("1")
+			app.NotFoundResponse(w, r)
+			return
+		}
+		var input struct {
+			Amount int               `json:"amount"`
+			Phone  types.PhoneNumber `json:"phone"`
+		}
+		if err := app.ReadJSON(w, r, &input); err != nil {
+			app.BadRequestResponse(w, r, err)
+			return
+		}
+		team, err := app.models.Signup.GetByID(r.Context(), teamID)
+		if err != nil {
+			app.BadRequestResponse(w, r, err)
+			return
+		}
+		mobilepay := 330811
+		if team.TeamType == types.TeamTypePatrulje {
+			mobilepay = 204414
+		}
+		text := fmt.Sprintf("https://www.mobilepay.dk/erhverv/betalingslink/betalingslink-svar?phone=%d&amount=%d&comment=%s&lock=1", mobilepay, input.Amount, teamID)
+		err = app.sms.Send(input.Phone.Normalize(), text)
+		if err != nil {
+			app.BadRequestResponse(w, r, err)
+			return
+		}
+		err = app.WriteJSON(w, http.StatusCreated, jsonapi.Envelope{"ok": true}, nil)
+		if err != nil {
+			app.ServerErrorResponse(w, r, err)
+		}
+	}
+*/
+func (app *application) validateEmailCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
-	if teamID == "" {
-		log.Println("1")
-		app.NotFoundResponse(w, r)
-		return
-	}
-	var input struct {
-		Amount int               `json:"amount"`
-		Phone  types.PhoneNumber `json:"phone"`
-	}
-	if err := app.ReadJSON(w, r, &input); err != nil {
-		app.BadRequestResponse(w, r, err)
-		return
-	}
-	team, err := app.models.Signup.GetByID(teamID)
+	secret := r.URL.Query().Get("secret")
+	err := app.commands.Signup.VerifyEmail(r.Context(), teamID, secret)
 	if err != nil {
 		app.BadRequestResponse(w, r, err)
 		return
 	}
-	mobilepay := 330811
-	if team.TeamType == types.TeamTypePatrulje {
-		mobilepay = 204414
-	}
-	text := fmt.Sprintf("https://www.mobilepay.dk/erhverv/betalingslink/betalingslink-svar?phone=%d&amount=%d&comment=%s&lock=1", mobilepay, input.Amount, teamID)
-	err = app.sms.Send(input.Phone.Normalize(), text)
+	err = app.commands.Signup.SendVerificationSms(r.Context(), teamID)
 	if err != nil {
 		app.BadRequestResponse(w, r, err)
 		return
 	}
-	err = app.WriteJSON(w, http.StatusCreated, jsonapi.Envelope{"ok": true}, nil)
-	if err != nil {
-		app.ServerErrorResponse(w, r, err)
-	}
+	http.Redirect(w, r, fmt.Sprintf("/indskrivning/%s", teamID), http.StatusSeeOther)
 }
-func (app *application) confirmSignupHandler(w http.ResponseWriter, r *http.Request) {
-	id := app.ReadNamedParam(r, "id")
-	if id == "" {
-		app.NotFoundResponse(w, r)
-		return
-	}
-	teamID, err := app.models.Signup.ConfirmBySecret(id)
-	if err != nil {
-		app.ServerErrorResponse(w, r, err)
-		return
-	}
-	team, err := app.models.Signup.GetByID(teamID)
+
+/*/
+	team, err := app.models.Signup.GetByID(r.Context(), teamID)
 	if err != nil {
 		app.BadRequestResponse(w, r, err)
 		return
@@ -138,11 +157,21 @@ func (app *application) confirmSignupHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/indskrivning/%s", teamID), http.StatusSeeOther)
-}
+	/*
+	if id == "" {
+		app.NotFoundResponse(w, r)
+		return
+	}
+	teamID, err := app.models.Signup.ConfirmBySecret(id)
+	if err != nil {
+		app.ServerErrorResponse(w, r, err)
+		return
+	}
+}*/
 
-func (app *application) signupHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) createSignupHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		TeamID       types.TeamID       `json:"teamId"`
+		//	TeamID       types.TeamID       `json:"teamId"`
 		TeamType     types.TeamType     `json:"type"`
 		Name         string             `json:"name"`
 		EmailPending types.EmailAddress `json:"emailPending"`
@@ -158,67 +187,86 @@ func (app *application) signupHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	*/
 	if err := app.ReadJSON(w, r, &input); err != nil {
-		log.Print(err)
+		//	log.Print(err)
 		app.BadRequestResponse(w, r, err)
 		return
 	}
-
-	msg := &messages.NathejkTeamSignedUp{
-		TeamID: input.TeamID,
-		Name:   input.Name,
-		Phone:  input.PhonePending,
-		Email:  input.EmailPending,
-	}
-	/*
-	   v := validator.New()
-
-	   	if product.Validate(v); !v.Valid() {
-	   		app.FailedValidationResponse(w, r, v.Errors)
-	   		return
-	   	}
-	*/
-	if err := app.commands.Team.Signup(input.TeamType, msg); err != nil {
-		spew.Dump(input)
-		app.ServerErrorResponse(w, r, err)
+	year := types.YearSlug(fmt.Sprintf("%d", time.Now().Year()))
+	teamID, err := app.commands.Signup.Signup(r.Context(), year, signup.SignupCommand{
+		TeamType: input.TeamType,
+		Name:     input.Name,
+		Phone:    input.PhonePending,
+		Email:    input.EmailPending,
+	})
+	if err != nil {
+		app.BadRequestResponse(w, r, err)
 		return
 	}
+	go app.commands.Signup.SendVerificationEmail(r.Context(), teamID)
 
-	team, _ := app.models.Signup.GetByID(msg.TeamID)
-	if team == nil {
-		team = &data.Signup{TeamID: msg.TeamID, TeamType: input.TeamType}
-	}
-	team.Name = input.Name
-	team.PhonePending = input.PhonePending
-	team.EmailPending = input.EmailPending
-
-	app.Background(func() {
-		data := map[string]any{
-			"team":    team,
-			"secret":  uuid.New().String(),
-			"baseurl": app.config.baseurl,
-		}
-
-		err := app.mailer.Send(string(input.EmailPending), "verify_email.tmpl", data)
-		if err != nil {
-			app.logger.PrintError(err, nil)
-		}
-		msg := app.jetstream.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.mail.%s.sent", "2025", input.TeamType, team.TeamID, types.PingTypeSignup)))
-		msg.SetBody(&messages.NathejkMailSent{
-			PingType:  types.PingTypeSignup,
-			TeamID:    team.TeamID,
-			Recipient: types.EmailAddress(input.EmailPending),
-			Subject:   "Bekræft e-mailadresse",
-		})
-		msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api", Phase: data["secret"].(string)})
-		if err := app.jetstream.Publish(msg); err != nil {
-			app.logger.PrintError(err, nil)
-		}
-	})
-
-	err := app.WriteJSON(w, http.StatusCreated, jsonapi.Envelope{"team": team}, nil)
+	err = app.WriteJSON(w, http.StatusCreated, jsonapi.Envelope{"ok": true}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
+	/*
+	   	msg := &messages.NathejkTeamSignedUp{
+	   		TeamID: input.TeamID,
+	   		Name:   input.Name,
+	   		Phone:  input.PhonePending,
+	   		Email:  input.EmailPending,
+	   	}
+
+	   /*
+
+	   	v := validator.New()
+
+	   		if product.Validate(v); !v.Valid() {
+	   			app.FailedValidationResponse(w, r, v.Errors)
+	   			return
+	   		}
+
+	   * /
+
+	   	if err := app.commands.Team.Signup(input.TeamType, msg); err != nil {
+	   		spew.Dump(input)
+	   		app.ServerErrorResponse(w, r, err)
+	   		return
+	   	}
+
+	   team, _ := app.models.Signup.GetByID(r.Context(), msg.TeamID)
+
+	   	/* 	if team == nil {
+	   		team = &data.Signup{TeamID: msg.TeamID, TeamType: input.TeamType}
+	   	}* /
+
+	   team.Name = input.Name
+	   team.PhonePending = input.PhonePending
+	   team.EmailPending = input.EmailPending
+
+	   	app.Background(func() {
+	   		data := map[string]any{
+	   			"team":    team,
+	   			"secret":  uuid.New().String(),
+	   			"baseurl": app.config.baseurl,
+	   		}
+
+	   		_, err := app.mailer.Send(string(input.EmailPending), "verify_email.tmpl", data)
+	   		if err != nil {
+	   			app.logger.PrintError(err, nil)
+	   		}
+	   		msg := app.jetstream.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.mail.%s.sent", "2025", input.TeamType, team.TeamID, types.PingTypeSignup)))
+	   		msg.SetBody(&messages.NathejkMailSent{
+	   			PingType:  types.PingTypeSignup,
+	   			TeamID:    team.TeamID,
+	   			Recipient: types.EmailAddress(input.EmailPending),
+	   			Subject:   "Bekræft e-mailadresse",
+	   		})
+	   		msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api", Phase: data["secret"].(string)})
+	   		if err := app.jetstream.Publish(msg); err != nil {
+	   			app.logger.PrintError(err, nil)
+	   		}
+	   	})
+	*/
 }
 
 /*

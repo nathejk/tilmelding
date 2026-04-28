@@ -5,6 +5,7 @@ import (
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/internal/data"
 	"nathejk.dk/internal/payment/mobilepay"
+	"nathejk.dk/nathejk/table/signup"
 	"nathejk.dk/superfluids/streaminterface"
 )
 
@@ -22,6 +23,7 @@ type Commands struct {
 	Personnel interface {
 		UpdatePerson(types.UserID, types.TeamType, Person) error
 	}
+	Signup signup.Commands
 }
 
 func New(stream streaminterface.Publisher, models data.Models, pp mobilepay.Client) Commands {

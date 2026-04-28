@@ -2,14 +2,30 @@ package main
 
 import (
 	"net/http"
+	"time"
 
 	jsonapi "nathejk.dk/cmd/api/app"
 )
 
 func (app *application) homeHandler(w http.ResponseWriter, r *http.Request) {
+	/*type signup struct {
+		Label string `json:"label"`
+		URL string `json:"url"`
+		Status string `json:"status"`
+	}*/
 	config := map[string]any{
 		"timeCountdown": app.config.countdown.time,
+		"timeServer":    time.Now().Format(time.RFC3339),
 		"videos":        app.config.countdown.videos,
+		"signups": []struct {
+			Label  string `json:"label"`
+			URL    string `json:"url"`
+			Status string `json:"status"`
+		}{
+			{Label: "Tilmeld spejderpatrulje", URL: "/indskrivning/patrulje", Status: "OPEN"},
+			{Label: "Tilmeld seniorklan", URL: "/indskrivning/klan", Status: "WAITINGLIST"},
+			{Label: "Tilmeld gøgler", URL: "/indskrivning/badut", Status: "CLOSED"},
+		},
 	}
 	err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"config": config}, nil)
 	if err != nil {

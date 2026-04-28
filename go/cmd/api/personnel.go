@@ -92,7 +92,7 @@ func (app *application) updatePersonnelHandler(w http.ResponseWriter, r *http.Re
 	paidAmount := app.models.Payment.AmountPaidByTeamID(types.TeamID(userID))
 	dueAmount := totalAmount - paidAmount
 	if dueAmount > 0 {
-		signup, _ := app.models.Signup.GetByID(types.TeamID(userID))
+		signup, _ := app.models.Signup.GetByID(r.Context(), types.TeamID(userID))
 
 		phone := types.PhoneNumber("")
 		if (signup != nil) && (signup.Phone != nil) {

@@ -29,25 +29,25 @@ type TeamConfig struct {
 
 func Korps() []SlugLabel {
 	return []SlugLabel{
-		SlugLabel{Slug: "dds", Label: "Det Danske Spejderkorps"},
-		SlugLabel{Slug: "kfum", Label: "KFUM-Spejderne"},
-		SlugLabel{Slug: "kfuk", Label: "De grønne pigespejdere"},
-		SlugLabel{Slug: "dbs", Label: "Danske Baptisters Spejderkorps"},
-		SlugLabel{Slug: "dgs", Label: "De Gule Spejdere"},
-		SlugLabel{Slug: "dss", Label: "Dansk Spejderkorps Sydslesvig"},
-		SlugLabel{Slug: "fdf", Label: "FDF / FPF"},
-		SlugLabel{Slug: "andet", Label: "Andet"},
+		{Slug: "dds", Label: "Det Danske Spejderkorps"},
+		{Slug: "kfum", Label: "KFUM-Spejderne"},
+		{Slug: "kfuk", Label: "De grønne pigespejdere"},
+		{Slug: "dbs", Label: "Danske Baptisters Spejderkorps"},
+		{Slug: "dgs", Label: "De Gule Spejdere"},
+		{Slug: "dss", Label: "Dansk Spejderkorps Sydslesvig"},
+		{Slug: "fdf", Label: "FDF / FPF"},
+		{Slug: "andet", Label: "Andet"},
 	}
 }
 func TShirtSizes() []SlugLabel {
 	return []SlugLabel{
-		SlugLabel{Slug: "", Label: "Ingen"},
-		SlugLabel{Slug: "xs", Label: "X-Small"},
-		SlugLabel{Slug: "s", Label: "Small"},
-		SlugLabel{Slug: "m", Label: "Medium"},
-		SlugLabel{Slug: "l", Label: "Large"},
-		SlugLabel{Slug: "xl", Label: "X-Large"},
-		SlugLabel{Slug: "xxl", Label: "XX-Large"},
+		{Slug: "", Label: "Ingen"},
+		{Slug: "xs", Label: "X-Small"},
+		{Slug: "s", Label: "Small"},
+		{Slug: "m", Label: "Medium"},
+		{Slug: "l", Label: "Large"},
+		{Slug: "xl", Label: "X-Large"},
+		{Slug: "xxl", Label: "XX-Large"},
 	}
 }
 
@@ -157,7 +157,7 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 	log.Printf("total=%d paid=%d due=%d\n", totalAmount, paidAmount, dueAmount)
 	paymentLink := ""
 	if dueAmount > 0 {
-		signup, _ := app.models.Signup.GetByID(teamID)
+		signup, _ := app.models.Signup.GetByID(r.Context(), teamID)
 		if (input.Contact.Phone == "") && (signup != nil) && (signup.Phone != nil) {
 			input.Contact.Phone = *signup.Phone
 		}

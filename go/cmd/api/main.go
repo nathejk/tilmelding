@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
 	"nathejk.dk/internal/jsonlog"
@@ -21,6 +22,7 @@ import (
 	"nathejk.dk/nathejk/table"
 	"nathejk.dk/nathejk/table/patrulje"
 	"nathejk.dk/nathejk/table/personnel"
+	"nathejk.dk/nathejk/table/signup"
 	"nathejk.dk/pkg/sqlpersister"
 	"nathejk.dk/superfluids/jetstream"
 	"nathejk.dk/superfluids/streaminterface"
@@ -36,6 +38,7 @@ type config struct {
 	port      int
 	webroot   string
 	baseurl   string
+	year      types.YearSlug
 	countdown struct {
 		time   string
 		videos []string
@@ -77,6 +80,8 @@ func main() {
 	flag.IntVar(&cfg.port, "port", 80, "API server port")
 	flag.StringVar(&cfg.webroot, "webroot", getEnv("WEBROOT", "/www"), "Static web root")
 	flag.StringVar(&cfg.baseurl, "baseurl", getEnv("BASEURL", "https://tilmelding.nathejk.dk"), "Base url of website")
+	var year string
+	flag.StringVar(&year, "year", getEnv("YEAR", fmt.Sprintf("%d", time.Now().Year())), "active year slug")
 
 	flag.StringVar(&cfg.sms.dsn, "sms-dsn", os.Getenv("SMS_DSN"), "SMS DSN")
 	flag.StringVar(&cfg.jetstream.dsn, "jetstream-dsn", os.Getenv("JETSTREAM_DSN"), "NATS Streaming DSN")
@@ -97,6 +102,7 @@ func main() {
 	cfg.countdown.videos = getEnvAsSlice("COUNTDOWN_VIDEOS", []string{}, "\n")
 
 	flag.Parse()
+	cfg.year = types.YearSlug(year)
 
 	//logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
 	logger := jsonlog.New(os.Stdout, jsonlog.LevelInfo)
@@ -121,29 +127,31 @@ func main() {
 	defer db.Close()
 	logger.PrintInfo("Database connected", nil)
 
-	sqlw := sqlpersister.New(db.DB())
+	smsclient, err := sms.NewClient(cfg.sms.dsn)
+	if err != nil {
+		logger.PrintFatal(err, nil)
+	}
 
-	tablePayment := table.NewPayment(sqlw, db.DB())
-	tableStaff := personnel.New(sqlw, db.DB())
-	tablePatrulje := patrulje.New(sqlw, db.DB())
+	reader := db.DB()
+	writer := sqlpersister.New(db.DB())
+
+	tablePayment := table.NewPayment(writer, reader)
+	tableStaff := personnel.New(writer, reader)
+	tablePatrulje := patrulje.New(writer, reader)
+	tableSignup := signup.New(js, writer, reader, signup.WithSms(smsclient))
 
 	mux := xstream.NewMux(js)
-	mux.AddConsumer(table.NewSignup(sqlw), table.NewConfirm(sqlw), table.NewKlan(sqlw), table.NewSenior(sqlw) /*table.NewPatrulje(sqlw),*/, table.NewPatruljeStatus(sqlw) /*table.NewPatruljeMerged(sqlw),*/, table.NewSpejder(sqlw), table.NewSpejderStatus(sqlw), tablePayment, tableStaff, tablePatrulje)
+	mux.AddConsumer(table.NewConfirm(writer), table.NewKlan(writer), table.NewSenior(writer) /*table.NewPatrulje(sqlw),*/, table.NewPatruljeStatus(writer) /*table.NewPatruljeMerged(sqlw),*/, table.NewSpejder(writer), table.NewSpejderStatus(writer), tablePayment, tableStaff, tablePatrulje, tableSignup)
 	//mux.AddConsumer(table.NewSpejder(sqlw), table.NewSpejderStatus(sqlw))
 	if err := mux.Run(context.Background()); err != nil {
 		logger.PrintFatal(err, nil)
 	}
 
-	models := data.NewModels(db.DB(), tablePayment, tableStaff, tablePatrulje)
+	models := data.NewModels(reader, tablePayment, tableStaff, tablePatrulje, tableSignup)
 
 	expvar.NewString("version").Set(version)
 	expvar.NewInt("timestamp").Set(time.Now().Unix())
 	expvar.NewInt("goroutines").Set(int64(runtime.NumGoroutine()))
-
-	smsclient, err := sms.NewClient(cfg.sms.dsn)
-	if err != nil {
-		logger.PrintFatal(err, nil)
-	}
 
 	payment, err := mobilepay.New(cfg.payment.dsn)
 	if err != nil {
@@ -158,10 +166,12 @@ func main() {
 		models:    models,
 		jetstream: js,
 		commands:  commands.New(js, models, payment),
-		mailer:    mailer.NewFromConfig(cfg.smtp),
+		mailer:    mailer.NewFromConfig(cfg.smtp).AddOptions(mailer.WithGlobalVar("baseurl", cfg.baseurl)),
 		sms:       smsclient,
 		logger:    logger,
 	}
+	app.commands.Signup = tableSignup
+
 	logger.PrintInfo("Application initialized", nil)
 
 	logger.PrintFatal(app.Serve(fmt.Sprintf(":%d", cfg.port), app.routes()), nil)

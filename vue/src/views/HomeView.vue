@@ -1,100 +1,157 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import Navigation from '@/components/Navigation.vue'
 import Countdown from '@/components/Countdown.vue'
 
-const config = ref({ timeCountdown: "2024" });
-const videoplayer = ref(null);
+const config = ref({ timeCountdown: '', videos: [], signups: [] })
+const videoplayer = ref(null)
+const currentTime = ref(new Date().getTime())
+let timeInterval = null
+
+const countdownPassed = computed(() => {
+  if (!config.value.timeCountdown) return false
+  const target = new Date(config.value.timeCountdown).getTime()
+  return currentTime.value >= target
+})
 
 async function loadConfig() {
-    try {
-        const response = await fetch("/api/home");
-        if (!response.ok) {
-            throw new Error("HTTP status " + response.status);
-        }
-        const data = await response.json();
-        return data.config
-    } catch (error) {
-        console.log("Failed loading config", error);
+  try {
+    const response = await fetch('/api/home')
+    if (!response.ok) {
+      throw new Error('HTTP status ' + response.status)
     }
-    return {}
+    const data = await response.json()
+    return data.config
+  } catch (error) {
+    console.log('Failed loading config', error)
+  }
+  return {}
 }
 
 function playRandom(videos) {
-    if (videos.length == 0) return
-    videoplayer.value.src = videos[videos.length * Math.random() | 0];
-    videoplayer.value.load();
-    videoplayer.value.play();
-    videoplayer.value.classList.remove('fading');
-    setTimeout(() => {
-        videoplayer.value.classList.add('fading');
-    }, (videoplayer.value.duration / videoplayer.value.playbackRate - 1) * 1000)
+  if (!videos || videos.length === 0) return
+  if (!videoplayer.value) return
+  videoplayer.value.src = videos[(videos.length * Math.random()) | 0]
+  videoplayer.value.load()
+  videoplayer.value.play()
+  videoplayer.value.classList.remove('fading')
+  setTimeout(
+    () => {
+      if (videoplayer.value) {
+        videoplayer.value.classList.add('fading')
+      }
+    },
+    (videoplayer.value.duration / videoplayer.value.playbackRate - 1) * 1000
+  )
 }
 
+function startVideo() {
+  if (videoplayer.value && config.value.videos && config.value.videos.length > 0) {
+    videoplayer.value.addEventListener('ended', () => playRandom(config.value.videos), true)
+    videoplayer.value.addEventListener('error', () => playRandom(config.value.videos), true)
+    playRandom(config.value.videos)
+  }
+}
 
 onMounted(async () => {
-    config.value = await loadConfig()
-    videoplayer.value.addEventListener("ended", () => playRandom(config.value.videos), true);
-    videoplayer.value.addEventListener("error", () => playRandom(config.value.videos), true);
-    playRandom(config.value.videos);
+  config.value = await loadConfig()
+  timeInterval = setInterval(() => {
+    currentTime.value = new Date().getTime()
+  }, 1000)
+  if (!countdownPassed.value) {
+    startVideo()
+  }
 })
 
-function download(url) {
-      // create element <a> for download PDF
-      const link = document.createElement('a');
-      link.href = url;
-      link.target = '_blank';
-      //link.download = this.pdfFileName;
+onBeforeUnmount(() => {
+  if (timeInterval) clearInterval(timeInterval)
+})
 
-      // Simulate a click on the element <a>
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+function buttonSeverity(status) {
+  switch (status) {
+    case 'OPEN':
+      return 'warning'
+    case 'WAITINGLIST':
+      return 'warning'
+    case 'CLOSED':
+      return 'secondary'
+    default:
+      return 'secondary'
+  }
+}
+
+function download(url) {
+  const link = document.createElement('a')
+  link.href = url
+  link.target = '_blank'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
 
 function link(url) {
-    window.location.href=url
+  window.location.href = url
 }
 </script>
 
 <template>
+  <!--div class="bg-slate-900">
+-      <div class="container mx-auto relative aspect-video">
+-        <video playsinline autoplay muted ref="videoplayer" />
+-        <Countdown class="absolute inset-0 text-slate-200 p-10 text-xl" :time="config.timeCountdown" v-slot="{days, hours, minutes, seconds}">
+-        <div v-if="days+hours+minutes+seconds <= 0"-->
+
   <Navigation class="dark" />
   <main class="">
-    <div class="bg-slate-600" v-if="false">
-      <div class="container mx-auto py-10">
-        <h1 class="mb-5 font-nathejk font-bold text-5xl text-yellow-500">TILMELDING LUKKET FOR I ÅR</h1>
-        <div class="text-2xl text-slate-300 leading-loose">
-          <p>Der kan stadig eftertilmeldes spejdere i de enkelte patruljer</p>
-        </div>
+    <!-- COUNTDOWN MODE: video background with countdown overlay -->
+    <div v-if="!countdownPassed" class="bg-slate-900">
+      <div class="container mx-auto relative aspect-video">
+        <video playsinline autoplay muted ref="videoplayer" class="w-full h-full object-cover" />
+        <Countdown
+          class="absolute inset-0 text-slate-200 p-10 text-xl"
+          :time="config.timeCountdown || '2099-01-01T00:00:00Z'"
+          v-slot="{ days, hours, minutes, seconds }"
+        >
+          <div lass="text-center">
+            <div lass="text-2xl md:text-4xl">
+              Vi vågner om
+              <span v-if="days"
+                ><span class="inline-block w-8 text-right">{{ days }}</span> dage</span
+              >
+              <span v-if="days || hours"
+                ><span class="inline-block w-8 text-right">{{ hours }}</span> timer</span
+              >
+              <span class="inline-block w-8 text-right">{{ minutes }}</span> minutter og
+              <span class="inline-block w-8 text-right">{{ seconds }}</span> sekunder og åbner
+              tilmeldingen.
+            </div>
+          </div>
+        </Countdown>
       </div>
     </div>
-    <div class="bg-slate-900">
-      <div class="container mx-auto relative aspect-video">
-        <video playsinline autoplay muted ref="videoplayer" />
-        <Countdown class="absolute inset-0 text-slate-200 p-10 text-xl" :time="config.timeCountdown" v-slot="{days, hours, minutes, seconds}">
-        <div v-if="days+hours+minutes+seconds <= 0">
 
-            <div class="flex justify-around">
-              <div class="self-center">
-                  <Button label="Tilmeld spejderpatrulje"  size="large" severity="warning" @click="link('/indskrivning/patrulje')" />
-              </div>
-              <div class="self-center" v-if="false">
-                  <Button label="Tilmeld seniorklan"  size="large" severity="warning" @click="link('/indskrivning/klan')" />
-              </div>
-              <div class="self-center">
-                  <Button label="Tilmeld gøgler"  size="large" severity="warning" @click="link('/indskrivning/badut')" />
-              </div>
-            </div>
+    <!-- SIGNUP MODE: after countdown, show signup buttons without video -->
+    <div v-else class="bg-slate-900">
+      <div class="container mx-auto py-16 px-4">
+        <h1 class="mb-10 font-nathejk font-bold text-4xl md:text-5xl text-yellow-500 text-center">
+          TILMELDING ER ÅBEN
+        </h1>
+        <div class="flex flex-wrap justify-around gap-6">
+          <div v-for="(signup, index) in config.signups" :key="index" class="relative">
+            <Button
+              :label="signup.label"
+              size="large"
+              :severity="buttonSeverity(signup.status)"
+              :disabled="signup.status === 'CLOSED'"
+              @click="signup.status !== 'CLOSED' && link(signup.url)"
+            />
+            <Tag
+              v-if="signup.status === 'WAITINGLIST'"
+              value="Venteliste"
+              class="absolute -top-3 -right-3 z-10 !bg-yellow-400 !text-slate-900"
+            />
+          </div>
         </div>
-        <div v-else>
-            Vi vågner om
-            <span v-if="days"><span class="inline-block w-8 text-right">{{ days }}</span> dage</span>
-            <span v-if="days || hours"><span class="inline-block w-8 text-right">{{ hours }}</span> timer</span>
-            <span class="inline-block w-8 text-right">{{ minutes }}</span> minutter og
-            <span class="inline-block w-8 text-right">{{ seconds }}</span> sekunder
-            og åbner tilmeldingen.
-        </div>
-        </Countdown>
       </div>
     </div>
 
@@ -130,7 +187,6 @@ function link(url) {
             </template>
           </Card>
         </div>
-
       </div>
     </div>
 
@@ -139,13 +195,25 @@ function link(url) {
         <h1 class="mb-5 font-nathejk font-bold text-5xl text-slate-700">INVITATIONER</h1>
         <Card class="">
           <template #content>
-            <div class="flex justify-around ">
+            <div class="flex justify-around">
               <div class="self-center">
-                  <Button label="Hent spejderinvitation" icon="pi pi-download" size="large" severity="warning" @click="download('/invitation/Patruljeinvitation2025.pdf')" />
+                <Button
+                  label="Hent spejderinvitation"
+                  icon="pi pi-download"
+                  size="large"
+                  severity="warning"
+                  @click="download('/invitation/invitation_spejder_2026.jpg')"
+                />
               </div>
               <Image src="/invitation/collage2026.png" alt="" />
               <div class="self-center">
-                  <Button label="Hent seniorinvitation" icon="pi pi-download" size="large" severity="warning" @click="download('/invitation/Seniorinvitation2025.pdf')" />
+                <Button
+                  label="Hent seniorinvitation"
+                  icon="pi pi-download"
+                  size="large"
+                  severity="warning"
+                  @click="download('/invitation/Invitation_bandit_2026.jpg')"
+                />
               </div>
             </div>
           </template>
@@ -158,34 +226,49 @@ function link(url) {
         <h1 class="mb-5 font-nathejk font-bold text-5xl text-yellow-500">TILMELDINGSPROCEDURE</h1>
         <div class="text-2xl text-slate-300 leading-loose">
           <p>Tilmeldingen består af 5 trin</p>
-        <Card class="bg-slate-600">
-          <template #content>
-          <ol class="list-decimal text-yellow-500 ml-10">
-            <li><span class="text-slate-300 pl-5">Indtast e-mailadresse og klik på link i tilsendt e-mail</span></li>
-            <li><span class="text-slate-300 pl-5">Indtast telefonnummer og modtga en PIN-kode</span></li>
-            <li><span class="text-slate-300 pl-5">Indtast patruljenavn, spejdergruppe, kontaktperson og ønskede antal deltagere</span></li>
-            <li><span class="text-slate-300 pl-5">Gennemfør betaling via MobilePay</span></li>
-            <li><span class="text-slate-300 pl-5">Når betalingen er registreret modtager i en bekræftigelsesmail herom.</span></li>
-          </ol>
-          </template>
-        </Card>
+          <Card class="bg-slate-600">
+            <template #content>
+              <ol class="list-decimal text-yellow-500 ml-10">
+                <li>
+                  <span class="text-slate-300 pl-5"
+                    >Indtast e-mailadresse og klik på link i tilsendt e-mail</span
+                  >
+                </li>
+                <li>
+                  <span class="text-slate-300 pl-5"
+                    >Indtast telefonnummer og modtga en PIN-kode</span
+                  >
+                </li>
+                <li>
+                  <span class="text-slate-300 pl-5"
+                    >Indtast patruljenavn, spejdergruppe, kontaktperson og ønskede antal
+                    deltagere</span
+                  >
+                </li>
+                <li><span class="text-slate-300 pl-5">Gennemfør betaling via MobilePay</span></li>
+                <li>
+                  <span class="text-slate-300 pl-5"
+                    >Når betalingen er registreret modtager i en bekræftigelsesmail herom.</span
+                  >
+                </li>
+              </ol>
+            </template>
+          </Card>
         </div>
       </div>
     </div>
-
   </main>
   <footer class="bg-slate-900 text-slate-100 font-nathejk text-3xl text-center uppercase">
-      <div class="py-52">Vi ses i mørket...</div>
+    <div class="py-52">Vi ses i mørket...</div>
   </footer>
-
 </template>
 
 <style>
 .transition {
-    transition: all 1s;
+  transition: all 1s;
 }
 
 .transition.fading {
-    opacity: 0;
+  opacity: 0;
 }
 </style>
