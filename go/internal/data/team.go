@@ -75,12 +75,13 @@ type Patrulje struct {
 	MemberCount int          `json:"memberCount"`
 }
 type Klan struct {
-	ID          types.TeamID       `json:"id"`
-	Status      types.SignupStatus `json:"status"`
-	Name        string             `json:"name"`
-	Group       string             `json:"group"`
-	Korps       string             `json:"korps"`
-	MemberCount int                `json:"memberCount"`
+	ID                  types.TeamID       `json:"id"`
+	Status              types.SignupStatus `json:"status"`
+	Name                string             `json:"name"`
+	Group               string             `json:"group"`
+	Korps               string             `json:"korps"`
+	MemberCount         int                `json:"memberCount"`
+	ReservedMemberCount int                `json:"reservedMemberCount"`
 }
 type Contact struct {
 	TeamID     types.TeamID       `json:"teamId"`
@@ -95,7 +96,7 @@ type Contact struct {
 func (m TeamModel) RequestedSeniorCount() int {
 	query := `SELECT COUNT(memberId) FROM senior WHERE year=%d`
 	var count int
-	_ = m.DB.QueryRow(query, 2025).Scan(&count)
+	_ = m.DB.QueryRow(query, 2026).Scan(&count)
 	return count
 }
 
@@ -104,7 +105,7 @@ func (m TeamModel) GetPatruljer(filters Filters) ([]*Patrulje, Metadata, error) 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	query := `SELECT p.teamId, p.teamNumber, p.name, p.groupName, p.korps, p.liga, p.memberCount, IF(pm.parentTeamId IS NOT NULL, "JOIN", IF(startedUts > 0, "STARTED",  signupStatus)) 
+	query := `SELECT p.teamId, p.teamNumber, p.name, p.groupName, p.korps, p.liga, p.memberCount, IF(pm.parentTeamId IS NOT NULL, "JOIN", IF(startedUts > 0, "STARTED",  signupStatus))
 		FROM patrulje p
 		JOIN patruljestatus ps ON p.teamId = ps.teamID AND (LOWER(p.year) = LOWER(?) OR ? = '')`
 	args := []any{filters.Year, filters.Year}
@@ -183,7 +184,7 @@ func (m TeamModel) GetKlan(teamID types.TeamID) (*Klan, error) {
 		return nil, ErrRecordNotFound
 	}
 
-	query := `SELECT t.teamId, t.name, t.groupName, t.korps, t.memberCount, t.signupStatus
+	query := `SELECT t.teamId, t.name, t.groupName, t.korps, t.memberCount, t.reservedMemberCount, t.signupStatus
 		FROM klan t
 		JOIN patruljestatus ts ON t.teamId = ts.teamID
 		WHERE t.teamId = ?`
@@ -194,6 +195,7 @@ func (m TeamModel) GetKlan(teamID types.TeamID) (*Klan, error) {
 		&t.Group,
 		&t.Korps,
 		&t.MemberCount,
+		&t.ReservedMemberCount,
 		&t.Status,
 	)
 	if err != nil {

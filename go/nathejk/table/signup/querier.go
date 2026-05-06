@@ -22,12 +22,13 @@ func (q querier) GetByID(ctx context.Context, teamID types.TeamID) (*Signup, err
 		return nil, tables.ErrRecordNotFound
 	}
 
-	query := `SELECT teamId, teamType, name, email, emailPending, phone, phonePending, pincode, createdAt
+	query := `SELECT teamId, year, teamType, name, email, emailPending, phone, phonePending, pincode, createdAt
 		FROM signup
 		WHERE teamId = ?`
 	var p Signup
 	err := q.db.QueryRow(query, teamID).Scan(
 		&p.TeamID,
+		&p.Year,
 		&p.TeamType,
 		&p.Name,
 		&p.Email,

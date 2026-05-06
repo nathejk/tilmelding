@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -131,7 +132,7 @@ func (app *application) validatePhoneNumberHandler(w http.ResponseWriter, r *htt
 */
 func (app *application) validateEmailCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
-	secret := r.URL.Query().Get("secret")
+	secret := app.ReadNamedParam(r, "secret")
 	err := app.commands.Signup.VerifyEmail(r.Context(), teamID, secret)
 	if err != nil {
 		app.BadRequestResponse(w, r, err)
@@ -202,8 +203,13 @@ func (app *application) createSignupHandler(w http.ResponseWriter, r *http.Reque
 		app.BadRequestResponse(w, r, err)
 		return
 	}
-	go app.commands.Signup.SendVerificationEmail(r.Context(), teamID)
-
+	app.Background(func() {
+		time.Sleep(3 * time.Second)
+		err := app.commands.Signup.SendVerificationEmail(context.Background(), teamID)
+		if err != nil {
+			log.Printf("mail send failed %v", err)
+		}
+	})
 	err = app.WriteJSON(w, http.StatusCreated, jsonapi.Envelope{"ok": true}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
@@ -254,7 +260,7 @@ func (app *application) createSignupHandler(w http.ResponseWriter, r *http.Reque
 	   		if err != nil {
 	   			app.logger.PrintError(err, nil)
 	   		}
-	   		msg := app.jetstream.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.mail.%s.sent", "2025", input.TeamType, team.TeamID, types.PingTypeSignup)))
+	   		msg := app.jetstream.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.mail.%s.sent", app.config.year, input.TeamType, team.TeamID, types.PingTypeSignup)))
 	   		msg.SetBody(&messages.NathejkMailSent{
 	   			PingType:  types.PingTypeSignup,
 	   			TeamID:    team.TeamID,

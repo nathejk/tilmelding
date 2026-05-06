@@ -95,7 +95,7 @@ func (app *application) showPatruljeHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (app *application) assignNumberHandler(w http.ResponseWriter, r *http.Request) {
-	teams, _ := app.models.Patrulje.GetAll(r.Context(), patrulje.Filter{YearSlug: "2025"})
+	teams, _ := app.models.Patrulje.GetAll(r.Context(), patrulje.Filter{YearSlug: app.config.year})
 	log.Printf("Assigning numbers to %d teams", len(teams))
 	for _, team := range teams {
 		if team.TeamNumber != "" {

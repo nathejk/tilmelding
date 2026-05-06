@@ -1,4 +1,4 @@
-package table
+package klan
 
 import (
 	"fmt"
@@ -12,45 +12,24 @@ import (
 	_ "embed"
 )
 
-type Klan struct {
-	TeamID       types.TeamID       `sql:"teamId"`
-	Year         string             `sql:"year"`
-	Name         string             `sql:"name"`
-	GroupName    string             `sql:"groupName"`
-	Korps        string             `sql:"korps"`
-	SignupStatus types.SignupStatus `sql:"signupStatus"`
-}
-
-type klan struct {
+type consumer struct {
 	w tablerow.Consumer
 }
 
-func NewKlan(w tablerow.Consumer) *klan {
-	table := &klan{w: w}
-	if err := w.Consume(table.CreateTableSql()); err != nil {
-		log.Fatalf("Error creating table %q", err)
-	}
-	return table
-}
-
-//go:embed klan.sql
-var klanSchema string
-
-func (t *klan) CreateTableSql() string {
-	return klanSchema
-}
-
-func (c *klan) Consumes() (subjs []streaminterface.Subject) {
+func (c *consumer) Consumes() []streaminterface.Subject {
 	return []streaminterface.Subject{
 		//streaminterface.SubjectFromStr("monolith:nathejk_team"),
 		//streaminterface.SubjectFromStr("nathejk"),
-		streaminterface.SubjectFromStr("NATHEJK.2026.klan.*.signedup"),
-		streaminterface.SubjectFromStr("NATHEJK.*.klan.*.updated"),
+		streaminterface.SubjectFromStr("NATHEJK:*.klan.*.signedup"),
+		streaminterface.SubjectFromStr("NATHEJK:*.klan.*.requested"),
+		streaminterface.SubjectFromStr("NATHEJK:*.klan.*.reserved"),
+		streaminterface.SubjectFromStr("NATHEJK:*.klan.*.updated"),
 		streaminterface.SubjectFromStr("NATHEJK.*.klan.*.status.changed"),
+		streaminterface.SubjectFromStr("NATHEJK.*.klan.*.assigned"),
 	}
 }
 
-func (c *klan) HandleMessage(msg streaminterface.Message) error {
+func (c *consumer) HandleMessage(msg streaminterface.Message) error {
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.klan.*.signedup"):
 		var body messages.NathejkTeamSignedUp
@@ -62,6 +41,26 @@ func (c *klan) HandleMessage(msg streaminterface.Message) error {
 		}
 		sql := fmt.Sprintf("INSERT IGNORE INTO klan SET teamId=%q, year=%q", body.TeamID, msg.Subject().Parts()[1])
 		if err := c.w.Consume(sql); err != nil {
+			log.Fatalf("Error consuming sql %q", err)
+		}
+
+	case msg.Subject().Match("nathejk.*.klan.*.requested"):
+		var body messages.NathejkTeamMembersRequested
+		if err := msg.Body(&body); err != nil {
+			return err
+		}
+		err := c.w.Consume(fmt.Sprintf("UPDATE klan SET requestedMemberCount=%d, signupStatus=%q WHERE teamId=%q", body.MemberCount, types.SignupStatusOnHold, body.TeamID))
+		if err != nil {
+			log.Fatalf("Error consuming sql %q", err)
+		}
+
+	case msg.Subject().Match("nathejk.*.klan.*.reserved"):
+		var body messages.NathejkTeamMembersRequested
+		if err := msg.Body(&body); err != nil {
+			return err
+		}
+		err := c.w.Consume(fmt.Sprintf("UPDATE klan SET reservedMemberCount=%d, signupStatus=%q WHERE teamId=%q", body.MemberCount, types.SignupStatusPay, body.TeamID))
+		if err != nil {
 			log.Fatalf("Error consuming sql %q", err)
 		}
 		/*
@@ -101,6 +100,17 @@ func (c *klan) HandleMessage(msg streaminterface.Message) error {
 		if err != nil {
 			log.Fatalf("Error consuming sql %q", err)
 		}
+
+	case msg.Subject().Match("NATHEJK.*.klan.*.assigned"):
+		var body messages.NathejkKlanAssigned
+		if err := msg.Body(&body); err != nil {
+			return err
+		}
+		err := c.w.Consume(fmt.Sprintf("UPDATE klan SET lok=%q WHERE teamId=%q", body.Lok, body.TeamID))
+		if err != nil {
+			log.Fatalf("Error consuming sql %q", err)
+		}
+
 	default:
 		log.Printf("Unhandled message %q", msg.Subject().Subject())
 		/*

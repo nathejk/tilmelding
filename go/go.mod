@@ -7,15 +7,15 @@ require (
 	github.com/go-mail/mail/v2 v2.3.0
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang-migrate/migrate/v4 v4.16.2
-	github.com/google/uuid v1.3.0
+	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/lib/pq v1.10.7
 	github.com/moul/http2curl v1.0.0
-	github.com/nathejk/shared-go v0.0.0-20250904085635-4e5edbc6ac16
+	github.com/nathejk/shared-go v0.0.0-20260505202516-687b32e2e61f
 	github.com/nats-io/nats.go v1.34.1
 	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.11.1
 	github.com/tdewolff/minify/v2 v2.23.3
 	github.com/wneessen/go-mail v0.6.2
 	golang.org/x/crypto v0.33.0

@@ -1,4 +1,4 @@
-package patrulje
+package senior
 
 import (
 	"strings"
@@ -8,12 +8,13 @@ import (
 )
 
 type Filter struct {
-	YearSlug     types.YearSlug
+	YearSlug     string
 	Page         int
 	PageSize     int
 	Sort         string
 	SortSafelist []string
-	TeamID       types.TeamID
+	TeamIDs      []types.TeamID
+	Lok          int
 }
 
 func (f *Filter) Validate(v validator.Validator) {
@@ -54,6 +55,7 @@ func (f Filter) Limit() int {
 	return f.PageSize
 }
 
+/*
 type Metadata struct {
 	Year         string       `json:"year"`
 	TeamID       types.TeamID `json:"teamId,omitempty"`
@@ -64,7 +66,6 @@ type Metadata struct {
 	TotalRecords int          `json:"total_records,omitempty"`
 }
 
-/*
 // The calculateMetadata() function calculates the appropriate pagination metadata
 // values given the total number of records, current page, and page size values. Note
 // that the last page value is calculated using the math.Ceil() function, which rounds
@@ -83,4 +84,5 @@ func calculateMetadata(year string, totalRecords, page, pageSize int) Metadata {
 		LastPage:     int(math.Ceil(float64(totalRecords) / float64(pageSize))),
 		TotalRecords: totalRecords,
 	}
-}*/
+}
+*/

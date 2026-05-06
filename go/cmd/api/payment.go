@@ -36,7 +36,7 @@ func (app *application) mobilepayCallbackHandler(w http.ResponseWriter, r *http.
 			app.logger.PrintError(err, nil)
 			return
 		}
-		msg := app.jetstream.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK.%s.mail.%s.sent", "2025", types.PingTypePaymentReceived)))
+		msg := app.jetstream.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK.%s.mail.%s.sent", app.config.year, types.PingTypePaymentReceived)))
 		msg.SetBody(&messages.NathejkMailSent{
 			PingType:  types.PingTypePaymentReceived,
 			TeamID:    types.TeamID(""),

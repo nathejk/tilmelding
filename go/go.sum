@@ -11,6 +11,8 @@ github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeN
 github.com/google/gofuzz v1.0.0/go.mod h1:dBl0BpW6vV/+mYPU4Po3pmUjxk6FQPldtuIdl/M65Eg=
 github.com/google/uuid v1.3.0 h1:t6JiXgmwXMjEs8VusXIJk2BXHsn+wx8BZdTaoZ5fu7I=
 github.com/google/uuid v1.3.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/hashicorp/errwrap v1.0.0/go.mod h1:YH+1FKiLXxHSkmPseP+kNlulaMuP3n2brvKWEqk/Jc4=
 github.com/hashicorp/errwrap v1.1.0 h1:OxrOeh75EUXMY8TBjag2fzXGZ40LB6IKw45YeGUDY2I=
 github.com/hashicorp/errwrap v1.1.0/go.mod h1:YH+1FKiLXxHSkmPseP+kNlulaMuP3n2brvKWEqk/Jc4=
@@ -48,6 +50,10 @@ github.com/nathejk/shared-go v0.0.0-20250612000024-ded22e9fd096 h1:TFk+B5c/rai8r
 github.com/nathejk/shared-go v0.0.0-20250612000024-ded22e9fd096/go.mod h1:1oMxHM3BPaPQyeYf7vVsAB9pe61Qexn7P1BQWDLGcWI=
 github.com/nathejk/shared-go v0.0.0-20250904085635-4e5edbc6ac16 h1:0ALsMYJiEFdXc+vi6e5KLpvKkEAKUMlzILdCIMMXX1w=
 github.com/nathejk/shared-go v0.0.0-20250904085635-4e5edbc6ac16/go.mod h1:1oMxHM3BPaPQyeYf7vVsAB9pe61Qexn7P1BQWDLGcWI=
+github.com/nathejk/shared-go v0.0.0-20260504210146-5bb74ca3eee8 h1:aT9u9JBYXEszHNAckQXZoHMPU6TiyfYGzaJbKUx5Znw=
+github.com/nathejk/shared-go v0.0.0-20260504210146-5bb74ca3eee8/go.mod h1:NXwlny4fygtvjToLV4sovUdbvZyROZJf3+8MOBGmIAw=
+github.com/nathejk/shared-go v0.0.0-20260505202516-687b32e2e61f h1:T5sH2vL5gEhKsfqDqE7id+Za6Jpslo3lFAUBsmf+IkA=
+github.com/nathejk/shared-go v0.0.0-20260505202516-687b32e2e61f/go.mod h1:NXwlny4fygtvjToLV4sovUdbvZyROZJf3+8MOBGmIAw=
 github.com/nats-io/nats.go v1.34.1 h1:syWey5xaNHZgicYBemv0nohUPPmaLteiBEUT6Q5+F/4=
 github.com/nats-io/nats.go v1.34.1/go.mod h1:Ubdu4Nh9exXdSz0RVWRFBbRfrbSxOYd26oF0wkWclB8=
 github.com/nats-io/nkeys v0.4.7 h1:RwNJbbIdYCoClSDNY7QVKZlyb/wfT6ugvFCiKy6vDvI=
@@ -66,6 +72,8 @@ github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
 github.com/stretchr/testify v1.8.1 h1:w7B6lhMri9wdJUVmEZPGGhZzrYTPvgJArz7wNPgYKsk=
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
+github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
+github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/tdewolff/minify/v2 v2.23.3 h1:ukamplWSwuuklnW8gLSvY+nvU+0lCRrRcZNoeHjhKng=
 github.com/tdewolff/minify/v2 v2.23.3/go.mod h1:RkUGjklq6uIsBoOdzY3ll35HKKQ2aFqLQhnanBHhDyU=
 github.com/tdewolff/parse/v2 v2.7.23 h1:sCW2PNTCM1yVldh5YK/8wrpRI9rSbloUZWjAydlN2IA=

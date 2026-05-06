@@ -60,7 +60,7 @@ func (c *payment) Request(amount mobilepay.Amount, desc string, phone types.Phon
 		OrderForeignKey: orderForeignKey,
 		OrderType:       orderType,
 	}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.payment.%s.requested", "2025", resp.Reference)))
+	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.payment.%s.requested", "2026", resp.Reference)))
 	msg.SetBody(body)
 	meta := messages.Metadata{Producer: "tilmelding-api"}
 	msg.SetMeta(&meta)
@@ -90,7 +90,7 @@ func (c *payment) Capture(reference string) error {
 		Currency:  string(availableAmount.Currency),
 		Timestamp: time.Now(),
 	}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK.%s.payment.%s.reserved", "2025", reference)))
+	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK.%s.payment.%s.reserved", "2026", reference)))
 	msg.SetBody(body)
 	msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 
@@ -100,7 +100,7 @@ func (c *payment) Capture(reference string) error {
 	if _, err := c.pp.CapturePayment(mobilepay.PaymentReference(reference), availableAmount); err != nil {
 		return err
 	}
-	msg = c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.payment.%s.received", "2025", reference)))
+	msg = c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.payment.%s.received", "2026", reference)))
 	msg.SetBody(&messages.NathejkPaymentReceived{
 		Reference: reference,
 		Amount:    int(availableAmount.Value),
@@ -125,7 +125,7 @@ func (c *payment) Signup(teamType types.TeamType, body *messages.NathejkTeamSign
 		body.Pincode = fmt.Sprintf("%d", rand.IntN(9000)+1000)
 	}
 
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.signedup", "2025", teamType, body.TeamID)))
+	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.signedup", "2026", teamType, body.TeamID)))
 	msg.SetBody(body)
 	meta := messages.Metadata{Producer: "tilmelding-api"}
 	msg.SetMeta(&meta)

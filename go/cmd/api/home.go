@@ -13,6 +13,10 @@ func (app *application) homeHandler(w http.ResponseWriter, r *http.Request) {
 		URL string `json:"url"`
 		Status string `json:"status"`
 	}*/
+	klanStatus := "WAITINGLIST"
+	if count, err := app.models.Klan.RequestedMemberCount(r.Context(), app.config.year); (err == nil) && (count < 115) {
+		klanStatus = "OPEN"
+	}
 	config := map[string]any{
 		"timeCountdown": app.config.countdown.time,
 		"timeServer":    time.Now().Format(time.RFC3339),
@@ -23,7 +27,7 @@ func (app *application) homeHandler(w http.ResponseWriter, r *http.Request) {
 			Status string `json:"status"`
 		}{
 			{Label: "Tilmeld spejderpatrulje", URL: "/indskrivning/patrulje", Status: "OPEN"},
-			{Label: "Tilmeld seniorklan", URL: "/indskrivning/klan", Status: "WAITINGLIST"},
+			{Label: "Tilmeld seniorklan", URL: "/indskrivning/klan", Status: klanStatus},
 			{Label: "Tilmeld gøgler", URL: "/indskrivning/badut", Status: "CLOSED"},
 		},
 	}

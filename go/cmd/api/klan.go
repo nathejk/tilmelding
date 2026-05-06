@@ -5,11 +5,14 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
 	"nathejk.dk/internal/payment/mobilepay"
 	"nathejk.dk/nathejk/commands"
+	"nathejk.dk/nathejk/table/klan"
+	"nathejk.dk/nathejk/table/payment"
 )
 
 func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) {
@@ -49,11 +52,76 @@ func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		log.Printf("Payment.GetAll %q", err)
 	}
+	if payments == nil {
+		payments = []payment.Payment{}
+
+	}
 	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"config": config, "team": team, "members": members, "payments": payments}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
 }
+func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Request) {
+	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
+	var input struct {
+		TeamName             string `json:"teamName"`
+		TeamGroup            string `json:"teamGroup"`
+		TeamCorps            string `json:"teamCorps"`
+		RequestedMemberCount uint32 `json:"requestedMemberCount"`
+	}
+	if err := app.ReadJSON(w, r, &input); err != nil {
+		log.Printf("ReadJSON %q", err)
+		app.BadRequestResponse(w, r, err)
+		return
+	}
+	log.Printf("before update")
+	err := app.commands.Klan.Update(r.Context(), teamID, klan.UpdateCommand{
+		Name:      &input.TeamName,
+		GroupName: &input.TeamGroup,
+		Korps:     &input.TeamCorps,
+	})
+	log.Printf("after update")
+	if err != nil {
+		app.BadRequestResponse(w, r, err)
+		return
+	}
+
+	log.Printf("before reqeust")
+	reservedMemberCount, err := app.commands.Klan.RequestMemberCount(r.Context(), app.config.year, teamID, input.RequestedMemberCount)
+	if err != nil {
+		log.Printf("with error %#v", err)
+
+		app.BadRequestResponse(w, r, err)
+		return
+	}
+	log.Printf("after update")
+	paymentLink := ""
+	status := types.SignupStatusOnHold
+	if reservedMemberCount > 0 {
+		status = types.SignupStatusPay
+		signup, err := app.models.Signup.GetByID(r.Context(), teamID)
+		if err != nil {
+			app.BadRequestResponse(w, r, err)
+			return
+		}
+		if (signup.Phone == nil) || (signup.Email == nil) {
+			spew.Dump(signup)
+			return
+		}
+
+		dueAmount := reservedMemberCount * 250
+		amount := mobilepay.Amount{Value: int64(dueAmount) * 100, Currency: mobilepay.Currency(types.CurrencyDKK)}
+		teamUrl := "https://tilmelding.nathejk.dk/klan/" + string(teamID)
+
+		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", *signup.Phone, *signup.Email, teamUrl, string(teamID), string(types.TeamTypeKlan))
+	}
+	team, _ := app.models.Teams.GetKlan(teamID)
+	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "status": status, "paymentLink": paymentLink}, nil)
+	if err != nil {
+		app.ServerErrorResponse(w, r, err)
+	}
+}
+
 func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
 	var input struct {

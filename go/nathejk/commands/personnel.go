@@ -36,7 +36,7 @@ func (c *personnel) Signup(teamType types.TeamType, body *messages.NathejkTeamSi
 		body.Pincode = fmt.Sprintf("%d", rand.IntN(9000)+1000)
 	}
 
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.signedup", "2025", teamType, body.TeamID)))
+	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.signedup", "2026", teamType, body.TeamID)))
 	msg.SetBody(body)
 	meta := messages.Metadata{Producer: "tilmelding-api"}
 	msg.SetMeta(&meta)
@@ -48,7 +48,7 @@ func (c *personnel) Signup(teamType types.TeamType, body *messages.NathejkTeamSi
 }
 
 func (c *personnel) UpdatePerson(userID types.UserID, userType types.TeamType, person Person) error {
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.updated", "2025", userType, userID)))
+	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.updated", "2026", userType, userID)))
 	msg.SetBody(&messages.NathejkPersonnelUpdated{
 		UserID:      userID,
 		Name:        person.Name,

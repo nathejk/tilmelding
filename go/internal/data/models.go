@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nathejk/shared-go/types"
+	"nathejk.dk/nathejk/table/klan"
 	"nathejk.dk/nathejk/table/patrulje"
 	"nathejk.dk/nathejk/table/payment"
 	"nathejk.dk/nathejk/table/personnel"
@@ -72,9 +73,10 @@ type Models struct {
 	Personnel PersonnelInterface
 	Patrulje  PatruljeInterface
 	Signup    signup.Queries
+	Klan      klan.Queries
 }
 
-func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterface, patrulje PatruljeInterface, s signup.Queries) Models {
+func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterface, patrulje PatruljeInterface, s signup.Queries, k klan.Queries) Models {
 	return Models{
 		Teams:       TeamModel{DB: db},
 		Members:     MemberModel{DB: db},
@@ -86,5 +88,6 @@ func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterfac
 		Personnel: personnel,
 		Patrulje:  patrulje,
 		Signup:    s,
+		Klan:      k,
 	}
 }

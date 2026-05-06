@@ -20,8 +20,10 @@ import (
 	"nathejk.dk/internal/vcs"
 	"nathejk.dk/nathejk/commands"
 	"nathejk.dk/nathejk/table"
+	"nathejk.dk/nathejk/table/klan"
 	"nathejk.dk/nathejk/table/patrulje"
 	"nathejk.dk/nathejk/table/personnel"
+	"nathejk.dk/nathejk/table/senior"
 	"nathejk.dk/nathejk/table/signup"
 	"nathejk.dk/pkg/sqlpersister"
 	"nathejk.dk/superfluids/jetstream"
@@ -113,7 +115,7 @@ func main() {
 		log.Printf("Error connecting %q", err)
 	}
 	logger.PrintInfo("Jetstream connected", nil)
-	/*msg, err := js.LastMessage(streaminterface.SubjectFromStr("NATHEJK.2024.>"))
+	/*msg, err := js.LastMessage(streaminterface.SubjectFromStr("NATHEJK.>"))
 	if err != nil {
 		log.Fatalf("Last message: %q", err)
 	}
@@ -132,22 +134,26 @@ func main() {
 		logger.PrintFatal(err, nil)
 	}
 
+	mailclient := mailer.NewFromConfig(cfg.smtp).AddOptions(mailer.WithGlobalVar("baseurl", cfg.baseurl))
+
 	reader := db.DB()
 	writer := sqlpersister.New(db.DB())
 
 	tablePayment := table.NewPayment(writer, reader)
 	tableStaff := personnel.New(writer, reader)
 	tablePatrulje := patrulje.New(writer, reader)
-	tableSignup := signup.New(js, writer, reader, signup.WithSms(smsclient))
+	tableSignup := signup.New(js, writer, reader, signup.WithSms(smsclient), signup.WithMailer(mailclient))
+	tableKlan := klan.New(js, writer, reader, klan.WithTotalMemberCount(115), klan.WithTeamMaxMemberCount(4))
+	tableSenior := senior.New(writer, reader)
 
 	mux := xstream.NewMux(js)
-	mux.AddConsumer(table.NewConfirm(writer), table.NewKlan(writer), table.NewSenior(writer) /*table.NewPatrulje(sqlw),*/, table.NewPatruljeStatus(writer) /*table.NewPatruljeMerged(sqlw),*/, table.NewSpejder(writer), table.NewSpejderStatus(writer), tablePayment, tableStaff, tablePatrulje, tableSignup)
+	mux.AddConsumer(table.NewConfirm(writer), tableKlan, tableSenior /*table.NewPatrulje(sqlw),*/, table.NewPatruljeStatus(writer) /*table.NewPatruljeMerged(sqlw),*/, table.NewSpejder(writer), table.NewSpejderStatus(writer), tablePayment, tableStaff, tablePatrulje, tableSignup)
 	//mux.AddConsumer(table.NewSpejder(sqlw), table.NewSpejderStatus(sqlw))
 	if err := mux.Run(context.Background()); err != nil {
 		logger.PrintFatal(err, nil)
 	}
 
-	models := data.NewModels(reader, tablePayment, tableStaff, tablePatrulje, tableSignup)
+	models := data.NewModels(reader, tablePayment, tableStaff, tablePatrulje, tableSignup, tableKlan)
 
 	expvar.NewString("version").Set(version)
 	expvar.NewInt("timestamp").Set(time.Now().Unix())
@@ -166,11 +172,12 @@ func main() {
 		models:    models,
 		jetstream: js,
 		commands:  commands.New(js, models, payment),
-		mailer:    mailer.NewFromConfig(cfg.smtp).AddOptions(mailer.WithGlobalVar("baseurl", cfg.baseurl)),
+		mailer:    mailclient,
 		sms:       smsclient,
 		logger:    logger,
 	}
 	app.commands.Signup = tableSignup
+	app.commands.Klan = tableKlan
 
 	logger.PrintInfo("Application initialized", nil)
 

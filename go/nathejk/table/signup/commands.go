@@ -61,7 +61,7 @@ func (c *commander) SendVerificationEmail(ctx context.Context, teamID types.Team
 		Secret:    uuid.New().String(),
 	}
 	data := map[string]any{
-		"team":   team,
+		"id":     team.TeamID,
 		"secret": body.Secret,
 	}
 
@@ -116,8 +116,8 @@ func (c *commander) VerifyEmail(ctx context.Context, teamID types.TeamID, secret
 		return tables.ErrVerificationFailed
 	}
 
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.email_verified", signup.TeamType, types.TeamTypeKlan, teamID)))
-	msg.SetBody(&messages.NathejkSignupEmailLinkClicked{
+	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.emailaddress.verified", signup.TeamType, types.TeamTypeKlan, teamID)))
+	msg.SetBody(&messages.NathejkSignupEmailVerified{
 		TeamID: teamID,
 		Email:  signup.EmailPending,
 		Secret: secret,
@@ -137,8 +137,8 @@ func (c *commander) VerifyPhone(ctx context.Context, teamID types.TeamID, pincod
 		return tables.ErrVerificationFailed
 	}
 
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.phone_verified", signup.TeamType, types.TeamTypeKlan, teamID)))
-	msg.SetBody(&messages.NathejkSignupPincodeUsed{
+	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.phonenumber.verified", signup.TeamType, types.TeamTypeKlan, teamID)))
+	msg.SetBody(&messages.NathejkSignupPhoneVerified{
 		TeamID:  teamID,
 		Phone:   signup.PhonePending,
 		Pincode: pincode,
