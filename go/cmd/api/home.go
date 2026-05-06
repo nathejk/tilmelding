@@ -17,6 +17,7 @@ func (app *application) homeHandler(w http.ResponseWriter, r *http.Request) {
 	if count, err := app.models.Klan.RequestedMemberCount(r.Context(), app.config.year); (err == nil) && (count < 115) {
 		klanStatus = "OPEN"
 	}
+	klanStatus = "CLOSED"
 	config := map[string]any{
 		"timeCountdown": app.config.countdown.time,
 		"timeServer":    time.Now().Format(time.RFC3339),
