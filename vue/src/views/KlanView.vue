@@ -63,9 +63,11 @@ onMounted(async () => {
     const data = await response.json()
     config.value = data.config
     team.value = data.team
+    /*
     while (data.members.length < data.team.reservedMemberCount) {
       data.members.push({})
     }
+    */
     data.members.map((m) => (m.vegitarian = m.diet == 'vegetar'))
     members.value = new List(...data.members)
     payments.value = new List(...data.payments)
@@ -234,7 +236,7 @@ const saveMember = () => {
   memberDialog.value = false
   member.value = { name: '' }
 }
-const initialSignup = computed(() => members.value.length == 0)
+const initialSignup = computed(() => payments.value.length == 0)
 const activeMembers = computed(() => members.value.filter((i) => !i.deleted))
 const deleteMember = () => {
   //members.value = members.value.filter(val => val.id !== member.value.id);
