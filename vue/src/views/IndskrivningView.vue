@@ -113,7 +113,11 @@ const validatePincode = async () => {
     }
     const data = await response.json()
     if (data.ok) {
-      router.replace({ path: '/' + contact.value.teamType + '/' + contact.value.teamId })
+      if (contact.value.teamType == 'gøgler') {
+        router.replace({ path: '/badut/' + contact.value.teamId })
+      } else {
+        router.replace({ path: '/' + contact.value.teamType + '/' + contact.value.teamId })
+      }
     } else {
       toast.add({
         severity: 'error',
@@ -139,8 +143,10 @@ const validatePincode = async () => {
       <span v-if="teamType == 'spejder'">Tilmelding af spejderpatrulje</span>
       <span v-else-if="teamType == 'senior'">Tilmelding af seniorklan</span>
       <span v-else-if="teamType == 'gøgler'"
-        >Tilmelding af gøgler <Tag value="Lukket" severity="danger"
-      /></span>
+        >Tilmelding af gøgler
+        <!-- Tag value="Lukket" severity="danger"
+      / --></span
+      >
       <span v-else-if="teamType == 'friend'">Hjælpertilmelding</span>
       <span v-else>Tilmelding</span>
     </h1>
@@ -179,7 +185,6 @@ const validatePincode = async () => {
           </div>
           <div class="flex pt-4 justify-end">
             <Button
-              v-if="teamType != 'gøgler'"
               label="Videre"
               icon="pi pi-arrow-right"
               iconPos="right"

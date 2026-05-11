@@ -24,7 +24,6 @@ function update() {
             <label for="shop-tshirt">Køb t-shirt</label>
             <Dropdown
               v-model="model"
-              :disabled="true"
               inputId="shop-tshirt"
               :options="props.options"
               optionValue="slug"
