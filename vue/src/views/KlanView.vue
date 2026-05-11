@@ -83,44 +83,8 @@ const member = ref({})
 const isLoading = ref(false)
 const memberDialog = ref(false)
 const deleteMemberDialog = ref(false)
-const paymentDialog = ref(false)
 const teamSubmitted = ref(false)
 const memberSubmitted = ref(false)
-
-const mobilepay = ref('')
-const pay = async () => {
-  const headers = {
-    'Content-Type': 'application/json'
-  }
-  try {
-    const body = JSON.stringify({
-      phone: mobilepay.value,
-      amount: payableAmount.value
-    })
-    const response = await fetch('/api/pay/' + props.teamId, {
-      method: 'PUT',
-      body: body,
-      headers: headers
-    })
-    if (!response.ok) {
-      throw new Error('HTTP status ' + response.status)
-    }
-    const data = await response.json()
-    //contact.value = data.team
-    //router.replace({ name: 'indskrivning', params: { id: data.teamId } })
-    //router.replace({ path: '/indskrivning/'+ data.team.teamId  })
-
-    //if (data.team.status =="HOLD") {
-    router.push({ name: 'thankyou' })
-    //}
-
-    //paymentDialog.value = true;
-    //const vendor = data.content
-    //next()
-  } catch (error) {
-    console.log('team signup failed', error)
-  }
-}
 
 const confirmDeleteMember = (prod) => {
   member.value = prod
@@ -608,35 +572,6 @@ const tshirtSizeLabel = (slug) => {
       <Button label="Ja" icon="pi pi-check" text @click="deleteMember" />
     </template>
   </Dialog>
-
-  <Dialog
-    v-model:visible="paymentDialog"
-    :style="{ width: '500px' }"
-    header="Betaling"
-    :modal="true"
-  >
-    <div class="confirmation-content">
-      <p class="m-0 mb-5">
-        Vi sender en SMS med et MobilePay betalingslink på DKK {{ payableAmount }},- til det
-        indtastede telefonnummer.
-      </p>
-      <InputGroup size="small">
-        <InputGroupAddon>+45</InputGroupAddon>
-        <InputText size="small" placeholder="Telefonnummer" v-model="mobilepay" />
-      </InputGroup>
-      <Message severity="warn" :closable="false"
-        >registrering af indbetalinger sker manuelt, der kan derfor gå noget tid inden betalingen er
-        registreret.</Message
-      >
-    </div>
-    <template #footer>
-      <Button label="Send betalingslink" icon="pi pi-mobile" text @click="pay" />
-    </template>
-  </Dialog>
-
-  <!-- BlockUI :blocked="isLoading" :fullScreen="true"></BlockUI >
-<ProgressSpinner v-show="isLoading" class="flex items-center justify-center z-[100]" iclass="absolute right-1/2 bottom-1/2 transform translate-x-1/2 translate-y-1/2" lass="overlay"/>
-        -->
 </template>
 
 <style scoped>
