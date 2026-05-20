@@ -539,7 +539,6 @@ const tshirtSizeLabel = (slug) => {
         <Dropdown
           v-model="member.tshirtSize"
           inputId="member-tshirt"
-          :disabled="true"
           :options="config.tshirtSizes"
           optionValue="slug"
           optionLabel="label"
