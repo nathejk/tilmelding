@@ -31,18 +31,28 @@ func (app *application) mobilepayCallbackHandler(w http.ResponseWriter, r *http.
 			"payment": payment,
 		}
 
-		_, err = app.mailer.Send(string(payment.ReceiptEmail), "payment_received.tmpl", data)
+		messageID, err := app.mailer.Send(string(payment.ReceiptEmail), "payment_received.tmpl", data)
 		if err != nil {
 			app.logger.PrintError(err, nil)
 			return
 		}
-		msg := app.jetstream.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK.%s.mail.%s.sent", app.config.year, types.PingTypePaymentReceived)))
-		msg.SetBody(&messages.NathejkMailSent{
+		body := messages.NathejkMailSent{
 			PingType:  types.PingTypePaymentReceived,
-			TeamID:    types.TeamID(""),
+			MessageID: messageID,
 			Recipient: payment.ReceiptEmail,
 			Subject:   "Betaling modtaget",
-		})
+		}
+		switch payment.OrderType {
+		case string(types.TeamTypeKlan),
+			string(types.TeamTypePatrulje):
+			body.TeamID = types.TeamID(payment.OrderForeignKey)
+
+		case string(types.TeamTypeBadut),
+			string(types.TeamTypeStaff):
+			body.MemberID = types.MemberID(payment.OrderForeignKey)
+		}
+		msg := app.jetstream.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK.%s.mail.%s.sent", app.config.year, types.PingTypePaymentReceived)))
+		msg.SetBody(&body)
 		msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 		if err := app.jetstream.Publish(msg); err != nil {
 			app.logger.PrintError(err, nil)
