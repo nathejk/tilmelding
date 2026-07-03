@@ -38,10 +38,16 @@ func (q Query) GetAll(teamID types.TeamID) ([]Payment, Metadata, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	query := `SELECT reference, receiptEmail, returnUrl, year, currency, FLOOR(amount/100), method, status, createdAt, changedAt, orderForeignKey, orderType
-		FROM payment
-		WHERE orderForeignKey = ?`
-	args := []any{teamID} //filters.Year, filters.Year}
+	// Returns every payment routed to this team, whether directly
+	// (legacy: payment.orderForeignKey = teamId) or through the new order
+	// entity (payment.orderForeignKey = orderId, orders.ownerId = teamId).
+	// FLOOR(amount/100) keeps the legacy contract: callers see DKK.
+	query := `SELECT p.reference, p.receiptEmail, p.returnUrl, p.year, p.currency, FLOOR(p.amount/100), p.method, p.status, p.createdAt, p.changedAt, p.orderForeignKey, p.orderType
+		FROM payment p
+		LEFT JOIN orders o ON o.orderId = p.orderForeignKey
+		WHERE p.orderForeignKey = ? OR o.ownerId = ?
+		ORDER BY p.createdAt ASC`
+	args := []any{teamID, teamID}
 	rows, err := q.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, Metadata{}, err
@@ -118,9 +124,18 @@ func (q Query) AmountDueByTeamID(teamID types.TeamID) {
 }
 
 func (q Query) AmountPaidByTeamID(teamID types.TeamID) int {
-	query := `SELECT FLOOR(SUM(amount)/100) FROM payment WHERE orderForeignKey = ? AND status IN (?, ?)`
+	// Sum of all reserved/received payments routed to this team, whether
+	// directly (legacy: payment.orderForeignKey = teamId) or through the
+	// new order entity (payment.orderForeignKey = orderId, orders.ownerId
+	// = teamId). Returns DKK (the amount column is in øre; FLOOR divides
+	// the total back to whole DKK to match the legacy contract).
+	query := `SELECT FLOOR(COALESCE(SUM(p.amount), 0) / 100)
+		FROM payment p
+		LEFT JOIN orders o ON o.orderId = p.orderForeignKey
+		WHERE p.status IN (?, ?)
+		  AND (p.orderForeignKey = ? OR o.ownerId = ?)`
 	var paidAmount int
-	if err := q.DB.QueryRow(query, teamID, types.PaymentStatusReserved, types.PaymentStatusReceived).Scan(&paidAmount); err != nil {
+	if err := q.DB.QueryRow(query, types.PaymentStatusReserved, types.PaymentStatusReceived, teamID, teamID).Scan(&paidAmount); err != nil {
 		return 0
 	}
 	return paidAmount

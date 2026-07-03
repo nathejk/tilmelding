@@ -7,6 +7,14 @@ import FloatLabel from 'primevue/floatlabel'
 import Calendar from 'primevue/calendar'
 import InputGroup from 'primevue/inputgroup'
 import InputGroupAddon from 'primevue/inputgroupaddon'
+import {
+  aggregateOrderLines,
+  orderTotalDkk,
+  orderDueDkk,
+  orderShortLines,
+  orderDateShort,
+  totalPaidDkk
+} from '@/helpers/order'
 
 const props = defineProps({
   teamId: { type: String, required: false }
@@ -14,51 +22,36 @@ const props = defineProps({
 
 const router = useRouter()
 
-class List extends Array {
-  totalAmount() {
-    return this.reduce((a, b) => a + (b['amount'] || 0), 0)
-  }
-  sum(field) {
-    return this.reduce((a, b) => a + (b[field] || 0), 0)
-  }
-  group(field) {
-    return 0
-  }
-}
-
 const config = ref({})
 const team = ref({})
 const contact = ref({})
-const members = ref(new List())
-const tshirtCount = computed(
-  () => activeMembers.value.filter((v) => !v.deleted && v.tshirtSize && v.tshirtSize != '').length
-)
-const expenses = computed(() => {
-  console.log(
-    'tshort',
-    tshirtCount.value * config.value.tshirtPrice,
-    tshirtCount,
-    config.value.tshirtPrice
-  )
-  return new List(
-    {
-      text: 'Deltagere',
-      count: activeMembers.value.length,
-      unitPrice: config.value.memberPrice,
-      amount: activeMembers.value.length * config.value.memberPrice
-    },
-    {
-      text: 'Års t-shirt',
-      count: tshirtCount,
-      unitPrice: config.value.tshirtPrice,
-      amount: tshirtCount.value * config.value.tshirtPrice
-    }
-  )
-})
-const payments = ref(new List())
-const payableAmount = computed(() =>
-  Math.max(0, expenses.value.sum('amount') - payments.value.sum('amount'))
-)
+const members = ref([])
+const order = ref(null)
+const paidOrders = ref([])
+
+// Expenses, payments, totals are now derived from the server-side order
+// envelope. The backend computes prices and aggregates per-member lines;
+// the frontend just groups by SKU for display and converts øre → DKK.
+const expenses = computed(() => aggregateOrderLines(order.value))
+const expensesTotal = computed(() => orderTotalDkk(order.value))
+// paymentsTotal is the cumulative paid amount across the open order and
+// every paid order in the history — the answer to "how much have I paid
+// in total".
+const paymentsTotal = computed(() => totalPaidDkk(order.value, paidOrders.value))
+const payableAmount = computed(() => orderDueDkk(order.value))
+// orderStatus is "OPEN" or "PAID" — see order.MarshalJSON on the
+// backend. Used by the template to render a status badge and to disable
+// the form once the order is locked.
+const orderStatus = computed(() => (order.value && order.value.status) || 'OPEN')
+// showOpenOrder gates the open-order block (status badge, expense
+// rows, "I alt", "At betale", refund text). When the open order has
+// nothing due there's no actionable content there — only the paid
+// history (if any) is worth showing.
+const showOpenOrder = computed(() => payableAmount.value > 0)
+// showPaymentsSection gates the entire Betalinger fieldset: render it
+// when there's either a current bill (open order with due > 0) or any
+// historical paid orders to display.
+const showPaymentsSection = computed(() => showOpenOrder.value || paidOrders.value.length > 0)
 
 onMounted(async () => {
   try {
@@ -70,8 +63,9 @@ onMounted(async () => {
     config.value = data.config
     team.value = data.team
     contact.value = data.contact
-    members.value = new List(...data.members)
-    payments.value = new List(...data.payments.filter((p) => p.status != 'requested'))
+    members.value = data.members ? [...data.members] : []
+    order.value = data.order || null
+    paidOrders.value = data.paidOrders ? [...data.paidOrders] : []
 
     console.log('found', data)
   } catch (error) {
@@ -108,44 +102,58 @@ const hideDialog = () => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const canSave = computed(() => activeMembers.value.length >= 3 && activeMembers.value.length <= 7)
-const save = async () => {
-  const headers = {
-    'Content-Type': 'application/json'
-  }
-  try {
-    const body = JSON.stringify({
-      team: team.value,
-      contact: contact.value,
-      members: members.value
-    })
-    console.log('body', body)
-    const response = await fetch('/api/patrulje/' + props.teamId, {
-      method: 'PUT',
-      body: body,
-      headers: headers
-    })
-    if (!response.ok) {
-      throw new Error('HTTP status ' + response.status)
-    }
-    const data = await response.json()
-    contact.value = data.team
-    //router.replace({ name: 'indskrivning', params: { id: data.teamId } })
-    //router.replace({ path: '/indskrivning/'+ data.team.teamId  })
 
+// putState is the shared HTTP PUT helper used by both syncOrder (silent
+// background save after every member edit) and save (final "Gem" button
+// which redirects to MobilePay if there's anything to pay). It mutates
+// team/contact/order refs from the server response so the UI stays in
+// sync with the projection.
+const putState = async () => {
+  const headers = { 'Content-Type': 'application/json' }
+  const body = JSON.stringify({
+    team: team.value,
+    contact: contact.value,
+    members: members.value
+  })
+  const response = await fetch('/api/patrulje/' + props.teamId, {
+    method: 'PUT',
+    body: body,
+    headers: headers
+  })
+  if (!response.ok) {
+    throw new Error('HTTP status ' + response.status)
+  }
+  const data = await response.json()
+  if (data.team) team.value = data.team
+  if (data.order) order.value = data.order
+  if (data.paidOrders) paidOrders.value = [...data.paidOrders]
+  return data
+}
+
+// syncOrder pushes the current form state to the server so the order is
+// recomputed (lines, totalAmount, dueAmount). Called whenever a member
+// is added, removed or edited so the displayed totals always match the
+// form, without requiring the user to click "Gem". Errors are swallowed
+// silently — the next sync (or the final save) will retry.
+const syncOrder = async () => {
+  try {
+    await putState()
+  } catch (error) {
+    console.log('syncOrder failed', error)
+  }
+}
+
+const save = async () => {
+  try {
+    const data = await putState()
     if (data.paymentLink && data.paymentLink != '') {
       location.href = data.paymentLink
     } else {
       router.push({ name: 'thankyou' })
     }
-    //const vendor = data.content
-    //next()
   } catch (error) {
     console.log('team signup failed', error)
   }
-  //isLoading.value=true
-  //await sleep(2000)
-  //isLoading.value=false
-  //paymentDialog.value = true;
 }
 
 const mobilepay = ref('')
@@ -200,6 +208,11 @@ const saveMember = () => {
   }
   memberDialog.value = false
   member.value = { name: '' }
+  // Recalculate the order on the server now that the member set has
+  // changed (added, edited, or t-shirt size flipped). Fire-and-forget
+  // — the user keeps editing while the order refreshes in the
+  // background.
+  syncOrder()
 }
 const activeMembers = computed(() => members.value.filter((i) => !i.deleted))
 const deleteMember = () => {
@@ -207,6 +220,9 @@ const deleteMember = () => {
   members.value[findIndexById(member.value.id)].deleted = true
   deleteMemberDialog.value = false
   member.value = {}
+  // Same rationale as saveMember — sync the order so totals reflect
+  // the removal immediately.
+  syncOrder()
   //toast.add({severity:'success', summary: 'Successful', detail: 'Product Deleted', life: 3000});
 }
 const findIndexById = (id) => {
@@ -454,36 +470,52 @@ const tshirtSizeLabel = (slug) => {
         </DataTable>
       </div>
     </Fieldset>
-    <Fieldset class="mt-3" legend="Betalinger">
+    <Fieldset class="mt-3" legend="Betalinger" v-if="showPaymentsSection">
       <div class="card">
+        <div v-if="showOpenOrder" class="text-right text-sm pb-2">
+          Status:
+          <span
+            class="font-bold ml-1"
+            :class="orderStatus === 'PAID' ? 'text-green-600' : 'text-orange-500'"
+            >{{ orderStatus }}</span
+          >
+        </div>
         <div class="grid grid-cols-6 gap-4">
-          <div class="col-start-4 text-center">Antal</div>
-          <div class="text-center">Pris</div>
-          <div class="text-center">Total</div>
-          <template v-for="expense in expenses">
-            <div class="col-start-1 col-span-3">{{ expense.text }}</div>
-            <div class="text-right">{{ expense.count }}</div>
-            <div class="text-right">{{ expense.unitPrice }},-</div>
-            <div class="text-right">{{ expense.amount }},-</div>
+          <template v-if="showOpenOrder">
+            <div class="col-start-4 text-center">Antal</div>
+            <div class="text-center">Pris</div>
+            <div class="text-center">Total</div>
+            <template v-for="expense in expenses">
+              <div class="col-start-1 col-span-3">{{ expense.text }}</div>
+              <div class="text-right">{{ expense.count }}</div>
+              <div class="text-right">{{ expense.unitPrice }},-</div>
+              <div class="text-right">{{ expense.amount }},-</div>
+            </template>
+            <div class="col-start-1 col-span-5 font-bold">I alt</div>
+            <div class="font-bold text-right">{{ expensesTotal }},-</div>
+            <Divider class="col-start-1 col-end-7" />
           </template>
-          <div class="col-start-1 col-span-5 font-bold">I alt</div>
-          <div class="font-bold text-right">{{ expenses.sum('amount') }},-</div>
-          <Divider class="col-start-1 col-end-7" />
-          <div class="col-start-1 col-span-3">Indbetalinger</div>
-          <div class="text-center">Dato</div>
-          <template v-for="payment in payments">
-            <div class="col-start-1 col-span-3">{{ payment.text }}</div>
-            <div>{{ payment.date }}</div>
-            <div class="col-end-7 text-right">{{ payment.amount }},-</div>
+          <template v-if="paidOrders.length">
+            <div class="col-start-1 col-span-6 text-sm font-bold">Tidligere betalte ordrer</div>
+            <template v-for="po in paidOrders" :key="po.orderId">
+              <div class="col-start-1 col-span-2 text-sm">{{ orderDateShort(po) }}</div>
+              <div class="col-span-3 text-sm">{{ orderShortLines(po) }}</div>
+              <div class="col-end-7 text-right text-sm">
+                {{ Math.round(po.paidAmount / 100) }},-
+              </div>
+            </template>
+            <Divider class="col-start-1 col-end-7" />
           </template>
-          <div class="col-start-1 col-span-5 font-bold">I alt</div>
-          <div class="font-bold text-right">{{ payments.sum('amount') }},-</div>
-          <Divider class="col-start-1 col-end-7" />
-          <div class="col-start-1 col-span-5 font-bold">At betale</div>
-          <div class="font-bold text-right">{{ payableAmount }},-</div>
+          <div class="col-start-1 col-span-3 font-bold">Indbetalt i alt</div>
+          <div class="col-end-7 font-bold text-right">{{ paymentsTotal }},-</div>
+          <template v-if="showOpenOrder">
+            <Divider class="col-start-1 col-end-7" />
+            <div class="col-start-1 col-span-5 font-bold">At betale</div>
+            <div class="font-bold text-right">{{ payableAmount }},-</div>
+          </template>
           <Divider class="col-end-7" />
         </div>
-        <p>
+        <p v-if="showOpenOrder">
           Deltagerbetalingen bliver ikke refunderet ved afbud uanset grund - vi kan have brugt
           pengene ud fra en forventning om, at du kommer. Det er dog helt frem til ganske kort før
           løbsstart muligt at skifte ud blandt deltagerne. Betalingen bliver naturligvis refunderet,

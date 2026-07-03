@@ -17,19 +17,81 @@ const router = createRouter({
       // which is lazy-loaded when the route is visited.
       component: () => import('../views/AboutView.vue')
     },
-    { path: '/patrulje/:teamId', name: 'patrulje', component: () => import('../views/PatruljeView.vue'), props: true },
-    { path: '/klan/:teamId', name: 'klan', component: () => import('../views/KlanView.vue'), props: true },
-    { path: '/badut/:userId', name: 'gøgler', component: () => import('../views/StaffView.vue'), props: true },
-    { path: '/friend/:userId', name: 'friend', component: () => import('../views/FriendView.vue'), props: true },
+    {
+      path: '/patrulje/:teamId',
+      name: 'patrulje',
+      component: () => import('../views/PatruljeView.vue'),
+      props: true
+    },
+    {
+      path: '/klan/:teamId',
+      name: 'klan',
+      component: () => import('../views/KlanView.vue'),
+      props: true
+    },
+    {
+      path: '/badut/:userId',
+      name: 'gøgler',
+      component: () => import('../views/BadutView.vue'),
+      props: true
+    },
+    {
+      path: '/crew/:userId',
+      name: 'crew',
+      component: () => import('../views/CrewView.vue'),
+      props: true
+    },
+    // Legacy /friend URLs from before the friend→crew rename. Pre-rename
+    // bookmarks and signup-confirmation links keep working without a
+    // redirect by aliasing onto the new component.
+    {
+      path: '/friend/:userId',
+      name: 'friend',
+      component: () => import('../views/CrewView.vue'),
+      props: true
+    },
     { path: '/verificer', name: 'verify', component: () => import('../views/VerifyView.vue') },
-    { path: '/indskrivning/patrulje', component: () => import('../views/IndskrivningView.vue'), props: { teamType: 'patrulje' } },
-    { path: '/indskrivning/klan', component: () => import('../views/IndskrivningView.vue'), props: { teamType: 'klan' } },
-    { path: '/indskrivning/badut', component: () => import('../views/IndskrivningView.vue'), props: { teamType: 'gøgler' } },
-    { path: '/indskrivning/friend', component: () => import('../views/IndskrivningView.vue'), props: { teamType: 'friend' } },
-    { path: '/indskrivning/:teamId', component: () => import('../views/IndskrivningView.vue'), props: true },
+    {
+      path: '/indskrivning/patrulje',
+      component: () => import('../views/IndskrivningView.vue'),
+      props: { teamType: 'patrulje' }
+    },
+    {
+      path: '/indskrivning/klan',
+      component: () => import('../views/IndskrivningView.vue'),
+      props: { teamType: 'klan' }
+    },
+    {
+      path: '/indskrivning/badut',
+      component: () => import('../views/IndskrivningView.vue'),
+      props: { teamType: 'gøgler' }
+    },
+    {
+      path: '/indskrivning/crew',
+      component: () => import('../views/IndskrivningView.vue'),
+      props: { teamType: 'crew' }
+    },
+    // Legacy /indskrivning/friend kept as an alias so existing
+    // QR codes / posters keep working post-rename. Posts the new
+    // "crew" team type to the backend.
+    {
+      path: '/indskrivning/friend',
+      component: () => import('../views/IndskrivningView.vue'),
+      props: { teamType: 'crew' }
+    },
+    {
+      path: '/indskrivning/:teamId',
+      component: () => import('../views/IndskrivningView.vue'),
+      props: true
+    },
     { path: '/venteliste', name: 'onhold', component: () => import('../views/VentelisteView.vue') },
     { path: '/tak', name: 'thankyou', component: () => import('../views/ThankyouView.vue') },
-    { path: '/betaling/:reference', name: 'payment', component: () => import('../views/PaymentView.vue'), props: true },
+    {
+      path: '/betaling/:reference',
+      name: 'payment',
+      component: () => import('../views/PaymentView.vue'),
+      props: true
+    }
   ]
 })
 

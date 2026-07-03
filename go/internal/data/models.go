@@ -7,10 +7,14 @@ import (
 	"time"
 
 	"github.com/nathejk/shared-go/types"
+	"nathejk.dk/nathejk/table/crewmember"
 	"nathejk.dk/nathejk/table/klan"
+	"nathejk.dk/nathejk/table/order"
 	"nathejk.dk/nathejk/table/patrulje"
 	"nathejk.dk/nathejk/table/payment"
 	"nathejk.dk/nathejk/table/personnel"
+	"nathejk.dk/nathejk/table/product"
+	"nathejk.dk/nathejk/table/section"
 	"nathejk.dk/nathejk/table/signup"
 )
 
@@ -69,14 +73,18 @@ type Models struct {
 			GetByID(types.TeamID) (*Signup, error)
 			ConfirmBySecret(string) (types.TeamID, error)
 		}*/
-	Payment   PaymentInterface
-	Personnel PersonnelInterface
-	Patrulje  PatruljeInterface
-	Signup    signup.Queries
-	Klan      klan.Queries
+	Payment    PaymentInterface
+	Personnel  PersonnelInterface
+	Patrulje   PatruljeInterface
+	Signup     signup.Queries
+	Klan       klan.Queries
+	Order      order.Queries
+	Product    product.Queries
+	Section    section.Queries
+	Crewmember crewmember.Queries
 }
 
-func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterface, patrulje PatruljeInterface, s signup.Queries, k klan.Queries) Models {
+func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterface, patrulje PatruljeInterface, s signup.Queries, k klan.Queries, o order.Queries, pr product.Queries, sec section.Queries, cm crewmember.Queries) Models {
 	return Models{
 		Teams:       TeamModel{DB: db},
 		Members:     MemberModel{DB: db},
@@ -84,10 +92,14 @@ func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterfac
 		Tokens:      TokenModel{DB: db},
 		Users:       UserModel{DB: db},
 		//Signup:      SignupModel{DB: db},
-		Payment:   payment,
-		Personnel: personnel,
-		Patrulje:  patrulje,
-		Signup:    s,
-		Klan:      k,
+		Payment:    payment,
+		Personnel:  personnel,
+		Patrulje:   patrulje,
+		Signup:     s,
+		Klan:       k,
+		Order:      o,
+		Product:    pr,
+		Section:    sec,
+		Crewmember: cm,
 	}
 }

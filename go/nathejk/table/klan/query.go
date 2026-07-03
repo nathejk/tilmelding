@@ -14,6 +14,7 @@ import (
 
 type Queries interface {
 	RequestedMemberCount(context.Context, types.YearSlug) (uint32, error)
+	RequestedSeniorCount(context.Context, types.YearSlug) (int, error)
 	GetAll(context.Context, Filter) ([]Klan, error)
 	GetByID(context.Context, types.TeamID) (*Klan, error)
 }
@@ -23,9 +24,24 @@ type querier struct {
 }
 
 func (q *querier) RequestedMemberCount(ctx context.Context, year types.YearSlug) (uint32, error) {
-	query := `SELECT COUNT(memberId) FROM senior WHERE year=?`
+	query := `SELECT SUM(reservedMemberCount) FROM klan WHERE year=?`
 	var count uint32
 	if err := q.db.QueryRow(query, year).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// RequestedSeniorCount returns the number of senior rows registered for
+// `year`. Used by UpdateMembers to put klans on the waiting list when the
+// global senior cap (currently 115) would be exceeded by accepting more.
+//
+// Cross-table read into the senior projection lives here so the klan
+// commander can keep its dependencies on a single Queries interface.
+func (q *querier) RequestedSeniorCount(ctx context.Context, year types.YearSlug) (int, error) {
+	query := `SELECT COUNT(memberId) FROM senior WHERE year=?`
+	var count int
+	if err := q.db.QueryRowContext(ctx, query, year).Scan(&count); err != nil {
 		return 0, err
 	}
 	return count, nil
@@ -84,7 +100,11 @@ func (q *querier) GetAll(ctx context.Context, f Filter) ([]Klan, error) {
 	}
 	query := `SELECT t.teamId, t.name, t.groupName, t.korps, t.signupStatus, t.lok,
 			(SELECT COUNT(*) FROM senior s where t.teamId = s.teamId) memberCount,
-			(SELECT COALESCE(SUM(amount), 0) FROM payment where t.teamId = payment.orderForeignKey AND status IN ('reserved', 'received')) as paidAmount
+			(SELECT COALESCE(SUM(pmt.amount), 0)
+				FROM payment pmt
+				LEFT JOIN orders o ON o.orderId = pmt.orderForeignKey
+				WHERE pmt.status IN ('reserved', 'received')
+				  AND (pmt.orderForeignKey = t.teamId OR o.ownerId = t.teamId)) as paidAmount
 		FROM klan t
 		JOIN patruljestatus ts ON t.teamId = ts.teamId AND t.signupStatus != ''
 		WHERE ` + strings.Join(where, " AND ")

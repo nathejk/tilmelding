@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"expvar"
 	"flag"
 	"fmt"
@@ -18,13 +19,18 @@ import (
 	"nathejk.dk/internal/payment/mobilepay"
 	"nathejk.dk/internal/sms"
 	"nathejk.dk/internal/vcs"
-	"nathejk.dk/nathejk/commands"
 	"nathejk.dk/nathejk/table"
+	"nathejk.dk/nathejk/table/crewmember"
 	"nathejk.dk/nathejk/table/klan"
+	"nathejk.dk/nathejk/table/order"
 	"nathejk.dk/nathejk/table/patrulje"
+	payments "nathejk.dk/nathejk/table/payment"
 	"nathejk.dk/nathejk/table/personnel"
+	"nathejk.dk/nathejk/table/product"
+	"nathejk.dk/nathejk/table/section"
 	"nathejk.dk/nathejk/table/senior"
 	"nathejk.dk/nathejk/table/signup"
+	"nathejk.dk/nathejk/table/spejder"
 	"nathejk.dk/pkg/sqlpersister"
 	"nathejk.dk/superfluids/jetstream"
 	"nathejk.dk/superfluids/streaminterface"
@@ -68,12 +74,27 @@ type application struct {
 
 	config    config
 	models    data.Models
+	db        *sql.DB
 	jetstream streaminterface.Stream
-	commands  commands.Commands
+	commands  commands
 	mailer    mailer.Mailer
 	sms       sms.Sender
 	payment   mobilepay.Client
 	logger    *jsonlog.Logger
+}
+
+// commands wires the entity-local write-side APIs together for handlers
+// to consume. Each field is satisfied by the table package responsible
+// for that entity (commands.go alongside table.go).
+type commands struct {
+	Signup     signup.Commands
+	Klan       klan.Commands
+	Patrulje   patrulje.Commands
+	Personnel  personnel.Commands
+	Payment    payments.Commands
+	Order      order.Commands
+	Section    section.Commands
+	Crewmember crewmember.Commands
 }
 
 func main() {
@@ -139,27 +160,52 @@ func main() {
 	reader := db.DB()
 	writer := sqlpersister.New(db.DB())
 
+	// Product catalogue is seeded at startup. Idempotent: re-running this with
+	// the same seed list updates names / prices / stock in place.
+	tableProduct := product.New(writer, reader)
+	if err := tableProduct.Seed(product.Seeds2026()); err != nil {
+		logger.PrintFatal(err, nil)
+	}
+
 	tablePayment := table.NewPayment(writer, reader)
-	tableStaff := personnel.New(writer, reader)
-	tablePatrulje := patrulje.New(writer, reader)
+	tableStaff := personnel.New(js, writer, reader)
+	tablePatrulje := patrulje.New(js, writer, reader)
+	tableSpejder := spejder.New(writer, reader)
 	tableSignup := signup.New(js, writer, reader, signup.WithSms(smsclient), signup.WithMailer(mailclient))
-	tableKlan := klan.New(js, writer, reader, klan.WithTotalMemberCount(115), klan.WithTeamMaxMemberCount(4))
+	// The 115-seat klan cap now lives on participation.klan.stock in the
+	// product catalogue (see product.Seeds2026). klan.WithProductQueries
+	// wires the catalogue in so RequestMemberCount can read it.
+	tableKlan := klan.New(js, writer, reader, klan.WithProductQueries(tableProduct), klan.WithTeamMaxMemberCount(4))
 	tableSenior := senior.New(writer, reader)
 
+	// Order projection + commander. Subscribes to NATHEJK:*.order.*.{created,
+	// lines.changed, cancelled, paid} via the mux below.
+	tableOrder := order.New(js, writer, reader, cfg.year, tableProduct)
+
+	// Crew organisation: sections (function/role/unit hierarchy) and the
+	// crew members assigned to them. Both are event-sourced projections
+	// registered on the mux below.
+	tableSection := section.New(js, writer, reader)
+	tableCrewmember := crewmember.New(js, writer, reader)
+
+	// Saga that bridges payment events into NathejkOrderPaid, which the
+	// order projector then projects into status=paid on the orders table.
+	orderSaga := order.NewSaga(js, tableOrder, tablePayment, 0)
+
 	mux := xstream.NewMux(js)
-	mux.AddConsumer(table.NewConfirm(writer), tableKlan, tableSenior /*table.NewPatrulje(sqlw),*/, table.NewPatruljeStatus(writer) /*table.NewPatruljeMerged(sqlw),*/, table.NewSpejder(writer), table.NewSpejderStatus(writer), tablePayment, tableStaff, tablePatrulje, tableSignup)
+	mux.AddConsumer(table.NewConfirm(writer), tableKlan, tableSenior /*table.NewPatrulje(sqlw),*/, table.NewPatruljeStatus(writer) /*table.NewPatruljeMerged(sqlw),*/, tableSpejder, table.NewSpejderStatus(writer), tablePayment, tableStaff, tablePatrulje, tableSignup, tableOrder, orderSaga, tableSection, tableCrewmember)
 	//mux.AddConsumer(table.NewSpejder(sqlw), table.NewSpejderStatus(sqlw))
 	if err := mux.Run(context.Background()); err != nil {
 		logger.PrintFatal(err, nil)
 	}
 
-	models := data.NewModels(reader, tablePayment, tableStaff, tablePatrulje, tableSignup, tableKlan)
+	models := data.NewModels(reader, tablePayment, tableStaff, tablePatrulje, tableSignup, tableKlan, tableOrder, tableProduct, tableSection, tableCrewmember)
 
 	expvar.NewString("version").Set(version)
 	expvar.NewInt("timestamp").Set(time.Now().Unix())
 	expvar.NewInt("goroutines").Set(int64(runtime.NumGoroutine()))
 
-	payment, err := mobilepay.New(cfg.payment.dsn)
+	paymentClient, err := mobilepay.New(cfg.payment.dsn)
 	if err != nil {
 		logger.PrintFatal(err, nil)
 	}
@@ -168,16 +214,24 @@ func main() {
 			Logger: logger,
 		},
 		config:    cfg,
-		payment:   payment,
+		payment:   paymentClient,
 		models:    models,
+		db:        reader,
 		jetstream: js,
-		commands:  commands.New(js, models, payment),
-		mailer:    mailclient,
-		sms:       smsclient,
-		logger:    logger,
+		commands: commands{
+			Signup:     tableSignup,
+			Klan:       tableKlan,
+			Patrulje:   tablePatrulje,
+			Personnel:  tableStaff,
+			Payment:    payments.NewCommands(js, paymentClient),
+			Order:      tableOrder,
+			Section:    tableSection,
+			Crewmember: tableCrewmember,
+		},
+		mailer: mailclient,
+		sms:    smsclient,
+		logger: logger,
 	}
-	app.commands.Signup = tableSignup
-	app.commands.Klan = tableKlan
 
 	logger.PrintInfo("Application initialized", nil)
 

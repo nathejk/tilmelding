@@ -22,7 +22,11 @@ func (q *querier) GetAll(ctx context.Context, filters Filter) ([]*Patrulje, erro
 	query := `SELECT p.teamId, teamNumber, name, groupName, korps, liga, contactName, contactPhone, contactEmail, contactRole, signupStatus,
 			(SELECT COUNT(*) FROM spejder s where p.teamId = s.teamId) memberCount,
 			(SELECT COUNT(*) FROM spejder s where p.teamId = s.teamId AND s.tshirtSize != '') tshirtCount,
-			(SELECT COALESCE(SUM(amount), 0) FROM payment where p.teamId = payment.orderForeignKey AND status IN ('reserved', 'received')) as paidAmount
+			(SELECT COALESCE(SUM(pmt.amount), 0)
+				FROM payment pmt
+				LEFT JOIN orders o ON o.orderId = pmt.orderForeignKey
+				WHERE pmt.status IN ('reserved', 'received')
+				  AND (pmt.orderForeignKey = p.teamId OR o.ownerId = p.teamId)) as paidAmount
 		FROM patrulje p
 		WHERE (LOWER(p.year) = LOWER(?) OR ? = '')`
 	args := []any{filters.YearSlug, filters.YearSlug}
@@ -58,6 +62,24 @@ func (q *querier) GetAll(ctx context.Context, filters Filter) ([]*Patrulje, erro
 	//metadata := calculateMetadata(filters.Year, totalRecords, filters.Page, filters.PageSize)
 
 	return patruljer, nil
+}
+
+// GetLastWithNumber returns the patrulje currently holding the highest
+// teamNumber, or tables.ErrRecordNotFound if no patrulje has been numbered
+// yet. Used by AssignNumber to compute the next number.
+func (q *querier) GetLastWithNumber(ctx context.Context) (*Patrulje, error) {
+	query := `SELECT teamId, teamNumber FROM patrulje WHERE teamNumber != "" ORDER BY length(teamNumber) DESC, teamNumber DESC LIMIT 1`
+	var p Patrulje
+	err := q.db.QueryRowContext(ctx, query).Scan(&p.TeamID, &p.TeamNumber)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, tables.ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+	return &p, nil
 }
 
 func (q *querier) GetByID(ctx context.Context, teamID types.TeamID) (*Patrulje, error) {

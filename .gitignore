@@ -1,5 +1,6 @@
 .DS_Store
 /docker-compose.override.yml
+go.work.sum
 /attic/
 node_modules/
 vue/public/videos

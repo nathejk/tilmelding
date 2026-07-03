@@ -34,6 +34,11 @@ COPY go/ .
 # BUILD
 FROM base AS build
 
+# Disable Go workspaces for the production build: the build server has no
+# sibling shared-go checkout, so dependencies must resolve from go.mod alone
+# via the public module proxy. A stray go.work would otherwise break CI.
+ENV GOWORK=off
+
 # test and lint before building
 RUN go test -timeout 60s ./... && \
     staticcheck ./...

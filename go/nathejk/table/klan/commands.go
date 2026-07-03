@@ -18,6 +18,7 @@ type Commands interface {
 	//VerifyPhone(context.Context, types.TeamID, string) error
 	RequestMemberCount(context.Context, types.YearSlug, types.TeamID, uint32) (uint32, error)
 	Update(context.Context, types.TeamID, UpdateCommand) error
+	UpdateMembers(context.Context, types.TeamID, Team, []Senior) error
 	AssignToLok(context.Context, types.TeamID, string) error
 	Delete(context.Context, types.TeamID) error
 }
@@ -31,13 +32,18 @@ type commander struct {
 // RequestMemberCount attempts to reserve seats for the given team.
 // It returns the number of seats successfully reserved. If capacity has been
 // reached the request is placed on a waiting list and the return value is 0.
+//
+// The cap is sourced from the product catalogue (participation.klan.stock)
+// when WithProductQueries was wired in; otherwise the legacy
+// WithTotalMemberCount fallback applies. See repository.go.
 func (c *commander) RequestMemberCount(ctx context.Context, year types.YearSlug, teamID types.TeamID, memberCount uint32) (uint32, error) {
 	actualMemberCount, err := c.q.RequestedMemberCount(ctx, year)
 	if err != nil {
 		return 0, err
 	}
+	cap := c.capacity(ctx, year)
 	action := "requested"
-	if c.r.TotalMemberCount > actualMemberCount {
+	if cap > actualMemberCount {
 		action = "reserved"
 	}
 	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.%s", year, types.TeamTypeKlan, teamID, action)))
@@ -52,6 +58,28 @@ func (c *commander) RequestMemberCount(ctx context.Context, year types.YearSlug,
 		return 0, nil
 	}
 	return memberCount, nil
+}
+
+// capacity returns the active seat cap for klan participation in the
+// given year. Sources, in priority order:
+//
+//   - Product catalogue: participation.klan.stock for `year`. NULL stock
+//     (unlimited) is treated as no constraint and falls through.
+//   - Legacy WithTotalMemberCount option (r.TotalMemberCount).
+//
+// On any product-query error the function silently falls back to the
+// legacy value; capacity gating is non-critical and we'd rather degrade
+// to the conservative legacy cap than fail the request.
+func (c *commander) capacity(ctx context.Context, year types.YearSlug) uint32 {
+	if c.r.Products != nil {
+		if p, err := c.r.Products.GetBySKU(ctx, year, "participation.klan"); err == nil && p != nil && p.Stock != nil {
+			if *p.Stock < 0 {
+				return 0
+			}
+			return uint32(*p.Stock)
+		}
+	}
+	return c.r.TotalMemberCount
 }
 
 type SignupCommand struct {
@@ -198,5 +226,136 @@ func (c *commander) Delete(ctx context.Context, teamID types.TeamID) error {
 	if err := c.p.Publish(msg); err != nil {
 		return err
 	}
+	return nil
+}
+
+// Team is the team-level slice of an UpdateMembers command.
+type Team struct {
+	TeamID      types.TeamID `json:"teamId"`
+	Name        string       `json:"name"`
+	Group       string       `json:"group"`
+	Korps       string       `json:"korps"`
+	MemberCount int          `json:"memberCount"`
+}
+
+// Senior is one member entry on an UpdateMembers command. Setting
+// Deleted=true publishes a member-deleted event instead of an update.
+type Senior struct {
+	MemberID   types.MemberID     `json:"memberId"`
+	Deleted    bool               `json:"deleted"`
+	Name       string             `json:"name"`
+	Address    string             `json:"address"`
+	PostalCode string             `json:"postalCode"`
+	Email      types.EmailAddress `json:"email"`
+	Phone      types.PhoneNumber  `json:"phone"`
+	Birthday   types.Date         `json:"birthday"`
+	Diet       string             `json:"diet"`
+	TShirtSize string             `json:"tshirtSize"`
+}
+
+// UpdateMembers projects the team form into the klan-side write events:
+// one NathejkKlanUpdated for the team slice, optional status transitions
+// when the global senior cap is reached, and one NathejkSeniorUpdated
+// (or NathejkMemberDeleted) per member.
+//
+// Members slice may be empty; in that case, MemberCount placeholder rows
+// are emitted so the projection can grow to the requested size before any
+// senior identities are filled in.
+func (c *commander) UpdateMembers(ctx context.Context, teamID types.TeamID, team Team, members []Senior) error {
+	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.updated", "2026", teamID)))
+	msg.SetBody(&messages.NathejkKlanUpdated{
+		TeamID:    teamID,
+		Name:      team.Name,
+		GroupName: team.Group,
+		Korps:     team.Korps,
+	})
+	msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
+	if err := c.p.Publish(msg); err != nil {
+		return err
+	}
+
+	klan, _ := c.q.GetByID(ctx, teamID)
+	if klan != nil && klan.Status == types.SignupStatusOnHold {
+		// The team is on waiting list, do not transition status.
+		return nil
+	}
+
+	seniorCount, _ := c.q.RequestedSeniorCount(ctx, "2026")
+	if seniorCount > 115 {
+		statusMsg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2026", teamID)))
+		statusMsg.SetBody(&messages.NathejkKlanStatusChanged{TeamID: teamID, Status: types.SignupStatusOnHold})
+		statusMsg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
+		if klan != nil && (klan.Status != types.SignupStatusPay) && (klan.Status != types.SignupStatusPaid) {
+			if err := c.p.Publish(statusMsg); err != nil {
+				return err
+			}
+		}
+	}
+	if klan != nil && klan.Status == "" {
+		statusMsg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2026", teamID)))
+		statusMsg.SetBody(&messages.NathejkKlanStatusChanged{TeamID: teamID, Status: types.SignupStatusPay})
+		statusMsg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
+		if err := c.p.Publish(statusMsg); err != nil {
+			return err
+		}
+	}
+
+	if len(members) == 0 {
+		for i := 0; i < team.MemberCount; i++ {
+			members = append(members, Senior{})
+		}
+	}
+
+	for i := range members {
+		m := &members[i]
+		if m.Deleted {
+			msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.deleted", "2026", m.MemberID)))
+			msg.SetBody(&messages.NathejkMemberDeleted{
+				MemberID: m.MemberID,
+				TeamID:   teamID,
+			})
+			msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
+			if err := c.p.Publish(msg); err != nil {
+				return err
+			}
+			continue
+		}
+
+		// Assign a fresh ID to brand-new members. Mutating through the
+		// slice index (not the loop copy) so the caller's slice carries
+		// the assigned IDs back — derivedLinesForKlan needs them on the
+		// same slice to key the order lines by memberId.
+		if m.MemberID == "" {
+			m.MemberID = types.MemberID(uuid.New().String())
+		}
+		msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.updated", "2026", m.MemberID)))
+		// Include teamId in the body so the senior projector's two-phase
+		// decode (see senior/consumer.go) can do an INSERT IGNORE for
+		// brand-new members. Without it the row is never created and the
+		// subsequent UPDATE matches zero rows, leaving order lines that
+		// reference a senior the projection never knew about.
+		msg.SetBody(&struct {
+			messages.NathejkSeniorUpdated
+			TeamID types.TeamID `json:"teamId"`
+		}{
+			NathejkSeniorUpdated: messages.NathejkSeniorUpdated{
+				MemberID:   m.MemberID,
+				Name:       m.Name,
+				Address:    m.Address,
+				PostalCode: m.PostalCode,
+				Email:      m.Email,
+				Phone:      m.Phone,
+				BirthDate:  m.Birthday,
+				TShirtSize: m.TShirtSize,
+				Diet:       m.Diet,
+			},
+			TeamID: teamID,
+		})
+		msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
+		if err := c.p.Publish(msg); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

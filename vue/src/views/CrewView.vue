@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Navigation from '@/components/Navigation.vue'
 import Shop from '@/components/Shop.vue'
@@ -7,6 +7,14 @@ import FloatLabel from 'primevue/floatlabel'
 import Calendar from 'primevue/calendar'
 import InputGroup from 'primevue/inputgroup'
 import InputGroupAddon from 'primevue/inputgroupaddon'
+import {
+  aggregateOrderLines,
+  orderTotalDkk,
+  orderDueDkk,
+  orderShortLines,
+  orderDateShort,
+  totalPaidDkk
+} from '@/helpers/order'
 
 const props = defineProps({
   userId: { type: String, required: false }
@@ -27,88 +35,61 @@ class List extends Array {
 }
 
 const config = ref({
-  memberPrice: 100,
+  memberPrice: 0,
   tshirtPrice: 175
 })
+// First-level sections (crew functions/units), fetched from the server and
+// used for the "function" selector below. Replaces the previously
+// hardcoded departments list.
+const sections = ref([])
 const questions = [
-  {
-    slug: 'seventeen',
-    title: 'Er du fyldt 17 år på Nathejk?',
-    type: 'radio',
-    options: ['Ja', 'Nej'],
-    defaults: []
-  },
-  {
-    slug: 'days',
-    title: 'Deltager',
-    type: 'checkbox',
-    options: ['fredag', 'lørdag', 'søndag'],
-    defaults: ['fredag', 'lørdag', 'søndag']
-  },
-  {
-    slug: 'car',
-    title: 'Transport under Nathejk',
-    type: 'radio',
-    options: [
-      'Jeg har egen bil',
-      'Jeg har brug for en plads',
-      'Jeg har allerede en aftale om kørsel'
-    ],
-    defaults: []
-  },
-  {
-    slug: 'seatcount',
-    title: 'Hvis du medbringer egen bil, hvor mange ekstra pladser har du?',
-    type: 'number',
-    options: [],
-    defaults: []
-  },
   {
     slug: 'diet',
     title: 'Har du brug for vegetarmad?',
     type: 'radio',
-    options: ['Ja', 'Mej'],
+    options: ['Ja', 'Nej'],
     defaults: []
   }
 ]
-const staffer = ref({ tshirtSize: '', additionals: {} })
-const tshirtCount = computed(() => (staffer.value.tshirtSize != '' ? 1 : 0))
-const expenses = computed(() => {
-  return new List(
-    {
-      text: 'Deltager',
-      count: 1,
-      unitPrice: config.value.memberPrice,
-      amount: config.value.memberPrice
-    },
-    {
-      text: 'Års t-shirt',
-      count: tshirtCount,
-      unitPrice: config.value.tshirtPrice,
-      amount: tshirtCount.value * config.value.tshirtPrice
-    }
-  )
-})
-const payments = ref(new List())
-const payableAmount = computed(() =>
-  Math.max(0, expenses.value.sum('amount') - payments.value.sum('amount'))
-)
+const staffer = ref({ tshirtSize: '', sectionSlug: '', additionals: {} })
+const order = ref(null)
+const paidOrders = ref([])
+
+// Expenses, payments, totals come from the server-side order envelope.
+const expenses = computed(() => aggregateOrderLines(order.value))
+const expensesTotal = computed(() => orderTotalDkk(order.value))
+const paymentsTotal = computed(() => totalPaidDkk(order.value, paidOrders.value))
+const payableAmount = computed(() => orderDueDkk(order.value))
+// orderStatus is "OPEN" or "PAID" — see order.MarshalJSON on the
+// backend.
+const orderStatus = computed(() => (order.value && order.value.status) || 'OPEN')
+// showOpenOrder gates the open-order block. Hidden when nothing's due.
+const showOpenOrder = computed(() => payableAmount.value > 0)
+// showPaymentsSection gates the entire Betalinger fieldset.
+const showPaymentsSection = computed(() => showOpenOrder.value || paidOrders.value.length > 0)
 
 onMounted(async () => load(props.userId))
 
 const load = async (userId) => {
   try {
-    const response = await fetch('/api/personnel/' + userId)
+    const response = await fetch('/api/crew/' + userId)
     if (!response.ok) {
       throw new Error('HTTP status ' + response.status)
     }
     const data = await response.json()
     config.value = data.config
-    staffer.value = data.person
-    if (!staffer.value.additionals.days) {
-      staffer.value.additionals.days = ['fredag', 'lørdag', 'søndag']
+    sections.value = data.sections ? [...data.sections] : []
+    staffer.value = data.member
+    if (!staffer.value.additionals) {
+      staffer.value.additionals = {}
     }
-    payments.value = new List(...data.payments.filter((p) => p.status != 'requested'))
+    order.value = data.order || null
+    paidOrders.value = data.paidOrders ? [...data.paidOrders] : []
+
+    // Arm the t-shirt watcher only after the load-induced staffer
+    // assignment above has settled. See BadutView.vue for the rationale.
+    await nextTick()
+    shirtWatchPrimed = true
 
     console.log('found', data)
   } catch (error) {
@@ -128,24 +109,8 @@ const memberSubmitted = ref(false)
 const mobilepay = ref('')
 
 const save = async () => {
-  const headers = {
-    'Content-Type': 'application/json'
-  }
   try {
-    const body = JSON.stringify({
-      person: staffer.value
-    })
-    console.log('body', body)
-    const response = await fetch('/api/personnel/' + props.userId, {
-      method: 'PUT',
-      body: body,
-      headers: headers
-    })
-    if (!response.ok) {
-      throw new Error('HTTP status ' + response.status)
-    }
-    const data = await response.json()
-
+    const data = await putState()
     if (data.paymentLink && data.paymentLink != '') {
       location.href = data.paymentLink
     } else {
@@ -155,6 +120,49 @@ const save = async () => {
     console.log('team signup failed', error)
   }
 }
+
+// Shared HTTP PUT helper used by both syncOrder (silent background save
+// when the t-shirt/section changes) and save (final "Gem" button which
+// redirects to MobilePay if there's anything to pay).
+const putState = async () => {
+  const headers = { 'Content-Type': 'application/json' }
+  const body = JSON.stringify({ member: staffer.value })
+  const response = await fetch('/api/crew/' + props.userId, {
+    method: 'PUT',
+    body: body,
+    headers: headers
+  })
+  if (!response.ok) {
+    throw new Error('HTTP status ' + response.status)
+  }
+  const data = await response.json()
+  if (data.member) staffer.value = data.member
+  if (data.order) order.value = data.order
+  if (data.paidOrders) paidOrders.value = [...data.paidOrders]
+  return data
+}
+
+const syncOrder = async () => {
+  try {
+    await putState()
+  } catch (error) {
+    console.log('syncOrder failed', error)
+  }
+}
+
+// Auto-sync the order when the t-shirt selection changes. The watcher
+// only acts after load() has explicitly primed it via nextTick, so a
+// load-induced value change doesn't issue a no-op PUT and — critically
+// — a loaded value that happens to equal the initial '' doesn't
+// silently swallow the user's first real selection.
+let shirtWatchPrimed = false
+watch(
+  () => staffer.value && staffer.value.tshirtSize,
+  () => {
+    if (!shirtWatchPrimed) return
+    syncOrder()
+  }
+)
 
 const tshirtSizeLabel = (slug) => {
   if (slug == '') return ''
@@ -248,29 +256,33 @@ const tshirtSizeLabel = (slug) => {
             <label for="team-korps">Spejderkorps</label>
           </FloatLabel>
         </div>
-        <p class="mt-5">
-          Deltager du sammen med din klan, og har I lyst til at få en opgave inden løbet? Hvis ja,
-          skriv jeres klannavn.
-        </p>
+        <p class="mt-5">Medlemsnummer fra medlemsservice.</p>
         <div class="flex flex-col">
           <FloatLabel class="mt-3">
             <InputText
-              id="team-name"
-              v-model.trim="staffer.klan"
+              id="medlemsservice"
+              v-model.trim="staffer.number"
               size="small"
               class="w-full"
-              required="true"
-              autofocus
-              :invalid="teamSubmitted && !staffer.klan"
             />
-            <label for="team-name">Klannavn</label>
+            <label for="medlemsservice">Medlemsnummer</label>
           </FloatLabel>
-          <small class="p-error mb-2" v-if="teamSubmitted && !team.name"
-            >Klannavn skal indtastes.</small
-          >
         </div>
       </Fieldset>
-      <Fieldset class="mt-3" legend="Gøgler">
+      <Fieldset class="mt-3" legend="Hjælper">
+        <div class="flex flex-col gap-2 pb-3">
+          <span>I hvilken funktion deltager du?</span>
+          <div v-for="s in sections" :key="s.slug" class="flex items-center pl-5">
+            <RadioButton
+              v-model="staffer.sectionSlug"
+              :inputId="'section-' + s.slug"
+              name="section"
+              :value="s.slug"
+              size="small"
+            />
+            <label :for="'section-' + s.slug" class="text-sm pl-2">{{ s.label }}</label>
+          </div>
+        </div>
         <div v-for="q in questions" class="flex flex-col gap-2 pb-3">
           <span>{{ q.title }}</span>
           <div
@@ -319,36 +331,52 @@ const tshirtSizeLabel = (slug) => {
 
     <Shop v-model="staffer.tshirtSize" :options="config.tshirtSizes" />
 
-    <Fieldset class="mt-3" legend="Betalinger">
+    <Fieldset class="mt-3" legend="Betalinger" v-if="showPaymentsSection">
       <div class="card">
+        <div v-if="showOpenOrder" class="text-right text-sm pb-2">
+          Status:
+          <span
+            class="font-bold ml-1"
+            :class="orderStatus === 'PAID' ? 'text-green-600' : 'text-orange-500'"
+            >{{ orderStatus }}</span
+          >
+        </div>
         <div class="grid grid-cols-6 gap-4">
-          <div class="col-start-4 text-center">Antal</div>
-          <div class="text-center">Pris</div>
-          <div class="text-center">Total</div>
-          <template v-for="expense in expenses">
-            <div class="col-start-1 col-span-3">{{ expense.text }}</div>
-            <div class="text-right">{{ expense.count }}</div>
-            <div class="text-right">{{ expense.unitPrice }},-</div>
-            <div class="text-right">{{ expense.amount }},-</div>
+          <template v-if="showOpenOrder">
+            <div class="col-start-4 text-center">Antal</div>
+            <div class="text-center">Pris</div>
+            <div class="text-center">Total</div>
+            <template v-for="expense in expenses">
+              <div class="col-start-1 col-span-3">{{ expense.text }}</div>
+              <div class="text-right">{{ expense.count }}</div>
+              <div class="text-right">{{ expense.unitPrice }},-</div>
+              <div class="text-right">{{ expense.amount }},-</div>
+            </template>
+            <div class="col-start-1 col-span-5 font-bold">I alt</div>
+            <div class="font-bold text-right">{{ expensesTotal }},-</div>
+            <Divider class="col-start-1 col-end-7" />
           </template>
-          <div class="col-start-1 col-span-5 font-bold">I alt</div>
-          <div class="font-bold text-right">{{ expenses.sum('amount') }},-</div>
-          <Divider class="col-start-1 col-end-7" />
-          <div class="col-start-1 col-span-3">Indbetalinger</div>
-          <div class="text-center">Dato</div>
-          <template v-for="payment in payments">
-            <div class="col-start-1 col-span-3">{{ payment.text }}</div>
-            <div>{{ payment.date }}</div>
-            <div class="col-end-7 text-right">{{ payment.amount }},-</div>
+          <template v-if="paidOrders.length">
+            <div class="col-start-1 col-span-6 text-sm font-bold">Tidligere betalte ordrer</div>
+            <template v-for="po in paidOrders" :key="po.orderId">
+              <div class="col-start-1 col-span-2 text-sm">{{ orderDateShort(po) }}</div>
+              <div class="col-span-3 text-sm">{{ orderShortLines(po) }}</div>
+              <div class="col-end-7 text-right text-sm">
+                {{ Math.round(po.paidAmount / 100) }},-
+              </div>
+            </template>
+            <Divider class="col-start-1 col-end-7" />
           </template>
-          <div class="col-start-1 col-span-5 font-bold">I alt</div>
-          <div class="font-bold text-right">{{ payments.sum('amount') }},-</div>
-          <Divider class="col-start-1 col-end-7" />
-          <div class="col-start-1 col-span-5 font-bold">At betale</div>
-          <div class="font-bold text-right">{{ payableAmount }},-</div>
+          <div class="col-start-1 col-span-3 font-bold">Indbetalt</div>
+          <div class="col-end-7 font-bold text-right">{{ paymentsTotal }},-</div>
+          <template v-if="showOpenOrder">
+            <Divider class="col-start-1 col-end-7" />
+            <div class="col-start-1 col-span-5 font-bold">At betale</div>
+            <div class="font-bold text-right">{{ payableAmount }},-</div>
+          </template>
           <Divider class="col-end-7" />
         </div>
-        <p>
+        <p v-if="showOpenOrder">
           Deltagerbetalingen bliver ikke refunderet ved afbud uanset grund - vi kan have brugt
           pengene ud fra en forventning om, at du kommer.
         </p>

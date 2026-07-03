@@ -1,0 +1,19 @@
+// Local development workspace.
+//
+// Resolves github.com/nathejk/shared-go from a sibling checkout instead of
+// the module proxy, so changes in shared-go are picked up immediately.
+//
+// Expected layout:
+//   <parent>/tilmelding/go/   <- this module
+//   <parent>/shared-go/       <- sibling checkout (also bind-mounted at
+//                                /shared-go inside the api dev container)
+//
+// CI / production builds run with GOWORK=off and resolve shared-go from
+// the public module proxy via the version pinned in go.mod.
+
+go 1.20
+
+use (
+	./
+	../../shared-go
+)

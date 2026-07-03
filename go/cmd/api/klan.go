@@ -10,9 +10,8 @@ import (
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
 	"nathejk.dk/internal/payment/mobilepay"
-	"nathejk.dk/nathejk/commands"
 	"nathejk.dk/nathejk/table/klan"
-	"nathejk.dk/nathejk/table/payment"
+	"nathejk.dk/nathejk/table/order"
 )
 
 func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) {
@@ -38,25 +37,31 @@ func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) 
 		log.Printf("GetSenior %q", err)
 	}
 
-	config := TeamConfig{
-		MinMemberCount: 1,
-		MaxMemberCount: 4,
-		MemberPrice:    250,
-		TShirtPrice:    175,
-		Korps:          Korps(),
-		TShirtSizes:    TShirtSizes(),
-	}
+	config := app.buildTeamConfig(r.Context(), "participation.klan", 1, 4)
 	//contact, _ := app.models.Teams.GetContact(teamId)
 
-	payments, _, err := app.models.Payment.GetAll(teamID)
-	if err != nil {
-		log.Printf("Payment.GetAll %q", err)
+	// Re-derive the open order's lines from the current member projection
+	// on every GET. This makes the page self-healing against any drift
+	// between the order and the projection: orphan lines (member removed
+	// after the line was created) are cleared, missing lines (member
+	// added but never billed) are added, and t-shirt size changes are
+	// reflected. SetDerivedLines is idempotent for unchanged input.
+	openOrder, paidOrders := app.loadOrders(r.Context(), types.TeamTypeKlan, string(teamID))
+	desired := derivedLinesForKlanSeniore(members)
+	if openOrder == nil && len(desired) > 0 {
+		if o, err := app.commands.Order.EnsureOpenOrder(r.Context(), types.TeamTypeKlan, string(teamID)); err == nil {
+			openOrder = o
+		}
 	}
-	if payments == nil {
-		payments = []payment.Payment{}
+	if openOrder != nil && derivedLinesNeedSync(openOrder, desired) {
+		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder.OrderID, desired); err == nil {
+			openOrder = o
+		} else {
+			log.Printf("setDerivedLinesAfterCreate %s: %v", openOrder.OrderID, err)
+		}
+	}
 
-	}
-	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"config": config, "team": team, "members": members, "payments": payments}, nil)
+	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"config": config, "team": team, "members": members, "order": openOrder, "paidOrders": paidOrders}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
@@ -97,6 +102,7 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 	log.Printf("after update")
 	paymentLink := ""
 	status := types.SignupStatusOnHold
+	var orderEnvelope *order.Order
 	if reservedMemberCount > 0 {
 		status = types.SignupStatusPay
 		signup, err := app.models.Signup.GetByID(r.Context(), teamID)
@@ -109,14 +115,43 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 			return
 		}
 
-		dueAmount := reservedMemberCount * 250
-		amount := mobilepay.Amount{Value: int64(dueAmount) * 100, Currency: mobilepay.Currency(types.CurrencyDKK)}
-		teamUrl := "https://tilmelding.nathejk.dk/klan/" + string(teamID)
+		// Build derived lines for the reserved seats. We don't have member
+		// IDs at this stage (members are filled in later via updateKlan)
+		// so each line carries a synthetic "pending-N" MemberID that
+		// satisfies the commander's required-MemberID rule. updateKlan
+		// later replaces these with member-keyed lines (the snapshot
+		// DELETE+INSERT in the projector cleanly swaps them).
+		desired := make([]order.DesiredLine, 0, reservedMemberCount)
+		for i := uint32(0); i < reservedMemberCount; i++ {
+			placeholder := pendingMemberID(i + 1)
+			desired = append(desired, order.DesiredLine{
+				LineID:     reservationLineID(i),
+				ProductSKU: "participation.klan",
+				MemberID:   placeholder,
+				Quantity:   1,
+			})
+		}
 
-		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", *signup.Phone, *signup.Email, teamUrl, string(teamID), string(types.TeamTypeKlan))
+		o, err := app.commands.Order.EnsureOpenOrder(r.Context(), types.TeamTypeKlan, string(teamID))
+		if err != nil {
+			app.ServerErrorResponse(w, r, err)
+			return
+		}
+		o, err = app.commands.Order.SetDerivedLines(r.Context(), o.OrderID, desired)
+		if err != nil {
+			app.BadRequestResponse(w, r, err)
+			return
+		}
+		orderEnvelope = o
+
+		if o.DueAmount > 0 {
+			amount := mobilepay.Amount{Value: int64(o.DueAmount), Currency: mobilepay.Currency(types.CurrencyDKK)}
+			teamUrl := "https://tilmelding.nathejk.dk/klan/" + string(teamID)
+			paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", *signup.Phone, *signup.Email, teamUrl, o.OrderID, "order")
+		}
 	}
 	team, _ := app.models.Teams.GetKlan(teamID)
-	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "status": status, "paymentLink": paymentLink}, nil)
+	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "status": status, "order": orderEnvelope, "paymentLink": paymentLink}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
@@ -125,7 +160,7 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
 	var input struct {
-		Team    commands.Klan `json:"team"`
+		Team    klan.Team `json:"team"`
 		Members []struct {
 			MemberID   types.MemberID     `json:"memberId"`
 			Deleted    bool               `json:"deleted"`
@@ -136,7 +171,7 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 			Phone      types.PhoneNumber  `json:"phone"`
 			Birthday   types.Date         `json:"birthday"`
 			Vegitarian bool               `json:"vegitarian"`
-			TShirtSize string             `json:"tshirtsize"`
+			TShirtSize string             `json:"tshirtSize"`
 		} `json:"members"`
 	}
 	if err := app.ReadJSON(w, r, &input); err != nil {
@@ -145,13 +180,13 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var seniors []commands.Senior
+	var seniors []klan.Senior
 	for _, m := range input.Members {
 		diet := ""
 		if m.Vegitarian {
 			diet = "vegetar"
 		}
-		seniors = append(seniors, commands.Senior{
+		seniors = append(seniors, klan.Senior{
 			MemberID:   m.MemberID,
 			Deleted:    m.Deleted,
 			Name:       m.Name,
@@ -170,23 +205,34 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		app.BadRequestResponse(w, r, err)
 		return
 	}
-	err = app.commands.Team.UpdateKlan(teamID, input.Team, seniors)
+	err = app.commands.Klan.UpdateMembers(r.Context(), teamID, input.Team, seniors)
 	if err != nil {
 		log.Printf("UpdateKlan  %q", err)
 		app.BadRequestResponse(w, r, err)
 		return
 	}
-	var tshirtCount = 0
-	for _, member := range input.Members {
-		if len(member.TShirtSize) > 0 {
-			tshirtCount++
-		}
+
+	// Project members into derived order lines (one participation +
+	// optional t-shirt per active senior, keyed by memberId). This
+	// supersedes any reservation-only lines created earlier in
+	// requestSeatHandler — same SetDerivedLines call replaces them.
+	desired := derivedLinesForKlan(seniors)
+
+	o, err := app.commands.Order.EnsureOpenOrder(r.Context(), types.TeamTypeKlan, string(teamID))
+	if err != nil {
+		app.ServerErrorResponse(w, r, err)
+		return
 	}
+	o, err = app.commands.Order.SetDerivedLines(r.Context(), o.OrderID, desired)
+	if err != nil {
+		log.Printf("SetDerivedLines %q", err)
+		app.BadRequestResponse(w, r, err)
+		return
+	}
+	log.Printf("klan order %s total=%d paid=%d due=%d", o.OrderID, o.TotalAmount, o.PaidAmount, o.DueAmount)
+
 	paymentLink := ""
-	totalAmount := tshirtCount*175 + len(input.Members)*250
-	paidAmount := app.models.Payment.AmountPaidByTeamID(teamID)
-	dueAmount := totalAmount - paidAmount
-	if dueAmount > 0 {
+	if o.DueAmount > 0 {
 		signup, _ := app.models.Signup.GetByID(r.Context(), teamID)
 
 		phone := types.PhoneNumber("")
@@ -198,20 +244,102 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		if (signup != nil) && (signup.Email != nil) {
 			email = *signup.Email
 		}
-		amount := mobilepay.Amount{Value: int64(dueAmount) * 100, Currency: mobilepay.Currency(types.CurrencyDKK)}
+		amount := mobilepay.Amount{Value: int64(o.DueAmount), Currency: mobilepay.Currency(types.CurrencyDKK)}
 		teamUrl := "https://tilmelding.nathejk.dk/klan/" + string(teamID)
 
-		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", phone, email, teamUrl, string(teamID), string(types.TeamTypeKlan))
+		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", phone, email, teamUrl, o.OrderID, "order")
 	}
 	team, _ := app.models.Teams.GetKlan(teamID)
-	/*
-		page := fmt.Sprintf("/patrulje/%s", input.TeamID)
-		err = app.WriteJSON(w, http.StatusCreated, jsonapi.Envelope{"team": map[string]string{"teamPage": page}}, nil)
-		if err != nil {
-			app.ServerErrorResponse(w, r, err)
-		}*/
-	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "paymentLink": paymentLink}, nil)
+	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "order": o, "paymentLink": paymentLink}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
+}
+
+// derivedLinesForKlan is the klan equivalent of derivedLinesForPatrulje:
+// one participation + optional t-shirt per active senior, keyed on
+// memberId so subsequent saves diff cleanly.
+func derivedLinesForKlan(seniors []klan.Senior) []order.DesiredLine {
+	lines := make([]order.DesiredLine, 0, len(seniors)*2)
+	for _, s := range seniors {
+		if s.Deleted {
+			continue
+		}
+		lines = append(lines, order.DesiredLine{
+			ProductSKU: "participation.klan",
+			MemberID:   string(s.MemberID),
+			Quantity:   1,
+		})
+		if s.TShirtSize != "" {
+			lines = append(lines, order.DesiredLine{
+				ProductSKU: "tshirt.adult",
+				MemberID:   string(s.MemberID),
+				Quantity:   1,
+				Attributes: map[string]any{"size": s.TShirtSize},
+			})
+		}
+	}
+	return lines
+}
+
+// derivedLinesForKlanSeniore is the read-path variant of derivedLinesForKlan.
+// It works with the []*data.Senior slice returned by GetSeniore (the show
+// handler) rather than the []klan.Senior used by the update handler.
+func derivedLinesForKlanSeniore(members []*data.Senior) []order.DesiredLine {
+	lines := make([]order.DesiredLine, 0, len(members)*2)
+	for _, s := range members {
+		lines = append(lines, order.DesiredLine{
+			ProductSKU: "participation.klan",
+			MemberID:   string(s.MemberID),
+			Quantity:   1,
+		})
+		if s.TShirtSize != "" {
+			lines = append(lines, order.DesiredLine{
+				ProductSKU: "tshirt.adult",
+				MemberID:   string(s.MemberID),
+				Quantity:   1,
+				Attributes: map[string]any{"size": s.TShirtSize},
+			})
+		}
+	}
+	return lines
+}
+
+// klanLinesNeedSync was the per-handler diff helper; it has moved to
+// orders.go as derivedLinesNeedSync, shared with the patrulje and
+// personnel show handlers.
+
+// reservationLineID is the deterministic LineID used for the placeholder
+// klan participation lines created by requestSeatHandler before any
+// senior identities are known. Using a separate prefix means that when
+// updateKlanHandler later runs and emits memberId-keyed lines, the
+// snapshot DELETE+INSERT in the projector cleanly replaces these with the
+// real per-senior lines.
+func reservationLineID(i uint32) string {
+	return "derived:participation.klan:reservation-" + uintToStr(i)
+}
+
+// pendingMemberID is the synthetic MemberID stamped on klan reservation
+// placeholder lines before any senior identities are known. Using a
+// stable, recognisable prefix ("pending-") satisfies the commander's
+// required-MemberID rule and makes the placeholder nature obvious in
+// reports built off order_line.memberId. updateKlanHandler later
+// supersedes these with real senior IDs via SetDerivedLines.
+func pendingMemberID(i uint32) string {
+	return "pending-" + uintToStr(i)
+}
+
+func uintToStr(i uint32) string {
+	// Tiny helper so we don't pull strconv into klan.go just for this.
+	if i == 0 {
+		return "0"
+	}
+	var digits [10]byte
+	pos := len(digits)
+	for i > 0 {
+		pos--
+		digits[pos] = byte('0' + i%10)
+		i /= 10
+	}
+	return string(digits[pos:])
 }

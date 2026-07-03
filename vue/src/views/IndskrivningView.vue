@@ -147,7 +147,7 @@ const validatePincode = async () => {
         <!-- Tag value="Lukket" severity="danger"
       / --></span
       >
-      <span v-else-if="teamType == 'friend'">Hjælpertilmelding</span>
+      <span v-else-if="teamType == 'crew'">Hjælpertilmelding</span>
       <span v-else>Tilmelding</span>
     </h1>
     <Stepper :linear="isLinear" v-model:activeStep="step">

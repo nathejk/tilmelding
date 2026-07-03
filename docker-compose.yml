@@ -50,7 +50,7 @@ services:
       dockerfile: docker/Dockerfile
     environment:
       JETSTREAM_DSN: nats://jetstream:4222
-      DB_DSN: bruger:kodeord@tcp(db:3306)/tilmelding?parseTime=true
+      DB_DSN: bruger:kodeord@tcp(db:3306)/tilmelding?parseTime=true&multiStatements=true
       SMS_DSN: cpsms://TOKEN@api.cpsms.dk
       #MONOLITH_DB_DSN_RW: root:ib@tcp(dev.nathejk.dk:3306)/nathejk2018?parseTime=true
       PAYMENT_DSN: mobilepay://client_id:client_secret@apitest.vipps.no?Ocp-Apim-Subscription-Key#MSN
@@ -75,6 +75,10 @@ services:
       SMTP_PORT: 1025
     volumes:
       - ./go:/app
+      # Sibling checkout of github.com/nathejk/shared-go. The path inside the
+      # container matches what go/go.work expects (../../shared-go relative to
+      # /app resolves to /shared-go).
+      - ../shared-go:/shared-go
       - api:/go
     depends_on:
       - gw

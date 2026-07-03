@@ -1,0 +1,12 @@
+# Workspaces are a local/dev-only concern. The production build resolves
+# shared-go from the public module proxy, so go.work must never enter the
+# Docker build context.
+go/go.work
+go/go.work.sum
+
+# Common noise
+**/.DS_Store
+**/node_modules
+.git
+.github
+attic/

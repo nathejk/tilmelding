@@ -1,8 +1,7 @@
-package commands
+package payment
 
 import (
 	"fmt"
-	"math/rand/v2"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,26 +11,26 @@ import (
 	"nathejk.dk/superfluids/streaminterface"
 )
 
-type paymentQuerier interface {
-	//ConfirmBySecret(string) (*data.Confirm, error)
-	//GetKlan(types.TeamID) (*data.Klan, error)
-	//RequestedSeniorCount() int
+// Commands is the payment write-side API. Methods publish payment events
+// onto the stream and (where relevant) drive the MobilePay client.
+type Commands interface {
+	Request(amount mobilepay.Amount, desc string, phone types.PhoneNumber, email types.EmailAddress, returnUrl, orderForeignKey, orderType string) (string, error)
+	Capture(reference string) error
 }
-type payment struct {
+
+type commander struct {
 	p  streaminterface.Publisher
-	q  paymentQuerier
 	pp mobilepay.Client
 }
 
-func NewPayment(p streaminterface.Publisher, q paymentQuerier, pp mobilepay.Client) *payment {
-	return &payment{
-		p:  p,
-		q:  q,
-		pp: pp,
-	}
+// NewCommands wires a payment commander. The publisher is used for
+// emitting the NathejkPayment* events that drive the projections; the
+// MobilePay client is used to create and capture authorisations.
+func NewCommands(p streaminterface.Publisher, pp mobilepay.Client) Commands {
+	return &commander{p: p, pp: pp}
 }
 
-func (c *payment) Request(amount mobilepay.Amount, desc string, phone types.PhoneNumber, email types.EmailAddress, returnUrl string, orderForeignKey string, orderType string) (string, error) {
+func (c *commander) Request(amount mobilepay.Amount, desc string, phone types.PhoneNumber, email types.EmailAddress, returnUrl string, orderForeignKey string, orderType string) (string, error) {
 	reference := uuid.New().String()
 	p := mobilepay.Payment{
 		Amount:             amount,
@@ -62,8 +61,7 @@ func (c *payment) Request(amount mobilepay.Amount, desc string, phone types.Phon
 	}
 	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.payment.%s.requested", "2026", resp.Reference)))
 	msg.SetBody(body)
-	meta := messages.Metadata{Producer: "tilmelding-api"}
-	msg.SetMeta(&meta)
+	msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 
 	if err := c.p.Publish(msg); err != nil {
 		return "", err
@@ -71,7 +69,7 @@ func (c *payment) Request(amount mobilepay.Amount, desc string, phone types.Phon
 	return resp.RedirectUrl, nil
 }
 
-func (c *payment) Capture(reference string) error {
+func (c *commander) Capture(reference string) error {
 	mpp, err := c.pp.GetPayment(mobilepay.PaymentReference(reference))
 	if err != nil {
 		return err
@@ -114,24 +112,5 @@ func (c *payment) Capture(reference string) error {
 	}
 
 	// TODO send mail
-	return nil
-}
-
-func (c *payment) Signup(teamType types.TeamType, body *messages.NathejkTeamSignedUp) error {
-	if body.TeamID == "" {
-		body.TeamID = types.TeamID(uuid.New().String())
-	}
-	if body.Pincode == "" {
-		body.Pincode = fmt.Sprintf("%d", rand.IntN(9000)+1000)
-	}
-
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.signedup", "2026", teamType, body.TeamID)))
-	msg.SetBody(body)
-	meta := messages.Metadata{Producer: "tilmelding-api"}
-	msg.SetMeta(&meta)
-
-	if err := c.p.Publish(msg); err != nil {
-		return err
-	}
 	return nil
 }

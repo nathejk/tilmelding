@@ -6,6 +6,7 @@ import (
 
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/pkg/tablerow"
+	"nathejk.dk/superfluids/streaminterface"
 
 	_ "embed"
 )
@@ -29,12 +30,15 @@ type Patrulje struct {
 }
 
 type table struct {
+	commander
 	consumer
 	querier
 }
 
-func New(w tablerow.Consumer, r *sql.DB) *table {
-	table := &table{consumer: consumer{w: w}, querier: querier{db: r}}
+func New(p streaminterface.Publisher, w tablerow.Consumer, r *sql.DB) *table {
+	q := querier{db: r}
+	c := commander{p: p, q: &q}
+	table := &table{commander: c, consumer: consumer{w: w}, querier: q}
 	if err := w.Consume(table.CreateTableSql()); err != nil {
 		log.Fatalf("Error creating table %q", err)
 	}
