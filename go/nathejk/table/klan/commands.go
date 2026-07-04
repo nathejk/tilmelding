@@ -6,10 +6,11 @@ import (
 	"math/rand/v2"
 
 	"github.com/google/uuid"
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	tables "nathejk.dk/nathejk/table"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 type Commands interface {
@@ -24,7 +25,7 @@ type Commands interface {
 }
 
 type commander struct {
-	p streaminterface.Publisher
+	p stream.Publisher
 	q Queries
 	r repository
 }
@@ -46,7 +47,7 @@ func (c *commander) RequestMemberCount(ctx context.Context, year types.YearSlug,
 	if cap > actualMemberCount {
 		action = "reserved"
 	}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.%s", year, types.TeamTypeKlan, teamID, action)))
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.%s", year, types.TeamTypeKlan, teamID, action)))
 	msg.SetBody(&messages.NathejkTeamMembersRequested{
 		TeamID:      teamID,
 		MemberCount: int(memberCount),
@@ -90,7 +91,7 @@ type SignupCommand struct {
 
 func (c *commander) Signup(ctx context.Context, year types.YearSlug, cmd SignupCommand) (types.TeamID, error) {
 	teamID := types.TeamID(uuid.New().String())
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.signedup", year, types.TeamTypeKlan, teamID)))
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.signedup", year, types.TeamTypeKlan, teamID)))
 	msg.SetBody(&messages.NathejkTeamSignedUp{
 		TeamID:  teamID,
 		Name:    cmd.Name,
@@ -113,7 +114,7 @@ func (c *commander) VerifyEmail(ctx context.Context, teamID types.TeamID, secret
 		return tables.ErrVerificationFailed
 	}
 
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.email_verified", signup.TeamType, types.TeamTypeKlan, teamID)))
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.email_verified", signup.TeamType, types.TeamTypeKlan, teamID)))
 	msg.SetBody(&messages.NathejkSignupEmailVerified{
 		TeamID: teamID,
 		Email:  signup.EmailPending,
@@ -134,7 +135,7 @@ func (c *commander) VerifyPhone(ctx context.Context, teamID types.TeamID, pincod
 		return tables.ErrVerificationFailed
 	}
 
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.phone_verified", signup.TeamType, types.TeamTypeKlan, teamID)))
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.phone_verified", signup.TeamType, types.TeamTypeKlan, teamID)))
 	msg.SetBody(&messages.NathejkSignupPhoneVerified{
 		TeamID:  teamID,
 		Phone:   signup.PhonePending,
@@ -177,7 +178,7 @@ func (c *commander) Update(ctx context.Context, teamID types.TeamID, cmd UpdateC
 		return nil
 	}
 
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.updated", klan.Year, teamID)))
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.updated", klan.Year, teamID)))
 	msg.SetBody(&messages.NathejkKlanUpdated{
 		TeamID:    teamID,
 		Name:      name,
@@ -201,7 +202,7 @@ func (c *commander) AssignToLok(ctx context.Context, teamID types.TeamID, lok st
 		return nil
 	}
 
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.assigned", klan.Year, teamID)))
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.assigned", klan.Year, teamID)))
 	msg.SetBody(&messages.NathejkKlanAssigned{
 		TeamID: teamID,
 		Lok:    lok,
@@ -218,7 +219,7 @@ func (c *commander) Delete(ctx context.Context, teamID types.TeamID) error {
 		return err
 	}
 
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", klan.Year, teamID)))
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", klan.Year, teamID)))
 	msg.SetBody(&messages.NathejkKlanStatusChanged{
 		TeamID: teamID,
 		Status: types.SignupStatus("deleted"),
@@ -262,14 +263,13 @@ type Senior struct {
 // are emitted so the projection can grow to the requested size before any
 // senior identities are filled in.
 func (c *commander) UpdateMembers(ctx context.Context, teamID types.TeamID, team Team, members []Senior) error {
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.updated", "2026", teamID)))
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.updated", "2026", teamID)))
 	msg.SetBody(&messages.NathejkKlanUpdated{
 		TeamID:    teamID,
 		Name:      team.Name,
 		GroupName: team.Group,
 		Korps:     team.Korps,
 	})
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 	if err := c.p.Publish(msg); err != nil {
 		return err
 	}
@@ -282,9 +282,8 @@ func (c *commander) UpdateMembers(ctx context.Context, teamID types.TeamID, team
 
 	seniorCount, _ := c.q.RequestedSeniorCount(ctx, "2026")
 	if seniorCount > 115 {
-		statusMsg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2026", teamID)))
+		statusMsg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2026", teamID)))
 		statusMsg.SetBody(&messages.NathejkKlanStatusChanged{TeamID: teamID, Status: types.SignupStatusOnHold})
-		statusMsg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 		if klan != nil && (klan.Status != types.SignupStatusPay) && (klan.Status != types.SignupStatusPaid) {
 			if err := c.p.Publish(statusMsg); err != nil {
 				return err
@@ -292,9 +291,8 @@ func (c *commander) UpdateMembers(ctx context.Context, teamID types.TeamID, team
 		}
 	}
 	if klan != nil && klan.Status == "" {
-		statusMsg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2026", teamID)))
+		statusMsg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2026", teamID)))
 		statusMsg.SetBody(&messages.NathejkKlanStatusChanged{TeamID: teamID, Status: types.SignupStatusPay})
-		statusMsg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 		if err := c.p.Publish(statusMsg); err != nil {
 			return err
 		}
@@ -309,12 +307,11 @@ func (c *commander) UpdateMembers(ctx context.Context, teamID types.TeamID, team
 	for i := range members {
 		m := &members[i]
 		if m.Deleted {
-			msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.deleted", "2026", m.MemberID)))
+			msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.deleted", "2026", m.MemberID)))
 			msg.SetBody(&messages.NathejkMemberDeleted{
 				MemberID: m.MemberID,
 				TeamID:   teamID,
 			})
-			msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 			if err := c.p.Publish(msg); err != nil {
 				return err
 			}
@@ -328,7 +325,7 @@ func (c *commander) UpdateMembers(ctx context.Context, teamID types.TeamID, team
 		if m.MemberID == "" {
 			m.MemberID = types.MemberID(uuid.New().String())
 		}
-		msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.updated", "2026", m.MemberID)))
+		msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.updated", "2026", m.MemberID)))
 		// Include teamId in the body so the senior projector's two-phase
 		// decode (see senior/consumer.go) can do an INSERT IGNORE for
 		// brand-new members. Without it the row is never created and the
@@ -351,7 +348,6 @@ func (c *commander) UpdateMembers(ctx context.Context, teamID types.TeamID, team
 			},
 			TeamID: teamID,
 		})
-		msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 		if err := c.p.Publish(msg); err != nil {
 			return err
 		}

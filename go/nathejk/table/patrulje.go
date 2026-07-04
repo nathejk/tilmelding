@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 
 	_ "embed"
 )
@@ -44,17 +45,17 @@ func (t *patrulje) CreateTableSql() string {
 	return patruljeSchema
 }
 
-func (c *patrulje) Consumes() (subjs []streaminterface.Subject) {
-	return []streaminterface.Subject{
-		//streaminterface.SubjectFromStr("monolith:nathejk_team"),
-		//streaminterface.SubjectFromStr("nathejk"),
-		streaminterface.SubjectFromStr("NATHEJK.2026.patrulje.*.signedup"),
-		streaminterface.SubjectFromStr("NATHEJK.*.patrulje.*.updated"),
-		streaminterface.SubjectFromStr("NATHEJK.*.patrulje.*.numberassigned"),
+func (c *patrulje) Consumes() (subjs []stream.Subject) {
+	return []stream.Subject{
+		//subject.FromStr("monolith:nathejk_team"),
+		//subject.FromStr("nathejk"),
+		subject.FromStr("NATHEJK.2026.patrulje.*.signedup"),
+		subject.FromStr("NATHEJK.*.patrulje.*.updated"),
+		subject.FromStr("NATHEJK.*.patrulje.*.numberassigned"),
 	}
 }
 
-func (c *patrulje) HandleMessage(msg streaminterface.Message) error {
+func (c *patrulje) HandleMessage(msg stream.Message) error {
 	//log.Printf("patrulje.go RECEIVED %q", msg.Subject().Subject())
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.patrulje.*.signedup"):

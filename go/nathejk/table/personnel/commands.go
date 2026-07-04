@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 // Commands is the personnel write-side API. It publishes a per-user
@@ -32,11 +33,11 @@ type Person struct {
 }
 
 type commander struct {
-	p streaminterface.Publisher
+	p stream.Publisher
 }
 
 func (c *commander) Update(ctx context.Context, userID types.UserID, userType types.TeamType, person Person) error {
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.updated", "2026", userType, userID)))
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.updated", "2026", userType, userID)))
 	msg.SetBody(&messages.NathejkPersonnelUpdated{
 		UserID:      userID,
 		Name:        person.Name,
@@ -48,6 +49,5 @@ func (c *commander) Update(ctx context.Context, userID types.UserID, userType ty
 		TshirtSize:  person.TshirtSize,
 		Additionals: person.Additionals,
 	})
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 	return c.p.Publish(msg)
 }

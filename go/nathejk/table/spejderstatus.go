@@ -3,9 +3,9 @@ package table
 import (
 	"log"
 
+	"github.com/jrgensen/stream"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 
 	_ "embed"
 )
@@ -36,13 +36,13 @@ func (t *spejderstatus) CreateTableSql() string {
 	return spejderStatusSchema
 }
 
-func (c *spejderstatus) Consumes() (subjs []streaminterface.Subject) {
-	return []streaminterface.Subject{
-		//	streaminterface.SubjectFromStr("nathejk"),
+func (c *spejderstatus) Consumes() (subjs []stream.Subject) {
+	return []stream.Subject{
+		//	subject.FromStr("nathejk"),
 	}
 }
 
-func (c *spejderstatus) HandleMessage(msg streaminterface.Message) error {
+func (c *spejderstatus) HandleMessage(msg stream.Message) error {
 	/*
 		switch msg.Subject().Subject() {
 			case "nathejk:member.status.changed":

@@ -11,6 +11,11 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/jetstream"
+	"github.com/jrgensen/stream/metatagger"
+	"github.com/jrgensen/stream/xstream"
+	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
@@ -32,9 +37,6 @@ import (
 	"nathejk.dk/nathejk/table/signup"
 	"nathejk.dk/nathejk/table/spejder"
 	"nathejk.dk/pkg/sqlpersister"
-	"nathejk.dk/superfluids/jetstream"
-	"nathejk.dk/superfluids/streaminterface"
-	"nathejk.dk/superfluids/xstream"
 )
 
 var (
@@ -75,7 +77,7 @@ type application struct {
 	config    config
 	models    data.Models
 	db        *sql.DB
-	jetstream streaminterface.Stream
+	publisher stream.Publisher
 	commands  commands
 	mailer    mailer.Mailer
 	sms       sms.Sender
@@ -136,7 +138,7 @@ func main() {
 		log.Printf("Error connecting %q", err)
 	}
 	logger.PrintInfo("Jetstream connected", nil)
-	/*msg, err := js.LastMessage(streaminterface.SubjectFromStr("NATHEJK.>"))
+	/*msg, err := js.LastMessage(subject.FromStr("NATHEJK.>"))
 	if err != nil {
 		log.Fatalf("Last message: %q", err)
 	}
@@ -157,6 +159,13 @@ func main() {
 
 	mailclient := mailer.NewFromConfig(cfg.smtp).AddOptions(mailer.WithGlobalVar("baseurl", cfg.baseurl))
 
+	// publisher wraps the JetStream connection so every command-published
+	// message inherits a default producer and build version in its metadata,
+	// rather than each call site setting the producer tag by hand.
+	publisher, err := metatagger.New(js, messages.Metadata{Producer: "tilmelding", Version: version})
+	if err != nil {
+		logger.PrintFatal(err, nil)
+	}
 	reader := db.DB()
 	writer := sqlpersister.New(db.DB())
 
@@ -168,29 +177,29 @@ func main() {
 	}
 
 	tablePayment := table.NewPayment(writer, reader)
-	tableStaff := personnel.New(js, writer, reader)
-	tablePatrulje := patrulje.New(js, writer, reader)
+	tableStaff := personnel.New(publisher, writer, reader)
+	tablePatrulje := patrulje.New(publisher, writer, reader)
 	tableSpejder := spejder.New(writer, reader)
-	tableSignup := signup.New(js, writer, reader, signup.WithSms(smsclient), signup.WithMailer(mailclient))
+	tableSignup := signup.New(publisher, writer, reader, signup.WithSms(smsclient), signup.WithMailer(mailclient))
 	// The 115-seat klan cap now lives on participation.klan.stock in the
 	// product catalogue (see product.Seeds2026). klan.WithProductQueries
 	// wires the catalogue in so RequestMemberCount can read it.
-	tableKlan := klan.New(js, writer, reader, klan.WithProductQueries(tableProduct), klan.WithTeamMaxMemberCount(4))
+	tableKlan := klan.New(publisher, writer, reader, klan.WithProductQueries(tableProduct), klan.WithTeamMaxMemberCount(4))
 	tableSenior := senior.New(writer, reader)
 
 	// Order projection + commander. Subscribes to NATHEJK:*.order.*.{created,
 	// lines.changed, cancelled, paid} via the mux below.
-	tableOrder := order.New(js, writer, reader, cfg.year, tableProduct)
+	tableOrder := order.New(publisher, writer, reader, cfg.year, tableProduct)
 
 	// Crew organisation: sections (function/role/unit hierarchy) and the
 	// crew members assigned to them. Both are event-sourced projections
 	// registered on the mux below.
-	tableSection := section.New(js, writer, reader)
-	tableCrewmember := crewmember.New(js, writer, reader)
+	tableSection := section.New(publisher, writer, reader)
+	tableCrewmember := crewmember.New(publisher, writer, reader)
 
 	// Saga that bridges payment events into NathejkOrderPaid, which the
 	// order projector then projects into status=paid on the orders table.
-	orderSaga := order.NewSaga(js, tableOrder, tablePayment, 0)
+	orderSaga := order.NewSaga(publisher, tableOrder, tablePayment, 0)
 
 	mux := xstream.NewMux(js)
 	mux.AddConsumer(table.NewConfirm(writer), tableKlan, tableSenior /*table.NewPatrulje(sqlw),*/, table.NewPatruljeStatus(writer) /*table.NewPatruljeMerged(sqlw),*/, tableSpejder, table.NewSpejderStatus(writer), tablePayment, tableStaff, tablePatrulje, tableSignup, tableOrder, orderSaga, tableSection, tableCrewmember)
@@ -217,13 +226,13 @@ func main() {
 		payment:   paymentClient,
 		models:    models,
 		db:        reader,
-		jetstream: js,
+		publisher: publisher,
 		commands: commands{
 			Signup:     tableSignup,
 			Klan:       tableKlan,
 			Patrulje:   tablePatrulje,
 			Personnel:  tableStaff,
-			Payment:    payments.NewCommands(js, paymentClient),
+			Payment:    payments.NewCommands(publisher, paymentClient),
 			Order:      tableOrder,
 			Section:    tableSection,
 			Crewmember: tableCrewmember,

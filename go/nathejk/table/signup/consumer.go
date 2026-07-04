@@ -3,26 +3,27 @@ package signup
 import (
 	"fmt"
 
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 type consumer struct {
 	w tablerow.Consumer
 }
 
-func (c *consumer) Consumes() []streaminterface.Subject {
-	return []streaminterface.Subject{
-		streaminterface.SubjectFromStr("NATHEJK:*.*.*.signedup"),
-		streaminterface.SubjectFromStr("NATHEJK:*.*.*.mail.validate.sent"),
-		streaminterface.SubjectFromStr("NATHEJK:*.*.*.sms.validate.sent"),
-		streaminterface.SubjectFromStr("NATHEJK:*.*.*.emailaddress.verified"),
-		streaminterface.SubjectFromStr("NATHEJK:*.*.*.phonenumber.verified"),
+func (c *consumer) Consumes() []stream.Subject {
+	return []stream.Subject{
+		subject.FromStr("NATHEJK:*.*.*.signedup"),
+		subject.FromStr("NATHEJK:*.*.*.mail.validate.sent"),
+		subject.FromStr("NATHEJK:*.*.*.sms.validate.sent"),
+		subject.FromStr("NATHEJK:*.*.*.emailaddress.verified"),
+		subject.FromStr("NATHEJK:*.*.*.phonenumber.verified"),
 	}
 }
 
-func (c *consumer) HandleMessage(msg streaminterface.Message) error {
+func (c *consumer) HandleMessage(msg stream.Message) error {
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.*.*.signedup"):
 		//case "NATHEJK.year.created":

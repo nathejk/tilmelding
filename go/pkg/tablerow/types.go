@@ -1,7 +1,7 @@
 package tablerow
 
 import (
-	"nathejk.dk/superfluids/streaminterface"
+	"github.com/jrgensen/stream"
 )
 
 type SQLPrimaryKeys map[string]interface{}
@@ -21,7 +21,7 @@ type SQLTableCreator interface {
 }
 
 type EntityChangedPublisher interface {
-	streaminterface.Publisher
+	stream.Publisher
 
 	Changed(body interface{}) error
 	Deleted(body interface{}) error

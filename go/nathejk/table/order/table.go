@@ -26,10 +26,10 @@ import (
 	"database/sql"
 	"log"
 
+	"github.com/jrgensen/stream"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/nathejk/table/product"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 
 	_ "embed"
 )
@@ -107,7 +107,7 @@ type table struct {
 
 // New wires the order package: creates the orders / order_line tables (idempotently),
 // and constructs a value that exposes the command API (Commands), the read API
-// (Queries), and the projector (streaminterface.Consumer).
+// (Queries), and the projector (stream.Consumer).
 //
 // year is the active Nathejk year that the commander stamps on newly-created
 // orders. The Product dependency is used at command time to validate
@@ -115,7 +115,7 @@ type table struct {
 //
 // Self-healing schema: after creating the tables it ensures any columns
 // or indexes added since the original schema landed are present.
-func New(p streaminterface.Publisher, w tablerow.Consumer, r *sql.DB, year types.YearSlug, products product.Queries) *table {
+func New(p stream.Publisher, w tablerow.Consumer, r *sql.DB, year types.YearSlug, products product.Queries) *table {
 	q := querier{db: r}
 	c := commander{p: p, q: &q, products: products, year: year}
 	t := &table{commander: c, consumer: consumer{w: w}, querier: q}

@@ -5,10 +5,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/internal/payment/mobilepay"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 // Commands is the payment write-side API. Methods publish payment events
@@ -19,14 +20,14 @@ type Commands interface {
 }
 
 type commander struct {
-	p  streaminterface.Publisher
+	p  stream.Publisher
 	pp mobilepay.Client
 }
 
 // NewCommands wires a payment commander. The publisher is used for
 // emitting the NathejkPayment* events that drive the projections; the
 // MobilePay client is used to create and capture authorisations.
-func NewCommands(p streaminterface.Publisher, pp mobilepay.Client) Commands {
+func NewCommands(p stream.Publisher, pp mobilepay.Client) Commands {
 	return &commander{p: p, pp: pp}
 }
 
@@ -59,9 +60,8 @@ func (c *commander) Request(amount mobilepay.Amount, desc string, phone types.Ph
 		OrderForeignKey: orderForeignKey,
 		OrderType:       orderType,
 	}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.payment.%s.requested", "2026", resp.Reference)))
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.payment.%s.requested", "2026", resp.Reference)))
 	msg.SetBody(body)
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 
 	if err := c.p.Publish(msg); err != nil {
 		return "", err
@@ -88,9 +88,8 @@ func (c *commander) Capture(reference string) error {
 		Currency:  string(availableAmount.Currency),
 		Timestamp: time.Now(),
 	}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK.%s.payment.%s.reserved", "2026", reference)))
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK.%s.payment.%s.reserved", "2026", reference)))
 	msg.SetBody(body)
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 
 	if err := c.p.Publish(msg); err != nil {
 		return err
@@ -98,14 +97,13 @@ func (c *commander) Capture(reference string) error {
 	if _, err := c.pp.CapturePayment(mobilepay.PaymentReference(reference), availableAmount); err != nil {
 		return err
 	}
-	msg = c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.payment.%s.received", "2026", reference)))
+	msg = c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.payment.%s.received", "2026", reference)))
 	msg.SetBody(&messages.NathejkPaymentReceived{
 		Reference: reference,
 		Amount:    int(availableAmount.Value),
 		Currency:  string(availableAmount.Currency),
 		Timestamp: time.Now(),
 	})
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 
 	if err := c.p.Publish(msg); err != nil {
 		return err

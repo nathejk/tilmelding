@@ -6,10 +6,11 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/mysql"
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 // bodyNathejkSectionsSorted is the wire body for NATHEJK.{year}.sections.sorted.
@@ -35,16 +36,16 @@ type consumer struct {
 	w tablerow.Consumer
 }
 
-func (c *consumer) Consumes() []streaminterface.Subject {
-	return []streaminterface.Subject{
-		streaminterface.SubjectFromStr("NATHEJK.*.section.*.added"),
-		streaminterface.SubjectFromStr("NATHEJK.*.section.*.moved"),
-		streaminterface.SubjectFromStr("NATHEJK.*.section.*.deleted"),
-		streaminterface.SubjectFromStr("NATHEJK.*.sections.sorted"),
+func (c *consumer) Consumes() []stream.Subject {
+	return []stream.Subject{
+		subject.FromStr("NATHEJK.*.section.*.added"),
+		subject.FromStr("NATHEJK.*.section.*.moved"),
+		subject.FromStr("NATHEJK.*.section.*.deleted"),
+		subject.FromStr("NATHEJK.*.sections.sorted"),
 	}
 }
 
-func (c *consumer) HandleMessage(msg streaminterface.Message) error {
+func (c *consumer) HandleMessage(msg stream.Message) error {
 	dialect := goqu.Dialect("mysql")
 
 	switch true {

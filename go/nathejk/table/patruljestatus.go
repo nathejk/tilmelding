@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 
 	_ "embed"
 )
@@ -44,14 +45,14 @@ func (t *patruljeStatus) CreateTableSql() string {
 	return patruljeStatusSchema
 }
 
-func (c *patruljeStatus) Consumes() (subjs []streaminterface.Subject) {
-	return []streaminterface.Subject{
-		streaminterface.SubjectFromStr("NATHEJK:*.*.*.signedup"),
-		//streaminterface.SubjectFromStr("monolith:nathejk_team"),
+func (c *patruljeStatus) Consumes() (subjs []stream.Subject) {
+	return []stream.Subject{
+		subject.FromStr("NATHEJK:*.*.*.signedup"),
+		//subject.FromStr("monolith:nathejk_team"),
 	}
 }
 
-func (c *patruljeStatus) HandleMessage(msg streaminterface.Message) error {
+func (c *patruljeStatus) HandleMessage(msg stream.Message) error {
 	//	log.Printf("patruljestatus.go RECEIVED %q", msg.Subject().Subject())
 	/*
 		if msg.Time().Year() != time.Now().Year() {

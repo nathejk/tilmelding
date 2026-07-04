@@ -7,8 +7,9 @@ import (
 
 	"github.com/nathejk/shared-go/messages"
 
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 // consumer projects the four order events onto the orders / order_line
@@ -19,16 +20,16 @@ type consumer struct {
 	w tablerow.Consumer
 }
 
-func (c *consumer) Consumes() []streaminterface.Subject {
-	return []streaminterface.Subject{
-		streaminterface.SubjectFromStr("NATHEJK:*.order.*.created"),
-		streaminterface.SubjectFromStr("NATHEJK:*.order.*.lines.changed"),
-		streaminterface.SubjectFromStr("NATHEJK:*.order.*.cancelled"),
-		streaminterface.SubjectFromStr("NATHEJK:*.order.*.paid"),
+func (c *consumer) Consumes() []stream.Subject {
+	return []stream.Subject{
+		subject.FromStr("NATHEJK:*.order.*.created"),
+		subject.FromStr("NATHEJK:*.order.*.lines.changed"),
+		subject.FromStr("NATHEJK:*.order.*.cancelled"),
+		subject.FromStr("NATHEJK:*.order.*.paid"),
 	}
 }
 
-func (c *consumer) HandleMessage(msg streaminterface.Message) error {
+func (c *consumer) HandleMessage(msg stream.Message) error {
 	switch {
 	case msg.Subject().Match("NATHEJK.*.order.*.created"):
 		return c.handleCreated(msg)
@@ -44,7 +45,7 @@ func (c *consumer) HandleMessage(msg streaminterface.Message) error {
 	}
 }
 
-func (c *consumer) handleCreated(msg streaminterface.Message) error {
+func (c *consumer) handleCreated(msg stream.Message) error {
 	var body messages.NathejkOrderCreated
 	if err := msg.Body(&body); err != nil {
 		return err
@@ -69,7 +70,7 @@ func (c *consumer) handleCreated(msg streaminterface.Message) error {
 	return nil
 }
 
-func (c *consumer) handleLinesChanged(msg streaminterface.Message) error {
+func (c *consumer) handleLinesChanged(msg stream.Message) error {
 	var body messages.NathejkOrderLinesChanged
 	if err := msg.Body(&body); err != nil {
 		return err
@@ -125,7 +126,7 @@ func (c *consumer) handleLinesChanged(msg streaminterface.Message) error {
 	return nil
 }
 
-func (c *consumer) handleCancelled(msg streaminterface.Message) error {
+func (c *consumer) handleCancelled(msg stream.Message) error {
 	var body messages.NathejkOrderCancelled
 	if err := msg.Body(&body); err != nil {
 		return err
@@ -145,7 +146,7 @@ func (c *consumer) handleCancelled(msg streaminterface.Message) error {
 	return nil
 }
 
-func (c *consumer) handlePaid(msg streaminterface.Message) error {
+func (c *consumer) handlePaid(msg stream.Message) error {
 	var body messages.NathejkOrderPaid
 	if err := msg.Body(&body); err != nil {
 		return err

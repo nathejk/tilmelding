@@ -4,9 +4,9 @@ import (
 	"database/sql"
 	"log"
 
+	"github.com/jrgensen/stream"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 
 	_ "embed"
 )
@@ -31,7 +31,7 @@ type table struct {
 	querier
 }
 
-func New(p streaminterface.Publisher, w tablerow.Consumer, r *sql.DB, services ...service) *table {
+func New(p stream.Publisher, w tablerow.Consumer, r *sql.DB, services ...service) *table {
 	q := querier{db: r}
 	c := commander{p: p, q: &q, r: NewRepository(services...)}
 	table := &table{commander: c, consumer: consumer{w: w}, querier: q}

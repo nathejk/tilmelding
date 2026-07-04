@@ -4,26 +4,27 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 type consumer struct {
 	w tablerow.Consumer
 }
 
-func (c *consumer) Consumes() (subjs []streaminterface.Subject) {
-	return []streaminterface.Subject{
-		streaminterface.SubjectFromStr("NATHEJK:*.patrulje.*.signedup"),
-		streaminterface.SubjectFromStr("NATHEJK:*.patrulje.*.updated"),
-		streaminterface.SubjectFromStr("NATHEJK:*.patrulje.*.numberassigned"),
-		streaminterface.SubjectFromStr("NATHEJK:*.patrulje.*.started"),
+func (c *consumer) Consumes() (subjs []stream.Subject) {
+	return []stream.Subject{
+		subject.FromStr("NATHEJK:*.patrulje.*.signedup"),
+		subject.FromStr("NATHEJK:*.patrulje.*.updated"),
+		subject.FromStr("NATHEJK:*.patrulje.*.numberassigned"),
+		subject.FromStr("NATHEJK:*.patrulje.*.started"),
 	}
 }
 
-func (c *consumer) HandleMessage(msg streaminterface.Message) error {
+func (c *consumer) HandleMessage(msg stream.Message) error {
 	//log.Printf("patrulje.go RECEIVED %q", msg.Subject().Subject())
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.patrulje.*.signedup"):

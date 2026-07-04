@@ -5,8 +5,8 @@ import (
 	"log"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/jrgensen/stream"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 
 	_ "embed"
 )
@@ -17,7 +17,7 @@ type table struct {
 	querier
 }
 
-func New(p streaminterface.Publisher, w tablerow.Consumer, r *sql.DB) *table {
+func New(p stream.Publisher, w tablerow.Consumer, r *sql.DB) *table {
 	q := querier{db: r, r: goqu.New("mysql", r)}
 	t := &table{commander: commander{p: p, q: &q}, consumer: consumer{w: w}, querier: q}
 	if err := w.Consume(t.CreateTableSql()); err != nil {

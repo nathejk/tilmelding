@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 // Commands is the write-side interface for sections.
@@ -21,7 +22,7 @@ type Commands interface {
 }
 
 type commander struct {
-	p streaminterface.Publisher
+	p stream.Publisher
 	q Queries
 }
 
@@ -52,11 +53,10 @@ func (c commander) Add(ctx context.Context, year types.YearSlug, slug types.Slug
 		ParentSectionSlug: parent,
 		Label:             label,
 	}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(
+	msg := c.p.MessageFunc()(subject.FromStr(
 		fmt.Sprintf("NATHEJK.%s.section.%s.added", year, slug),
 	))
 	msg.SetBody(&body)
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding"})
 	return c.p.Publish(msg)
 }
 
@@ -81,11 +81,10 @@ func (c commander) Rename(ctx context.Context, year types.YearSlug, slug types.S
 		ParentSectionSlug: existing.ParentSlug,
 		Label:             label,
 	}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(
+	msg := c.p.MessageFunc()(subject.FromStr(
 		fmt.Sprintf("NATHEJK.%s.section.%s.added", year, slug),
 	))
 	msg.SetBody(&body)
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding"})
 	return c.p.Publish(msg)
 }
 
@@ -107,11 +106,10 @@ func (c commander) Sort(ctx context.Context, year types.YearSlug, parent types.S
 		ParentSectionSlug: parent,
 		SortedSlugs:       sortedSlugs,
 	}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(
+	msg := c.p.MessageFunc()(subject.FromStr(
 		fmt.Sprintf("NATHEJK.%s.sections.sorted", year),
 	))
 	msg.SetBody(&body)
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding"})
 	return c.p.Publish(msg)
 }
 
@@ -166,11 +164,10 @@ func (c commander) Move(ctx context.Context, year types.YearSlug, slug types.Slu
 		Slug:              slug,
 		ParentSectionSlug: newParent,
 	}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(
+	msg := c.p.MessageFunc()(subject.FromStr(
 		fmt.Sprintf("NATHEJK.%s.section.%s.moved", year, slug),
 	))
 	msg.SetBody(&body)
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding"})
 	return c.p.Publish(msg)
 }
 
@@ -191,11 +188,10 @@ func (c commander) Delete(ctx context.Context, year types.YearSlug, slug types.S
 	}
 
 	body := messages.NathejkSectionDeleted{Slug: slug}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(
+	msg := c.p.MessageFunc()(subject.FromStr(
 		fmt.Sprintf("NATHEJK.%s.section.%s.deleted", year, slug),
 	))
 	msg.SetBody(&body)
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding"})
 	return c.p.Publish(msg)
 }
 
@@ -245,11 +241,10 @@ func (c commander) CopyFromYear(ctx context.Context, source, dest types.YearSlug
 				ParentSectionSlug: s.ParentSlug,
 				Label:             s.Label,
 			}
-			msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(
+			msg := c.p.MessageFunc()(subject.FromStr(
 				fmt.Sprintf("NATHEJK.%s.section.%s.added", dest, s.Slug),
 			))
 			msg.SetBody(&body)
-			msg.SetMeta(&messages.Metadata{Producer: "tilmelding"})
 			if err := c.p.Publish(msg); err != nil {
 				return count, err
 			}
@@ -266,11 +261,10 @@ func (c commander) CopyFromYear(ctx context.Context, source, dest types.YearSlug
 					ParentSectionSlug: s.ParentSlug,
 					Label:             s.Label,
 				}
-				msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(
+				msg := c.p.MessageFunc()(subject.FromStr(
 					fmt.Sprintf("NATHEJK.%s.section.%s.added", dest, s.Slug),
 				))
 				msg.SetBody(&body)
-				msg.SetMeta(&messages.Metadata{Producer: "tilmelding"})
 				if err := c.p.Publish(msg); err != nil {
 					return count, err
 				}

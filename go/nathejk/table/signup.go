@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 type signup struct {
@@ -38,13 +39,13 @@ CREATE TABLE IF NOT EXISTS signup (
 `
 }
 
-func (t *signup) Consumes() []streaminterface.Subject {
-	return []streaminterface.Subject{
-		streaminterface.SubjectFromStr("NATHEJK:*.*.*.signedup"),
+func (t *signup) Consumes() []stream.Subject {
+	return []stream.Subject{
+		subject.FromStr("NATHEJK:*.*.*.signedup"),
 	}
 }
 
-func (t *signup) HandleMessage(msg streaminterface.Message) error {
+func (t *signup) HandleMessage(msg stream.Message) error {
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.*.*.signedup"):
 		//case "NATHEJK.year.created":

@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 
 	_ "embed"
 )
@@ -40,17 +41,17 @@ func (t *klan) CreateTableSql() string {
 	return klanSchema
 }
 
-func (c *klan) Consumes() (subjs []streaminterface.Subject) {
-	return []streaminterface.Subject{
-		//streaminterface.SubjectFromStr("monolith:nathejk_team"),
-		//streaminterface.SubjectFromStr("nathejk"),
-		streaminterface.SubjectFromStr("NATHEJK.2026.klan.*.signedup"),
-		streaminterface.SubjectFromStr("NATHEJK.*.klan.*.updated"),
-		streaminterface.SubjectFromStr("NATHEJK.*.klan.*.status.changed"),
+func (c *klan) Consumes() (subjs []stream.Subject) {
+	return []stream.Subject{
+		//subject.FromStr("monolith:nathejk_team"),
+		//subject.FromStr("nathejk"),
+		subject.FromStr("NATHEJK.2026.klan.*.signedup"),
+		subject.FromStr("NATHEJK.*.klan.*.updated"),
+		subject.FromStr("NATHEJK.*.klan.*.status.changed"),
 	}
 }
 
-func (c *klan) HandleMessage(msg streaminterface.Message) error {
+func (c *klan) HandleMessage(msg stream.Message) error {
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.klan.*.signedup"):
 		var body messages.NathejkTeamSignedUp

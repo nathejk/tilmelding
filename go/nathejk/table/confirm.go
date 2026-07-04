@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 type confirm struct {
@@ -33,13 +34,13 @@ CREATE TABLE IF NOT EXISTS confirm (
 `
 }
 
-func (t *confirm) Consumes() []streaminterface.Subject {
-	return []streaminterface.Subject{
-		streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.*.*.mail.%s.sent", "2026", types.PingTypeSignup)),
+func (t *confirm) Consumes() []stream.Subject {
+	return []stream.Subject{
+		subject.FromStr(fmt.Sprintf("NATHEJK:%s.*.*.mail.%s.sent", "2026", types.PingTypeSignup)),
 	}
 }
 
-func (t *confirm) HandleMessage(msg streaminterface.Message) error {
+func (t *confirm) HandleMessage(msg stream.Message) error {
 	switch msg.Subject().Subject() {
 	//case "NATHEJK.year.created":
 	default:

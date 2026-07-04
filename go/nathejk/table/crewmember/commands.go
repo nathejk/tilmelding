@@ -6,10 +6,11 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	tables "nathejk.dk/nathejk/table"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 // Commands is the write-side interface for crew members.
@@ -36,7 +37,7 @@ type UpdateFields struct {
 }
 
 type commander struct {
-	p streaminterface.Publisher
+	p stream.Publisher
 	q Queries
 }
 
@@ -56,11 +57,10 @@ func (c commander) Register(ctx context.Context, year types.YearSlug, name strin
 		Phone:  phone,
 		Email:  email,
 	}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(
+	msg := c.p.MessageFunc()(subject.FromStr(
 		fmt.Sprintf("NATHEJK.%s.crewmember.%s.registered", year, userID),
 	))
 	msg.SetBody(&body)
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding"})
 	if err := c.p.Publish(msg); err != nil {
 		return "", err
 	}
@@ -89,11 +89,10 @@ func (c commander) Update(ctx context.Context, year types.YearSlug, userID types
 		Diet:        f.Diet,
 		Additionals: f.Additionals,
 	}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(
+	msg := c.p.MessageFunc()(subject.FromStr(
 		fmt.Sprintf("NATHEJK.%s.crewmember.%s.updated", year, userID),
 	))
 	msg.SetBody(&body)
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding"})
 	return c.p.Publish(msg)
 }
 
@@ -126,21 +125,19 @@ func (c commander) AssignSection(ctx context.Context, year types.YearSlug, userI
 		UserID:      userID,
 		SectionSlug: section,
 	}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(
+	msg := c.p.MessageFunc()(subject.FromStr(
 		fmt.Sprintf("NATHEJK.%s.crewmember.%s.section.assigned", year, userID),
 	))
 	msg.SetBody(&body)
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding"})
 	return c.p.Publish(msg)
 }
 
 // Delete publishes NathejkCrewMemberDeleted (soft delete in the read model).
 func (c commander) Delete(ctx context.Context, year types.YearSlug, userID types.UserID) error {
 	body := messages.NathejkCrewMemberDeleted{UserID: userID}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(
+	msg := c.p.MessageFunc()(subject.FromStr(
 		fmt.Sprintf("NATHEJK.%s.crewmember.%s.deleted", year, userID),
 	))
 	msg.SetBody(&body)
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding"})
 	return c.p.Publish(msg)
 }

@@ -9,10 +9,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 // Product prices in øre, matching product.Seeds2026. Hard-coded so the
@@ -63,7 +64,7 @@ func (app *application) migrateLegacyOrdersHandler(w http.ResponseWriter, r *htt
 	}
 	dryRun := r.URL.Query().Get("dry") == "1"
 
-	report, err := runLegacyOrderMigration(r.Context(), app.db, app.jetstream, year, dryRun)
+	report, err := runLegacyOrderMigration(r.Context(), app.db, app.publisher, year, dryRun)
 	if err != nil {
 		app.logger.PrintError(err, map[string]string{"year": year})
 		app.ServerErrorResponse(w, r, err)
@@ -118,7 +119,7 @@ type memberLine struct {
 // team with legacy payments and no paid order, builds derived lines from
 // the current member projections, truncates lines to the paid budget when
 // the team underpaid, and publishes the three order events per team.
-func runLegacyOrderMigration(ctx context.Context, db *sql.DB, publisher streaminterface.Publisher, year string, dryRun bool) (migrationReport, error) {
+func runLegacyOrderMigration(ctx context.Context, db *sql.DB, publisher stream.Publisher, year string, dryRun bool) (migrationReport, error) {
 	teams, err := findLegacyTeams(ctx, db, year)
 	if err != nil {
 		return migrationReport{}, fmt.Errorf("findLegacyTeams: %w", err)
@@ -315,9 +316,10 @@ func truncateLinesToBudget(lines []messages.NathejkOrder_Line, budget int) ([]me
 
 // publishMigratedOrder fires the three events (created → lines.changed →
 // paid) the order projector and saga need to materialise the synthetic
-// order. Producer metadata is set to "migrate-orders" so the trail is
-// visible in the stream.
-func publishMigratedOrder(p streaminterface.Publisher, year string, orderID string, team legacyTeam, lines []messages.NathejkOrder_Line, totalAmount int, now time.Time) error {
+// order. It publishes through the shared metatagger publisher but overrides
+// the producer tag with "migrate-orders" so the trail is visible in the
+// stream, while still inheriting the tagger's other defaults (e.g. version).
+func publishMigratedOrder(p stream.Publisher, year string, orderID string, team legacyTeam, lines []messages.NathejkOrder_Line, totalAmount int, now time.Time) error {
 	meta := &messages.Metadata{Producer: "migrate-orders"}
 
 	created := &messages.NathejkOrderCreated{
@@ -328,7 +330,7 @@ func publishMigratedOrder(p streaminterface.Publisher, year string, orderID stri
 		Currency:  "DKK",
 		Timestamp: now,
 	}
-	msg := p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.order.%s.created", year, orderID)))
+	msg := p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.order.%s.created", year, orderID)))
 	msg.SetBody(created)
 	msg.SetMeta(meta)
 	if err := p.Publish(msg); err != nil {
@@ -341,7 +343,7 @@ func publishMigratedOrder(p streaminterface.Publisher, year string, orderID stri
 		TotalAmount: totalAmount,
 		Timestamp:   now,
 	}
-	msg = p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.order.%s.lines.changed", year, orderID)))
+	msg = p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.order.%s.lines.changed", year, orderID)))
 	msg.SetBody(linesChanged)
 	msg.SetMeta(meta)
 	if err := p.Publish(msg); err != nil {
@@ -353,7 +355,7 @@ func publishMigratedOrder(p streaminterface.Publisher, year string, orderID stri
 		PaidAmount: totalAmount,
 		Timestamp:  now,
 	}
-	msg = p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.order.%s.paid", year, orderID)))
+	msg = p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.order.%s.paid", year, orderID)))
 	msg.SetBody(paid)
 	msg.SetMeta(meta)
 	if err := p.Publish(msg); err != nil {

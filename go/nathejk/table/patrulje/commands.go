@@ -7,10 +7,11 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	tables "nathejk.dk/nathejk/table"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 // Commands is the patrulje write-side API. Methods publish domain events
@@ -56,7 +57,7 @@ type Spejder struct {
 }
 
 type commander struct {
-	p streaminterface.Publisher
+	p stream.Publisher
 	q *querier
 }
 
@@ -64,7 +65,7 @@ type commander struct {
 // NathejkScoutUpdated (or NathejkMemberDeleted) per member. New members
 // without a MemberID are assigned a fresh UUID before the update event.
 func (c *commander) Update(ctx context.Context, teamID types.TeamID, team Team, contact Contact, members []Spejder) error {
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.patrulje.%s.updated", "2026", teamID)))
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.patrulje.%s.updated", "2026", teamID)))
 	msg.SetBody(&messages.NathejkTeamUpdated{
 		TeamID:            teamID,
 		Type:              types.TeamTypePatrulje,
@@ -79,7 +80,6 @@ func (c *commander) Update(ctx context.Context, teamID types.TeamID, team Team, 
 		ContactPhone:      contact.Phone,
 		ContactRole:       contact.Role,
 	})
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 	if err := c.p.Publish(msg); err != nil {
 		return err
 	}
@@ -87,12 +87,11 @@ func (c *commander) Update(ctx context.Context, teamID types.TeamID, team Team, 
 	for i := range members {
 		m := &members[i]
 		if m.Deleted {
-			msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.deleted", "2026", m.MemberID)))
+			msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.deleted", "2026", m.MemberID)))
 			msg.SetBody(&messages.NathejkMemberDeleted{
 				MemberID: m.MemberID,
 				TeamID:   teamID,
 			})
-			msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 			if err := c.p.Publish(msg); err != nil {
 				return err
 			}
@@ -106,7 +105,7 @@ func (c *commander) Update(ctx context.Context, teamID types.TeamID, team Team, 
 		if m.MemberID == "" {
 			m.MemberID = types.MemberID(uuid.New().String())
 		}
-		msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.updated", "2026", m.MemberID)))
+		msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.updated", "2026", m.MemberID)))
 		// Include teamId in the body so the spejder projector's two-phase
 		// decode (see spejder/consumer.go) can do an INSERT IGNORE for
 		// brand-new members. Without it the row is never created and the
@@ -129,7 +128,6 @@ func (c *commander) Update(ctx context.Context, teamID types.TeamID, team Team, 
 			},
 			TeamID: teamID,
 		})
-		msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 		if err := c.p.Publish(msg); err != nil {
 			return err
 		}
@@ -153,11 +151,10 @@ func (c *commander) AssignNumber(ctx context.Context, teamID types.TeamID) error
 	} else if err != nil && !errors.Is(err, tables.ErrRecordNotFound) {
 		return err
 	}
-	msg := c.p.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK.%s.patrulje.%s.numberassigned", "2026", teamID)))
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK.%s.patrulje.%s.numberassigned", "2026", teamID)))
 	msg.SetBody(&messages.NathejkPatrolNumberAssigned{
 		TeamID:     teamID,
 		TeamNumber: fmt.Sprintf("%d", nr),
 	})
-	msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
 	return c.p.Publish(msg)
 }

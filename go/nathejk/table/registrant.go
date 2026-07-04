@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/jrgensen/stream"
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"nathejk.dk/pkg/tablerow"
-	"nathejk.dk/superfluids/streaminterface"
 
 	_ "embed"
 )
@@ -30,13 +31,13 @@ func (t *registrant) CreateTableSql() string {
 	return registrantSchema
 }
 
-func (c *registrant) Consumes() (subjs []streaminterface.Subject) {
-	return []streaminterface.Subject{
-		streaminterface.SubjectFromStr("nathejk"),
+func (c *registrant) Consumes() (subjs []stream.Subject) {
+	return []stream.Subject{
+		subject.FromStr("nathejk"),
 	}
 }
 
-func (c *registrant) HandleMessage(msg streaminterface.Message) {
+func (c *registrant) HandleMessage(msg stream.Message) {
 	switch msg.Subject().Subject() {
 	case "nathejk:patrulje.signedup", "nathejk:klan.signedup":
 		var body messages.NathejkTeamSignedUp

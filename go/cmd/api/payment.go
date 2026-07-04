@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
-	"nathejk.dk/superfluids/streaminterface"
 )
 
 func (app *application) mobilepayCallbackHandler(w http.ResponseWriter, r *http.Request) {
@@ -71,10 +71,9 @@ func (app *application) mobilepayCallbackHandler(w http.ResponseWriter, r *http.
 				app.logger.PrintError(oerr, map[string]string{"orderId": payment.OrderForeignKey})
 			}
 		}
-		msg := app.jetstream.MessageFunc()(streaminterface.SubjectFromStr(fmt.Sprintf("NATHEJK.%s.mail.%s.sent", app.config.year, types.PingTypePaymentReceived)))
+		msg := app.publisher.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK.%s.mail.%s.sent", app.config.year, types.PingTypePaymentReceived)))
 		msg.SetBody(&body)
-		msg.SetMeta(&messages.Metadata{Producer: "tilmelding-api"})
-		if err := app.jetstream.Publish(msg); err != nil {
+		if err := app.publisher.Publish(msg); err != nil {
 			app.logger.PrintError(err, nil)
 		}
 	})
