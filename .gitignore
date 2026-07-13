@@ -5,3 +5,4 @@ go.work.sum
 node_modules/
 vue/public/videos
 web/ui/public/config.js
+/go/api
