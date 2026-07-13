@@ -1,7 +1,7 @@
 # Tilmelding — Agent Rules
 
 ## Org conventions
-Read `../nathejk/conventions/rules.md` for org-wide conventions before proceeding.
+Read `.agents/rules/rules.md` for org-wide conventions before proceeding.
 Everything in that file applies here unless explicitly overridden below.
 
 ---
@@ -15,29 +15,18 @@ Everything in that file applies here unless explicitly overridden below.
 
 | Service | Technology | Dev target | Local URL |
 |---|---|---|---|
-| frontend | Vue 3 (TS) | `node-dev` | `https://<name>.localhost` |
-| bff | Go | `go-dev` | internal only |
+| frontend | Vue 3 (TS) | `ui-dev` | `http://tilmelding.local.nathejk.dk` |
+| bff | Go | `base` | internal only |
 
 ### Key files
-- `Dockerfile` — multistage build (targets: `node-dev`, `go-dev`, `prod`)
+- `docker/Dockerfile` — multistage build (dev targets: `ui-dev`, `base`; prod target: `prod`)
 - `docker-compose.yml` — dev environment
-- `tasks/TASKS.md` — task board conventions
-
----
-
-## Task board
-Tasks are in `tasks/`. Read `tasks/TASKS.md` before touching any task.
+- `roadmap/tasks/TASKS.md` — task board conventions
+- `roadmap/prd/` — Product Requirements Documents (see `roadmap/prd/README.md`)
 
 ---
 
 ## Repo-specific conventions
 
 - All endpoints must have OpenAPI annotations
-<!-- Add anything that overrides or extends conventions/rules.md -->
-<!-- Examples: -->
-<!-- - API versioning scheme -->
-<!-- - Frontend state management pattern (Pinia stores in src/stores/) -->
-<!-- - Go package structure -->
-<!-- - Specific environment variables required -->
-<!-- - Test commands -->
-<!-- Delete this section if there are no repo-specific additions -->
+- New features and significant changes require a PRD (`prd` skill) before implementation

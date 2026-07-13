@@ -7,7 +7,7 @@ This document defines the conventions for a file-based kanban task system design
 ## Folder Structure
 
 ```
-tasks/
+roadmap/tasks/
   open/       ← tasks available to be picked up
   doing/      ← tasks actively being worked on
   done/       ← completed tasks (kept for reference)

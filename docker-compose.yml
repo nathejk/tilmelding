@@ -10,22 +10,6 @@ networks:
     external: true
 
 services:
-  gw:
-    image: jrgensen/gateway
-    platform: linux/x86_64
-    environment:
-      PROXY_MAPPINGS: >
-        mail:8025
-        tilmelding:ui
-        sql:phpmyadmin
-    networks:
-      - local
-      - traefik
-    labels:
-      traefik.enable: true
-      traefik.docker.network: traefik
-      traefik.http.routers.tilmelding.rule: Host(`tilmelding.local.nathejk.dk`) || HostRegexp(`.+\.tilmelding\.local\.nathejk\.dk`)
-
   ui:
     build:
       context: .
@@ -38,10 +22,13 @@ services:
     volumes:
       - ./vue:/app
       - ui-node_modules:/app/node_modules
-    depends_on:
-      - gw
     networks:
       - local
+      - traefik
+    labels:
+      traefik.enable: true
+      traefik.docker.network: traefik
+      traefik.http.routers.tilmelding.rule: Host(`tilmelding.local.nathejk.dk`)
 
   api:
     build:
@@ -81,7 +68,6 @@ services:
       - ../shared-go:/shared-go
       - api:/go
     depends_on:
-      - gw
       - db
     networks:
       - local
@@ -106,9 +92,14 @@ services:
       PMA_USER: bruger
       PMA_PASSWORD: kodeord
     depends_on:
-      - gw
+      - db
     networks:
       - local
+      - traefik
+    labels:
+      traefik.enable: true
+      traefik.docker.network: traefik
+      traefik.http.routers.tilmelding-sql.rule: Host(`sql.tilmelding.local.nathejk.dk`)
 
   mail:
     image: mailhog/mailhog:v1.0.1
@@ -116,3 +107,9 @@ services:
     restart: unless-stopped
     networks:
       - local
+      - traefik
+    labels:
+      traefik.enable: true
+      traefik.docker.network: traefik
+      traefik.http.routers.tilmelding-mail.rule: Host(`mail.tilmelding.local.nathejk.dk`)
+      traefik.http.services.tilmelding-mail.loadbalancer.server.port: 8025

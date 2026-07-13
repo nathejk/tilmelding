@@ -82,8 +82,8 @@ RUN npm run build
 # PROD
 FROM alpine:3.14.1 AS prod
 
-ARG CI_VERSION
-ENV SENTRY_RELEASE=$CI_VERSION
+ARG BUILD_VERSION
+ENV SENTRY_RELEASE=$BUILD_VERSION
 
 RUN set -eux; \
 	apk add --update --no-cache \
