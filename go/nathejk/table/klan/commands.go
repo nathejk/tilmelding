@@ -3,6 +3,7 @@ package klan
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/google/uuid"
 	"github.com/jrgensen/stream"
@@ -69,10 +70,14 @@ func (c *commander) RequestMemberCount(ctx context.Context, year types.YearSlug,
 func (c *commander) capacity(ctx context.Context, year types.YearSlug) uint32 {
 	if c.r.Products != nil {
 		if p, err := c.r.Products.GetBySKU(ctx, year, "participation.klan"); err == nil && p != nil && p.Stock != nil {
-			if *p.Stock < 0 {
+			stock := *p.Stock
+			if stock < 0 {
 				return 0
 			}
-			return uint32(*p.Stock)
+			if stock > math.MaxUint32 {
+				return math.MaxUint32
+			}
+			return uint32(stock)
 		}
 	}
 	return c.r.TotalMemberCount
