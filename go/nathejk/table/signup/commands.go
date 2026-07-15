@@ -2,8 +2,9 @@ package signup
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand/v2"
+	"math/big"
 
 	"github.com/google/uuid"
 	"github.com/jrgensen/stream"
@@ -87,7 +88,11 @@ func (c *commander) SendVerificationSms(ctx context.Context, teamID types.TeamID
 		// phone already verified
 		return nil
 	}
-	pincode := fmt.Sprintf("%d", rand.IntN(9000)+1000)
+	n, err := rand.Int(rand.Reader, big.NewInt(10000))
+	if err != nil {
+		return err
+	}
+	pincode := fmt.Sprintf("%04d", n.Int64())
 	body := &messages.NathejkSmsSent{
 		PingType: types.PingTypeValidate,
 		TeamID:   teamID,
