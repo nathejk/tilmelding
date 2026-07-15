@@ -29,17 +29,44 @@ traffic and connect to messaging.
 - External network: `traefik` (declare it `external: true` in your compose).
 - Entrypoints: `web` (:80) and `websecure` (:443), bound to `127.0.0.1` on the
   host.
-- **No TLS/ACME is configured** (a `letsencrypt` volume is mounted but unused),
-  so local services are served over **HTTP on :80** — use `http://` URLs. Do
-  not add `tls` / `certresolver` labels; there is no resolver to satisfy them.
-- Routers attach to all entrypoints by default, so **omit** the `entrypoints`
-  label (the infra's own services do).
-- Required per-service labels: `traefik.enable=true`,
+- TLS is available via the ACME cert resolver **`desec`** and a shared
+  **`redirect-to-https`** middleware (both defined in the infra repo).
+- Base labels every web-exposed service needs: `traefik.enable=true`,
   `traefik.docker.network=traefik`, and
-  `traefik.http.routers.<repo>[-<svc>].rule=Host(`<sub>.local.nathejk.dk`)`.
-  Add `traefik.http.services.<…>.loadbalancer.server.port` only when the
-  container's web port is not 80 (e.g. MailHog → 8025).
+  `traefik.http.services.<svc>.loadbalancer.server.port=<port>` **only** when
+  the container's web port is not 80 (e.g. MailHog → 8025).
 - Hostnames: any subdomain of `local.nathejk.dk`.
+
+Pick one of three exposure patterns per service:
+
+1. **Plain HTTP** (simplest; fine for internal dev tools). One router, no
+   `entrypoints`/`tls` — it attaches to all entrypoints, no TLS termination.
+   Use `http://` URLs.
+   ```yaml
+   traefik.http.routers.<svc>.rule: Host(`<sub>.local.nathejk.dk`)
+   ```
+
+2. **Redirect HTTP → HTTPS** (recommended for user-facing services). Two
+   routers: the `web` one redirects, the `websecure` one serves with the cert.
+   Use `https://` URLs.
+   ```yaml
+   # HTTP: redirect to HTTPS
+   traefik.http.routers.<svc>.rule: Host(`<sub>.local.nathejk.dk`)
+   traefik.http.routers.<svc>.entrypoints: web
+   traefik.http.routers.<svc>.middlewares: redirect-to-https
+   # HTTPS: serve with the LE/desec cert
+   traefik.http.routers.<svc>-secure.rule: Host(`<sub>.local.nathejk.dk`)
+   traefik.http.routers.<svc>-secure.entrypoints: websecure
+   traefik.http.routers.<svc>-secure.tls.certresolver: desec
+   ```
+
+3. **Serve both HTTP and HTTPS** (no redirect — both schemes work). Same as (2)
+   but drop the `redirect-to-https` middleware so the `web` router serves
+   directly instead of redirecting.
+
+When a service has two routers, point both at the same service explicitly
+(`traefik.http.routers.<svc>.service=<svc>` /
+`...<svc>-secure.service=<svc>`) if Traefik can't infer it.
 
 **JetStream / NATS** (`nats:2.10-alpine -js`)
 - Network: `jetstream` (declare it `external: true`).
@@ -76,7 +103,10 @@ never build the `prod` image for local work.
     container listens on a non-80 port (Traefik defaults to 80).
   - Use repo-scoped router/service names (e.g. `<repo>`, `<repo>-<service>`)
     to avoid collisions on the shared Traefik.
-  - Never expose ports directly to the host — Traefik handles routing.
+  - Choose an HTTPS strategy — plain HTTP, redirect HTTP→HTTPS, or serve both
+    — per the three patterns in the Traefik contract above (redirect/serve-both
+    use two routers + the `desec` cert resolver).
+  - Never publish ports to the host with `ports:` — Traefik handles routing.
 - Services reached only internally (e.g. the Go `api` via the frontend's dev
   proxy, the database) stay on `local` only and get no Traefik labels.
 - Committed environment defaults live in `docker-compose.yml`; per-developer
@@ -92,9 +122,21 @@ never build the `prod` image for local work.
   labels:
     traefik.enable: true
     traefik.docker.network: traefik
-    traefik.http.routers.<repo>-<service>.rule: Host(`<sub>.<repo>.local.nathejk.dk`)
     # only when the container port is not 80:
     # traefik.http.services.<repo>-<service>.loadbalancer.server.port: <port>
+
+    # --- Option 1: plain HTTP (attaches to all entrypoints) ---
+    traefik.http.routers.<repo>-<service>.rule: Host(`<sub>.local.nathejk.dk`)
+
+    # --- Option 2: redirect HTTP -> HTTPS (recommended for user-facing) ---
+    # traefik.http.routers.<repo>-<service>.rule: Host(`<sub>.local.nathejk.dk`)
+    # traefik.http.routers.<repo>-<service>.entrypoints: web
+    # traefik.http.routers.<repo>-<service>.middlewares: redirect-to-https
+    # traefik.http.routers.<repo>-<service>-secure.rule: Host(`<sub>.local.nathejk.dk`)
+    # traefik.http.routers.<repo>-<service>-secure.entrypoints: websecure
+    # traefik.http.routers.<repo>-<service>-secure.tls.certresolver: desec
+    #
+    # Option 3 (serve both): as Option 2 without the redirect-to-https middleware.
 networks:
   traefik:
     external: true

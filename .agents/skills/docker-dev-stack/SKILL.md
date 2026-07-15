@@ -126,6 +126,29 @@ Only add `traefik.http.services.<name>.loadbalancer.server.port` when the
 container listens on a **non-80** port — Traefik defaults to 80, so `ui` and
 `phpmyadmin` omit it, while `mail` sets it to `8025`.
 
+The example above is **plain HTTP** (the router attaches to all entrypoints,
+no TLS). TLS is available via the infra's `desec` cert resolver and a
+`redirect-to-https` middleware, so a service can instead:
+
+- **Redirect HTTP → HTTPS** (recommended for user-facing) — two routers, the
+  `web` one carrying `middlewares: redirect-to-https`, the `-secure` one on
+  `websecure` with `tls.certresolver: desec`:
+  ```yaml
+  traefik.http.routers.tilmelding.rule: Host(`tilmelding.local.nathejk.dk`)
+  traefik.http.routers.tilmelding.entrypoints: web
+  traefik.http.routers.tilmelding.middlewares: redirect-to-https
+  traefik.http.routers.tilmelding-secure.rule: Host(`tilmelding.local.nathejk.dk`)
+  traefik.http.routers.tilmelding-secure.entrypoints: websecure
+  traefik.http.routers.tilmelding-secure.tls.certresolver: desec
+  ```
+- **Serve both HTTP and HTTPS** — same as above but omit the
+  `redirect-to-https` middleware so the `web` router serves directly.
+
+See the "Shared infrastructure contract" in the org rules
+(`.agents/rules/rules.md`) for the full details. The current
+`docker-compose.yml` uses plain HTTP (so dev URLs are `http://…`); switch a
+service to a pattern above to serve it over HTTPS.
+
 Current host mappings: `tilmelding.local.nathejk.dk` → `ui`,
 `sql.tilmelding.local.nathejk.dk` → `phpmyadmin`,
 `mail.tilmelding.local.nathejk.dk` → `mail` (port 8025). Services reached only
@@ -226,10 +249,11 @@ docker build -f docker/Dockerfile --target prod -t tilmelding:local .
    the shared external networks.
 3. If it must be reachable from the browser, join the `traefik` network and add
    its own labels: `traefik.enable`, `traefik.docker.network=traefik`, and a
-   `traefik.http.routers.<repo>-<service>.rule=Host(`<sub>.tilmelding.local.nathejk.dk`)`.
+   `traefik.http.routers.<repo>-<service>.rule=Host(`<sub>.local.nathejk.dk`)`.
    Add `traefik.http.services.<repo>-<service>.loadbalancer.server.port=<port>`
    **only** if the container listens on a non-80 port (Traefik defaults to 80).
-   If it's internal-only, leave it on `local` with no labels.
+   Choose an HTTPS strategy (plain HTTP / redirect / serve-both) per the Routing
+   section above. If it's internal-only, leave it on `local` with no labels.
 4. If it needs a build, extend `docker/Dockerfile` with a new stage rather
    than adding a sibling Dockerfile.
 5. Document any required env vars in `docker-compose.yml` with a sane dev
