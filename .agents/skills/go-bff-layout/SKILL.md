@@ -163,6 +163,7 @@ The dev container re-runs these on every `.go`/`.sql` change (see
 
 ```sh
 go test -timeout 10s ./...
+go vet ./...            # hard gate
 go tool staticcheck ./...   # hard gate
 go build ./...
 ```

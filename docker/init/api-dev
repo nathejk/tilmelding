@@ -45,6 +45,7 @@ go tool govulncheck ./... || echo "govulncheck reported findings (non-blocking)"
 while true; do
     go get -v ./... && \
     go test -timeout 10s ./... && \
+    go vet ./... && \
     go tool staticcheck ./... && \
 	go build ./...
 

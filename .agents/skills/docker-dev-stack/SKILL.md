@@ -162,8 +162,8 @@ internally — the Go `api` (via the Vite dev proxy for `/api` + `/callback`) an
 
 1. At startup, once: `go tool gosec ./...` and `go tool govulncheck ./...`
    (report-only, non-blocking).
-2. `go get -v ./...` → `go test -timeout 10s ./...` → `go tool staticcheck ./...`
-   → `go build ./...`
+2. `go get -v ./...` → `go test -timeout 10s ./...` → `go vet ./...` →
+   `go tool staticcheck ./...` → `go build ./...`
 3. If everything passes, `go run $GO_BUILD_FLAGS nathejk.dk/cmd/api &`.
 4. `inotifywait` blocks on `*.go` / `*.sql` changes.
 5. On change: kill the running binary (and children) and loop.
