@@ -11,7 +11,7 @@
 // CI / production builds run with GOWORK=off and resolve shared-go from
 // the public module proxy via the version pinned in go.mod.
 
-go 1.25.0
+go 1.25.8
 
 use (
 	../../shared-go

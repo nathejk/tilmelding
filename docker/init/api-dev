@@ -33,10 +33,19 @@ fi
 echo $program
 cd /app
 
+# One-time security scans at startup. Report-only (non-blocking) so a finding
+# or a transient vuln-DB fetch doesn't brick the hot-reload loop below. All dev
+# tools are managed as `tool` directives in go.mod and run via `go tool`, so
+# they always build with the current toolchain (no stale-binary shadowing).
+echo "== gosec =="
+go tool gosec ./... || echo "gosec reported findings (non-blocking)"
+echo "== govulncheck =="
+go tool govulncheck ./... || echo "govulncheck reported findings (non-blocking)"
+
 while true; do
-    go get -v -d ./... && \
+    go get -v ./... && \
     go test -timeout 10s ./... && \
-    staticcheck ./... && \
+    go tool staticcheck ./... && \
 	go build ./...
 
     if [ "$?" == "0" ]; then

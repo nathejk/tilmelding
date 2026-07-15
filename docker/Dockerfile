@@ -5,6 +5,11 @@ FROM golang:1.25 AS api-dev
 RUN mkdir -p /app/docker/bin
 WORKDIR /app
 
+# Persist the Go build cache in the api:/go volume so `go tool` doesn't rebuild
+# the dev tools (staticcheck/gosec/govulncheck) from scratch on every start.
+# The cache is toolchain-keyed, so a Go bump invalidates it automatically.
+ENV GOCACHE=/go/.cache/go-build
+
 ENV DEBIAN_FRONTEND=noninteractive
 RUN set -eux; \
 	apt -qq update && \
@@ -12,8 +17,6 @@ RUN set -eux; \
         bash \
         inotify-tools && \
     apt -qq clean
-
-RUN go install honnef.co/go/tools/cmd/staticcheck@latest
 
 COPY docker/init/api-dev /init
 ENTRYPOINT ["/init", "api"]
@@ -41,7 +44,7 @@ ENV GOWORK=off
 
 # test and lint before building
 RUN go test -timeout 60s ./... && \
-    staticcheck ./...
+    go tool staticcheck ./...
 
 # build service
 RUN GOARCH=amd64 CGO_ENABLED=1 GOOS=linux \
@@ -63,6 +66,7 @@ RUN npm install -g npm@7.24.0
 #RUN npm install
 COPY docker/init/ui-dev /init
 
+EXPOSE 80
 ENTRYPOINT ["/init"]
 
 #FROM node:10.11-alpine AS ui-builder

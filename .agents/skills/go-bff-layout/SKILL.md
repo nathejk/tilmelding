@@ -144,6 +144,18 @@ This is event-sourced-ish: SQL tables are projections, JetStream is the log.
   task. The dev container image (`golang:1.25` in the Dockerfile) must
   match.
 
+### Dev tools (staticcheck, gosec, govulncheck)
+
+Dev tools are managed as **`tool` directives in `go.mod`** (Go 1.24+) and run via
+`go tool <name>`, so they are version-pinned in `go.mod`/`go.sum` and always
+build with the current toolchain. Add a new one with
+`go get -tool <pkg>` (run inside the `api` container). Do **not** `go install`
+tools into the image — the `api:/go` volume would shadow the binary and freeze
+it at an old Go version.
+
+Registered tools: `honnef.co/go/tools/cmd/staticcheck`,
+`github.com/securego/gosec/v2/cmd/gosec`, `golang.org/x/vuln/cmd/govulncheck`.
+
 ### Tests and lint
 
 The dev container re-runs these on every `.go`/`.sql` change (see
@@ -151,18 +163,20 @@ The dev container re-runs these on every `.go`/`.sql` change (see
 
 ```sh
 go test -timeout 10s ./...
-staticcheck ./...
+go tool staticcheck ./...   # hard gate
 go build ./...
 ```
 
+If any fail the dev loop will not restart the binary — keep `./...` green.
+`gosec` and `govulncheck` also run once at container startup, but **report-only**
+(they don't gate the loop, since gosec findings and govulncheck's network vuln-DB
+fetch shouldn't block hot reload).
+
 CI does not run a separate `go test` step. The workflow
 (`.github/workflows/build-and-publish.yml`) builds the Docker image on every
-pull request and push to `main`; the `build` stage runs the same checks with a
-longer timeout (`go test -timeout 60s ./...` + `staticcheck ./...`) before
-compiling the static binary, so a red test fails the image build.
-
-If any of these fail the dev loop will not restart the binary. Keep `./...`
-green at all times.
+pull request and push to `main`; the `build` stage runs `go test -timeout 60s
+./...` + `go tool staticcheck ./...` before compiling the static binary, so a
+red test or lint failure fails the image build.
 
 ### Configuration
 
@@ -187,7 +201,7 @@ docker compose logs -f api
 
 # one-off go command
 docker compose run --rm api go test ./...
-docker compose run --rm api staticcheck ./...
+docker compose run --rm --entrypoint go api tool staticcheck ./...
 ```
 
 The `api` container's entrypoint (`docker/init/api-dev`) already runs

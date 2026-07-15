@@ -160,14 +160,18 @@ internally — the Go `api` (via the Vite dev proxy for `/api` + `/callback`) an
 
 `docker/init/api-dev` runs an `inotifywait` loop:
 
-1. `go get -d ./...` → `go test -timeout 10s ./...` → `staticcheck ./...`
+1. At startup, once: `go tool gosec ./...` and `go tool govulncheck ./...`
+   (report-only, non-blocking).
+2. `go get -v ./...` → `go test -timeout 10s ./...` → `go tool staticcheck ./...`
    → `go build ./...`
-2. If everything passes, `go run $GO_BUILD_FLAGS nathejk.dk/cmd/api &`.
-3. `inotifywait` blocks on `*.go` / `*.sql` changes.
-4. On change: kill the running binary (and children) and loop.
+3. If everything passes, `go run $GO_BUILD_FLAGS nathejk.dk/cmd/api &`.
+4. `inotifywait` blocks on `*.go` / `*.sql` changes.
+5. On change: kill the running binary (and children) and loop.
 
-So a *broken* commit leaves the previous binary running until you fix it.
-This is intentional — fix the build or watch logs to see why.
+Dev tools are `tool` directives in `go/go.mod`, run via `go tool` (see the
+`go-bff-layout` skill), so they always match the current toolchain. The Go
+build cache is kept in the `api:/go` volume via `GOCACHE=/go/.cache/go-build`
+so tools aren't recompiled on every start.
 
 `GO_BUILD_FLAGS` (e.g. `-race`) is set via env in compose if you want it.
 
@@ -244,5 +248,7 @@ docker build -f docker/Dockerfile --target prod -t tilmelding:local .
   scope names with the repo prefix (`tilmelding`, `tilmelding-sql`, …).
 - Don't commit `docker-compose.override.yml`. Don't move secrets out of it
   into `docker-compose.yml`.
-- Don't `EXPOSE` ports to the host in dev — web-exposed services are reached
-  through Traefik, internal ones through the `local` network.
+- Don't publish container ports to the host with `ports:` in dev — web-exposed
+  services are reached through Traefik, internal ones through the `local`
+  network. (`EXPOSE` in the Dockerfile is fine and expected — Traefik's docker
+  provider uses it to discover a service's port.)
