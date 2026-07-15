@@ -30,7 +30,12 @@ traffic and connect to messaging.
 - Entrypoints: `web` (:80) and `websecure` (:443), bound to `127.0.0.1` on the
   host.
 - TLS is available via the ACME cert resolver **`desec`** and a shared
-  **`redirect-to-https`** middleware (both defined in the infra repo).
+  **`redirect-to-https`** middleware (both defined in the infra repo). HTTPS in
+  dev is **not for security** (everything is on localhost) but to give the SPA a
+  browser **secure context**: `*.local.nathejk.dk` isn't treated as `localhost`,
+  so secure-context-only APIs (Navigation API, geolocation, clipboard, service
+  workers, WebCrypto) require HTTPS. User-facing SPAs should use the redirect
+  pattern; internal-only dev tools can stay on plain HTTP.
 - Base labels every web-exposed service needs: `traefik.enable=true`,
   `traefik.docker.network=traefik`, and
   `traefik.http.services.<svc>.loadbalancer.server.port=<port>` **only** when

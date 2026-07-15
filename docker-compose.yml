@@ -28,7 +28,16 @@ services:
     labels:
       traefik.enable: true
       traefik.docker.network: traefik
+      # HTTP router: redirect to HTTPS so the SPA always loads in a secure
+      # context (needed for browser APIs gated behind HTTPS on non-localhost
+      # hosts like *.local.nathejk.dk).
       traefik.http.routers.tilmelding.rule: Host(`tilmelding.local.nathejk.dk`)
+      traefik.http.routers.tilmelding.entrypoints: web
+      traefik.http.routers.tilmelding.middlewares: redirect-to-https
+      # HTTPS router: serve with the desec (ACME) cert.
+      traefik.http.routers.tilmelding-secure.rule: Host(`tilmelding.local.nathejk.dk`)
+      traefik.http.routers.tilmelding-secure.entrypoints: websecure
+      traefik.http.routers.tilmelding-secure.tls.certresolver: desec
 
   api:
     build:
@@ -41,7 +50,7 @@ services:
       SMS_DSN: cpsms://TOKEN@api.cpsms.dk
       #MONOLITH_DB_DSN_RW: root:ib@tcp(dev.nathejk.dk:3306)/nathejk2018?parseTime=true
       PAYMENT_DSN: mobilepay://client_id:client_secret@apitest.vipps.no?Ocp-Apim-Subscription-Key#MSN
-      BASEURL: http://tilmelding.local.nathejk.dk
+      BASEURL: https://tilmelding.local.nathejk.dk
       COUNTDOWN: "2026-04-29T21:16:00Z"
       COUNTDOWN_VIDEOS: |
         https://nathejk-countdown.s3.eu-central-1.amazonaws.com/videos/anne.mov

@@ -140,9 +140,12 @@ docker compose run --rm ui npm run lint
 
 The `ui` container (`docker/init/ui-dev`) runs `npm ci && npm run dev`,
 which starts Vite on port 80 inside the container, routed by Traefik (via the
-`ui` service's own labels) to `http://tilmelding.local.nathejk.dk`.
-`node_modules` lives in a named volume (`ui-node_modules`) so a host re-clone
-doesn't trigger a full reinstall.
+`ui` service's own labels) to `https://tilmelding.local.nathejk.dk`. HTTP is
+redirected to HTTPS: the SPA is served over TLS so it runs in a browser
+**secure context**, which `*.local.nathejk.dk` (unlike `localhost`) otherwise
+wouldn't get — needed for APIs like the Navigation API, geolocation, clipboard,
+and service workers. `node_modules` lives in a named volume (`ui-node_modules`)
+so a host re-clone doesn't trigger a full reinstall.
 
 ```sh
 # add a dependency

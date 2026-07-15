@@ -15,7 +15,7 @@ Everything in that file applies here unless explicitly overridden below.
 
 | Service | Technology | Dev target | Local URL |
 |---|---|---|---|
-| frontend | Vue 3 (TS) | `ui-dev` | `http://tilmelding.local.nathejk.dk` |
+| frontend | Vue 3 (TS) | `ui-dev` | `https://tilmelding.local.nathejk.dk` |
 | bff | Go | `base` | internal only |
 
 ### Key files

@@ -111,6 +111,11 @@ service — Traefik routes straight to each container. Use repo-scoped
 router/service names (`<repo>`, `<repo>-<service>`) so they don't collide with
 other repos on the shared Traefik.
 
+The user-facing SPA (`ui`) is served over **HTTPS via a redirect** so it always
+loads in a browser secure context (see the Vue skill / org rules for why
+`*.local.nathejk.dk` needs this). Two routers — the `web` one redirects, the
+`-secure` one serves with the `desec` cert:
+
 ```yaml
 ui:
   networks:
@@ -120,40 +125,36 @@ ui:
     traefik.enable: true
     traefik.docker.network: traefik
     traefik.http.routers.tilmelding.rule: Host(`tilmelding.local.nathejk.dk`)
+    traefik.http.routers.tilmelding.entrypoints: web
+    traefik.http.routers.tilmelding.middlewares: redirect-to-https
+    traefik.http.routers.tilmelding-secure.rule: Host(`tilmelding.local.nathejk.dk`)
+    traefik.http.routers.tilmelding-secure.entrypoints: websecure
+    traefik.http.routers.tilmelding-secure.tls.certresolver: desec
 ```
 
-Only add `traefik.http.services.<name>.loadbalancer.server.port` when the
-container listens on a **non-80** port — Traefik defaults to 80, so `ui` and
-`phpmyadmin` omit it, while `mail` sets it to `8025`.
+Internal dev tools that don't need a secure context use **plain HTTP** — a
+single Host-rule router, no `entrypoints`/`tls` (attaches to all entrypoints):
 
-The example above is **plain HTTP** (the router attaches to all entrypoints,
-no TLS). TLS is available via the infra's `desec` cert resolver and a
-`redirect-to-https` middleware, so a service can instead:
+```yaml
+phpmyadmin:
+  labels:
+    traefik.enable: true
+    traefik.docker.network: traefik
+    traefik.http.routers.tilmelding-sql.rule: Host(`sql.tilmelding.local.nathejk.dk`)
+```
 
-- **Redirect HTTP → HTTPS** (recommended for user-facing) — two routers, the
-  `web` one carrying `middlewares: redirect-to-https`, the `-secure` one on
-  `websecure` with `tls.certresolver: desec`:
-  ```yaml
-  traefik.http.routers.tilmelding.rule: Host(`tilmelding.local.nathejk.dk`)
-  traefik.http.routers.tilmelding.entrypoints: web
-  traefik.http.routers.tilmelding.middlewares: redirect-to-https
-  traefik.http.routers.tilmelding-secure.rule: Host(`tilmelding.local.nathejk.dk`)
-  traefik.http.routers.tilmelding-secure.entrypoints: websecure
-  traefik.http.routers.tilmelding-secure.tls.certresolver: desec
-  ```
-- **Serve both HTTP and HTTPS** — same as above but omit the
-  `redirect-to-https` middleware so the `web` router serves directly.
+A third option, **serve both HTTP and HTTPS**, is the redirect pattern without
+the `redirect-to-https` middleware. Only add
+`traefik.http.services.<name>.loadbalancer.server.port` when the container
+listens on a **non-80** port — Traefik defaults to 80, so `ui`/`phpmyadmin`
+omit it while `mail` sets `8025`.
 
-See the "Shared infrastructure contract" in the org rules
-(`.agents/rules/rules.md`) for the full details. The current
-`docker-compose.yml` uses plain HTTP (so dev URLs are `http://…`); switch a
-service to a pattern above to serve it over HTTPS.
-
-Current host mappings: `tilmelding.local.nathejk.dk` → `ui`,
-`sql.tilmelding.local.nathejk.dk` → `phpmyadmin`,
-`mail.tilmelding.local.nathejk.dk` → `mail` (port 8025). Services reached only
-internally — the Go `api` (via the Vite dev proxy for `/api` + `/callback`) and
-`db` — stay on `local` only and get **no** Traefik labels.
+Current host mappings: `tilmelding.local.nathejk.dk` → `ui` (HTTPS, redirected),
+`sql.tilmelding.local.nathejk.dk` → `phpmyadmin` and
+`mail.tilmelding.local.nathejk.dk` → `mail` (port 8025), both plain HTTP.
+Services reached only internally — the Go `api` (via the Vite dev proxy for
+`/api` + `/callback`) and `db` — stay on `local` only and get **no** Traefik
+labels.
 
 ### Volumes
 
