@@ -204,9 +204,15 @@ so tools aren't recompiled on every start.
 `docker/init/ui-dev` is just:
 
 ```sh
-npm ci
+npm ci --no-audit --no-fund
 npm run dev
 ```
+
+The container uses the npm bundled with Node 20 (v10) — do **not** re-pin an
+older npm. Two things keep `npm ci` from hanging on every container start:
+`--no-audit --no-fund` (the registry audit call would otherwise stall after the
+install), and `CYPRESS_INSTALL_BINARY=0` in the `ui` service env (skips
+Cypress's large binary download; e2e runs separately, not in this container).
 
 Vite handles HMR. If `package-lock.json` changes you usually want
 `docker compose run --rm ui npm ci` or `docker compose build ui` to refresh

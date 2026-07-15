@@ -57,7 +57,9 @@ RUN mkdir -p /app
 WORKDIR /app
 COPY vue /app
 
-RUN npm install -g npm@7.24.0
+# Use the npm bundled with Node 20 (v10). The project has no `engines`
+# constraint, and modern deps (rollup, etc.) require npm >= 8; the old
+# `npm@7.24.0` pin here made `npm ci` extremely slow / hang on a cold cache.
 
 # python is a dependency of node-gyp that we need to build node-sass https://www.npmjs.com/package/node-gyp
 #RUN apk add g++ make python3 && \
