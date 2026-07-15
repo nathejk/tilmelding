@@ -2,7 +2,6 @@ package klan
 
 import (
 	"nathejk.dk/nathejk/table/product"
-	"nathejk.dk/nathejk/table/signup"
 )
 
 // repository holds the klan commander's external dependencies and tunables.
@@ -24,7 +23,6 @@ import (
 // package usable in isolation for tests that don't want to set up the
 // product catalogue.
 type repository struct {
-	Signup             signup.Queries
 	Products           product.Queries
 	TotalMemberCount   uint32
 	TeamMinMemberCount uint32
@@ -32,12 +30,6 @@ type repository struct {
 }
 
 type external func(*repository)
-
-func WithSignup(q signup.Queries) external {
-	return func(r *repository) {
-		r.Signup = q
-	}
-}
 
 // WithProductQueries injects the product read API so RequestMemberCount
 // can read the participation.klan cap from the catalogue. Pass the
