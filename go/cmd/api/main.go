@@ -9,11 +9,13 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/jrgensen/stream"
 	"github.com/jrgensen/stream/jetstream"
 	"github.com/jrgensen/stream/metatagger"
+	"github.com/jrgensen/stream/subject"
 	"github.com/jrgensen/stream/xstream"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
@@ -36,6 +38,7 @@ import (
 	"nathejk.dk/nathejk/table/senior"
 	"nathejk.dk/nathejk/table/signup"
 	"nathejk.dk/nathejk/table/spejder"
+	"nathejk.dk/pkg/deadletter"
 	"nathejk.dk/pkg/sqlpersister"
 )
 
@@ -167,7 +170,22 @@ func main() {
 		logger.PrintFatal(err, nil)
 	}
 	reader := db.DB()
-	writer := sqlpersister.New(db.DB())
+	// writer persists the read-model projections. It is wrapped in a
+	// dead-letter writer so a single failing statement (e.g. a value that
+	// overflows its column) is captured in the deadletter table instead of
+	// crashing the consumer loop. It stays a transparent pass-through until
+	// writer.Arm() below, so startup table creation and seeding still fail
+	// loudly.
+	writer := deadletter.New(sqlpersister.New(db.DB()), db.DB())
+	if err := writer.Consume(writer.CreateTableSql()); err != nil {
+		logger.PrintFatal(err, nil)
+	}
+	// The projections are rebuilt by replaying the stream from sequence zero on
+	// every start, so any dead-letters captured during the previous run's
+	// replay are stale. Clear them before this run's replay begins.
+	if err := writer.Reset(); err != nil {
+		logger.PrintFatal(err, nil)
+	}
 
 	// Product catalogue is seeded at startup. Idempotent: re-running this with
 	// the same seed list updates names / prices / stock in place.
@@ -201,11 +219,44 @@ func main() {
 	// order projector then projects into status=paid on the orders table.
 	orderSaga := order.NewSaga(publisher, tableOrder, tablePayment, 0)
 
+	// Startup DDL and seeding are done: from here on a failing statement is
+	// dead-lettered and the consumer loop keeps running instead of exiting.
+	writer.Arm()
+
+	// Sequence of the last event that already exists in the stream. Once the
+	// projections have replayed up to here, the app is "live": the catchup
+	// detector fires and reports how many statements landed in the dead-letter
+	// table during replay. A zero target means an empty stream.
+	var targetSeq uint64
+	if last, err := js.LastMessage(subject.FromStr("NATHEJK:>")); err != nil {
+		logger.PrintInfo("No events in stream; starting live", nil)
+	} else {
+		targetSeq = last.Sequence()
+	}
+	detector := newCatchupDetector(targetSeq, func() {
+		n, err := writer.Count()
+		if err != nil {
+			logger.PrintError(err, map[string]string{"context": "deadletter status"})
+			return
+		}
+		if n == 0 {
+			logger.PrintInfo("Caught up — live. Dead-letter queue is empty.", nil)
+			return
+		}
+		logger.PrintInfo("Caught up — live. Statements failed during replay and were dead-lettered.", map[string]string{
+			"deadletter_rows": strconv.Itoa(n),
+		})
+	})
+
 	mux := xstream.NewMux(js)
-	mux.AddConsumer(table.NewConfirm(writer), tableKlan, tableSenior /*table.NewPatrulje(sqlw),*/, table.NewPatruljeStatus(writer) /*table.NewPatruljeMerged(sqlw),*/, tableSpejder, table.NewSpejderStatus(writer), tablePayment, tableStaff, tablePatrulje, tableSignup, tableOrder, orderSaga, tableSection, tableCrewmember)
+	mux.AddConsumer(detector, table.NewConfirm(writer), tableKlan, tableSenior /*table.NewPatrulje(sqlw),*/, table.NewPatruljeStatus(writer) /*table.NewPatruljeMerged(sqlw),*/, tableSpejder, table.NewSpejderStatus(writer), tablePayment, tableStaff, tablePatrulje, tableSignup, tableOrder, orderSaga, tableSection, tableCrewmember)
 	//mux.AddConsumer(table.NewSpejder(sqlw), table.NewSpejderStatus(sqlw))
 	if err := mux.Run(context.Background()); err != nil {
 		logger.PrintFatal(err, nil)
+	}
+	// An empty stream has no message to cross targetSeq, so signal live now.
+	if targetSeq == 0 {
+		detector.FireNow()
 	}
 
 	models := data.NewModels(reader, tablePayment, tableStaff, tablePatrulje, tableSignup, tableKlan, tableOrder, tableProduct, tableSection, tableCrewmember)
