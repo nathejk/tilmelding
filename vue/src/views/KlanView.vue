@@ -79,6 +79,10 @@ const memberDialog = ref(false)
 const deleteMemberDialog = ref(false)
 const teamSubmitted = ref(false)
 const memberSubmitted = ref(false)
+// memberError shows a server-side rejection in the member dialog (e.g. the
+// team is already full). paymentError shows why a payment was blocked.
+const memberError = ref('')
+const paymentError = ref('')
 
 const confirmDeleteMember = (prod) => {
   member.value = prod
@@ -96,6 +100,7 @@ const openNew = () => {
 const hideDialog = () => {
   memberDialog.value = false
   memberSubmitted.value = false
+  memberError.value = ''
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -131,10 +136,15 @@ const requestSeat = async () => {
 }
 
 const save = async () => {
+  paymentError.value = ''
   try {
     const data = await putState()
     if (data.team && data.team.status == 'HOLD') {
       router.push({ name: 'onhold' })
+      return
+    }
+    if (data.paymentError) {
+      paymentError.value = data.paymentError
       return
     }
     if (data.paymentLink && data.paymentLink != '') {
@@ -147,11 +157,9 @@ const save = async () => {
   }
 }
 
-// putState is the shared HTTP PUT helper used by both syncOrder (silent
-// background save after every member edit) and save (final "Gem" button
-// which redirects to MobilePay if there's anything to pay). It mutates
-// team/order refs from the server response so the UI stays in sync
-// with the projection.
+// putState saves the team + contact fields via the team PUT and returns a
+// payment link (or paymentError when payment is blocked). Member add/edit/
+// delete no longer go through here — they use the dedicated member endpoints.
 const putState = async () => {
   team.value.memberCount = Math.floor(team.value.memberCount)
   team.value.diet = team.value.vegitarian ? 'vegetar' : ''
@@ -176,66 +184,69 @@ const putState = async () => {
   return data
 }
 
-// syncOrder pushes the current form state to the server so the order is
-// recomputed (lines, totalAmount, dueAmount). Called whenever a senior
-// is added, removed or edited so the displayed totals always match the
-// form, without requiring the user to click "Gem".
-const syncOrder = async () => {
-  try {
-    await putState()
-  } catch (error) {
-    console.log('syncOrder failed', error)
-  }
-}
-
-const saveMember = () => {
+const saveMember = async () => {
   memberSubmitted.value = true
-
-  if (member.value.name.trim() == '') {
+  if (!member.value.name || member.value.name.trim() == '') {
     return
   }
-  if (member.value.id) {
-    //member.value.inventoryStatus = product.value.inventoryStatus.value ? product.value.inventoryStatus.value : product.value.inventoryStatus;
-    members.value[findIndexById(member.value.id)] = member.value
-    //toast.add({severity:'success', summary: 'Successful', detail: 'Product Updated', life: 3000});
-  } else {
-    member.value.id = createId()
-    members.value.push(member.value)
-    //    toast.add({severity:'success', summary: 'Successful', detail: 'Product Created', life: 3000});
+  memberError.value = ''
+  const headers = { 'Content-Type': 'application/json' }
+  // The senior member endpoint takes klan.Senior with a `diet` string; the
+  // form tracks a `vegitarian` boolean, so map between them on the wire.
+  const payload = { ...member.value, diet: member.value.vegitarian ? 'vegetar' : '' }
+  try {
+    if (member.value.memberId) {
+      const response = await fetch(
+        '/api/klan/' + props.teamId + '/member/' + member.value.memberId,
+        { method: 'PUT', headers, body: JSON.stringify({ member: payload }) }
+      )
+      if (!response.ok) throw new Error('HTTP status ' + response.status)
+      const data = await response.json()
+      data.member.vegitarian = data.member.diet == 'vegetar'
+      const i = members.value.findIndex((m) => m.memberId === data.member.memberId)
+      if (i >= 0) members.value[i] = data.member
+      if (data.order) order.value = data.order
+    } else {
+      const response = await fetch('/api/klan/' + props.teamId + '/member', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ member: payload })
+      })
+      if (response.status === 422) {
+        const data = await response.json()
+        memberError.value = Object.values(data.error || { members: 'Kunne ikke tilføje medlem.' }).join(' ')
+        return
+      }
+      if (!response.ok) throw new Error('HTTP status ' + response.status)
+      const data = await response.json()
+      data.member.vegitarian = data.member.diet == 'vegetar'
+      members.value.push(data.member)
+      if (data.order) order.value = data.order
+    }
+    memberDialog.value = false
+    member.value = { name: '' }
+  } catch (error) {
+    console.log('saveMember failed', error)
   }
-  memberDialog.value = false
-  member.value = { name: '' }
-  // Recalculate the order on the server so totals reflect the change.
-  syncOrder()
 }
 const initialSignup = computed(() => !order.value)
 const activeMembers = computed(() => members.value.filter((i) => !i.deleted))
-const deleteMember = () => {
-  //members.value = members.value.filter(val => val.id !== member.value.id);
-  members.value[findIndexById(member.value.id)].deleted = true
+const deleteMember = async () => {
+  try {
+    const response = await fetch(
+      '/api/klan/' + props.teamId + '/member/' + member.value.memberId,
+      { method: 'DELETE' }
+    )
+    if (response.ok) {
+      const data = await response.json()
+      members.value = members.value.filter((m) => m.memberId !== member.value.memberId)
+      if (data.order) order.value = data.order
+    }
+  } catch (error) {
+    console.log('deleteMember failed', error)
+  }
   deleteMemberDialog.value = false
   member.value = {}
-  syncOrder()
-  //toast.add({severity:'success', summary: 'Successful', detail: 'Product Deleted', life: 3000});
-}
-const findIndexById = (id) => {
-  let index = -1
-  for (let i = 0; i < members.value.length; i++) {
-    if (members.value[i].id === id) {
-      index = i
-      break
-    }
-  }
-
-  return index
-}
-const createId = () => {
-  let id = ''
-  var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  for (var i = 0; i < 5; i++) {
-    id += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return id
 }
 const tshirtSizeLabel = (slug) => {
   if (slug == '') return ''
@@ -480,6 +491,7 @@ const tshirtSizeLabel = (slug) => {
       </div>
     </Fieldset>
 
+    <Message v-if="paymentError" severity="error" :closable="false">{{ paymentError }}</Message>
     <div class="card flex justify-end" v-if="!initialSignup">
       <Button
         class="my-5"
@@ -572,6 +584,8 @@ const tshirtSizeLabel = (slug) => {
         <label for="member-tshirt">Vælg t-shirt</label>
       </FloatLabel>
     </div>
+
+    <Message v-if="memberError" severity="error" :closable="false">{{ memberError }}</Message>
 
     <template #footer>
       <Button label="Afbryd" icon="pi pi-times" text @click="hideDialog" />
