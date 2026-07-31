@@ -52,12 +52,24 @@ func (app *application) loadOrders(ctx context.Context, ownerType types.TeamType
 // back into agreement, false when the order already matches — in which
 // case the GET stays a pure read with no event publication.
 //
+// It applies the same paid-unit offset that SetDerivedLines will apply
+// (via order.ApplyPaidOffset), so the comparison is against the set that
+// would actually be persisted. Without this an order still carrying
+// already-paid units (e.g. participations paid under old member IDs) would
+// look "in sync" and never self-heal to the count-based bill.
+//
 // The comparison ignores manual lines (only derived lines are recomputed)
 // and is keyed on (productSku, memberId, t-shirt size) — the same
 // dimensions every derivedLinesFor* helper varies on. Quantity drift would
 // not be detected, but the read-path helpers always emit quantity=1 so
 // any difference there indicates a manual edit we shouldn't clobber.
-func derivedLinesNeedSync(o *order.Order, desired []order.DesiredLine) bool {
+func (app *application) derivedLinesNeedSync(ctx context.Context, o *order.Order, desired []order.DesiredLine) bool {
+	paidQty, err := app.models.Order.PaidQuantityBySKU(ctx, app.config.year, o.OwnerType, o.OwnerID)
+	if err != nil {
+		log.Printf("PaidQuantityBySKU %q", err)
+	}
+	desired = order.ApplyPaidOffset(desired, paidQty)
+
 	type key struct {
 		sku      string
 		memberID string

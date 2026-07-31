@@ -31,14 +31,16 @@ type Queries interface {
 	// changing a derived or manual line.
 	ReservedQuantity(ctx context.Context, year types.YearSlug, productSKU string) (int, error)
 
-	// PaidLineKeys returns the set of (productSKU, memberID) pairs that
-	// already appear on a paid order for the given owner in the given
-	// year. Used by SetDerivedLines to keep already-paid items off the
-	// open order so the same member or t-shirt isn't charged twice.
+	// PaidQuantityBySKU returns the total quantity per productSKU that already
+	// appears on a paid order for the given owner in the given year. Used by
+	// SetDerivedLines to bill by unit count: a team pays for a number of
+	// participation seats and t-shirts, and the people occupying those units
+	// may change, so the open order should only charge for units beyond the
+	// paid count — not re-charge whenever a specific member changes.
 	//
-	// Keys are encoded as productSKU + "\x00" + memberID. Cancelled and
-	// open orders are deliberately excluded; the contract is "paid".
-	PaidLineKeys(ctx context.Context, year types.YearSlug, ownerType types.TeamType, ownerID string) (map[string]bool, error)
+	// Cancelled and open orders are deliberately excluded; the contract is
+	// "paid".
+	PaidQuantityBySKU(ctx context.Context, year types.YearSlug, ownerType types.TeamType, ownerID string) (map[string]int, error)
 }
 
 type querier struct {
@@ -138,37 +140,39 @@ func (q *querier) ReservedQuantity(ctx context.Context, year types.YearSlug, pro
 	return int(qty.Int64), nil
 }
 
-// PaidLineKeys — see Queries.PaidLineKeys.
+// PaidQuantityBySKU — see Queries.PaidQuantityBySKU.
 //
-// Lines without a memberId are ignored: a paid line that can't be
-// attributed to a member can't be matched to a desired line either, so
-// including it would just be noise. In practice every line carries a
-// memberId (enforced by the commander), so the filter is defensive.
-func (q *querier) PaidLineKeys(ctx context.Context, year types.YearSlug, ownerType types.TeamType, ownerID string) (map[string]bool, error) {
+// Sums order_line.quantity per productSKU across the owner's paid orders.
+// This is the "paid units" (seats / t-shirts) count the open order bills
+// against; individual memberIds are irrelevant because a paid unit is
+// fungible — the member occupying a seat (or the size of a t-shirt) may
+// change without re-charging.
+func (q *querier) PaidQuantityBySKU(ctx context.Context, year types.YearSlug, ownerType types.TeamType, ownerID string) (map[string]int, error) {
 	rows, err := q.db.QueryContext(ctx,
-		`SELECT DISTINCT l.productSku, l.memberId
+		`SELECT l.productSku, COALESCE(SUM(l.quantity), 0)
 			FROM order_line l
 			JOIN orders o ON o.orderId = l.orderId
 			WHERE o.year = ? AND o.ownerType = ? AND o.ownerId = ? AND o.status = 'paid'
-			  AND l.memberId <> ''`,
+			GROUP BY l.productSku`,
 		year, string(ownerType), ownerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	keys := map[string]bool{}
+	qtys := map[string]int{}
 	for rows.Next() {
-		var sku, memberID string
-		if err := rows.Scan(&sku, &memberID); err != nil {
+		var sku string
+		var qty int
+		if err := rows.Scan(&sku, &qty); err != nil {
 			return nil, err
 		}
-		keys[sku+"\x00"+memberID] = true
+		qtys[sku] = qty
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return keys, nil
+	return qtys, nil
 }
 
 // scanRow is the small intersection of *sql.Row and *sql.Rows that scanOrder

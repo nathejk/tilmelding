@@ -53,7 +53,7 @@ func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) 
 			openOrder = o
 		}
 	}
-	if openOrder != nil && derivedLinesNeedSync(openOrder, desired) {
+	if openOrder != nil && app.derivedLinesNeedSync(r.Context(), openOrder, desired) {
 		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder.OrderID, desired); err == nil {
 			openOrder = o
 		} else {

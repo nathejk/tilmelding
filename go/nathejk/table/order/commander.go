@@ -179,26 +179,19 @@ func (c *commander) SetDerivedLines(ctx context.Context, orderID string, desired
 		return nil, ErrNotOpen
 	}
 
-	// Drop any (productSKU, memberID) that has already been paid for in a
-	// previous order owned by the same owner. Without this, a team that
-	// pays for N members and then adds an (N+1)-th would have the open
-	// order summarise all N+1 again and bill them twice for the first N.
-	// Cancelled and other open orders are not subtracted; only paid lines
-	// are immutable enough to dedupe against.
-	paid, err := c.q.PaidLineKeys(ctx, c.year, o.OwnerType, o.OwnerID)
+	// Bill by unit count, not by member identity. A team pays for a number of
+	// units per SKU (participation seats, t-shirts); the people occupying them
+	// may change over time. So the open order should only carry the desired
+	// lines *beyond* what has already been paid for that SKU. This makes a
+	// swapped member (delete + add within the paid count) cost nothing, and
+	// lets a t-shirt size change for free, while an (N+1)-th unit is still
+	// charged. Only paid orders count toward paidQty; cancelled and other open
+	// orders do not.
+	paidQty, err := c.q.PaidQuantityBySKU(ctx, c.year, o.OwnerType, o.OwnerID)
 	if err != nil {
 		return nil, err
 	}
-	if len(paid) > 0 {
-		filtered := make([]DesiredLine, 0, len(desired))
-		for _, d := range desired {
-			if paid[d.ProductSKU+"\x00"+d.MemberID] {
-				continue
-			}
-			filtered = append(filtered, d)
-		}
-		desired = filtered
-	}
+	desired = ApplyPaidOffset(desired, paidQty)
 
 	// Start from the existing manual lines (preserved across SetDerivedLines).
 	kept := make([]messages.NathejkOrder_Line, 0, len(o.Lines))
@@ -457,6 +450,39 @@ func (c *commander) publishLinesChanged(orderID string, lines []messages.Nathejk
 	msg := c.p.MessageFunc()(subj)
 	msg.SetBody(&body)
 	return c.p.Publish(msg)
+}
+
+// ApplyPaidOffset removes already-paid units from a desired line set so the
+// open order only carries (and bills) the units beyond what has already been
+// paid. paidQty is the paid quantity per productSKU (see
+// Queries.PaidQuantityBySKU).
+//
+// Billing is by *count*, not member identity: a team pays for a number of
+// participation seats and t-shirts, and the people occupying them may change.
+// So for each SKU we drop up to paidQty[sku] of the desired lines; whichever
+// lines survive are the ones charged. This is what makes a swapped member cost
+// nothing (delete + add within the paid count) and a t-shirt size change free,
+// while still charging the (N+1)-th unit.
+//
+// The function is pure so the show-path sync check and the SetDerivedLines
+// command compute the same target from the same input.
+func ApplyPaidOffset(desired []DesiredLine, paidQty map[string]int) []DesiredLine {
+	if len(paidQty) == 0 {
+		return desired
+	}
+	remaining := make(map[string]int, len(paidQty))
+	for sku, qty := range paidQty {
+		remaining[sku] = qty
+	}
+	filtered := make([]DesiredLine, 0, len(desired))
+	for _, d := range desired {
+		if remaining[d.ProductSKU] >= d.Quantity {
+			remaining[d.ProductSKU] -= d.Quantity
+			continue
+		}
+		filtered = append(filtered, d)
+	}
+	return filtered
 }
 
 // defaultLineID generates a stable LineID when a caller didn't provide one.

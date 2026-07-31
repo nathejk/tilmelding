@@ -81,7 +81,7 @@ func (app *application) showCrewHandler(w http.ResponseWriter, r *http.Request) 
 			openOrder = o
 		}
 	}
-	if openOrder != nil && derivedLinesNeedSync(openOrder, desired) {
+	if openOrder != nil && app.derivedLinesNeedSync(ctx, openOrder, desired) {
 		if o, err := app.setDerivedLinesAfterCreate(ctx, openOrder.OrderID, desired); err == nil {
 			openOrder = o
 		} else {

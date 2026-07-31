@@ -30,8 +30,9 @@ const (
 // migrateLegacyOrdersHandler backfills synthetic paid orders for teams
 // that paid through the legacy payment flow (payment.orderForeignKey =
 // teamId, orderType != 'order') but don't yet have a paid order in the
-// new order system. After running, PaidLineKeys correctly reports what
-// each team has already paid for and the open order won't double-bill.
+// new order system. After running, the paid-unit count per SKU correctly
+// reflects what each team has already paid for and the open order won't
+// double-bill.
 //
 // The handler is idempotent: teams that already have a paid order are
 // skipped. Calling it twice is safe.
@@ -219,8 +220,8 @@ func findLegacyTeams(ctx context.Context, db *sql.DB, year string) ([]legacyTeam
 // buildLinesForTeam constructs participation + optional t-shirt lines
 // for every current member of the team. Mirrors the derivedLinesFor*
 // pattern in the patrulje / klan / personnel handlers, including the
-// "derived:<sku>:<memberId>" lineId convention so SetDerivedLines later
-// dedupes against these via PaidLineKeys.
+// "derived:<sku>:<memberId>" lineId convention so the paid-unit count per
+// SKU that SetDerivedLines bills against is correct.
 //
 // Personnel signups (crew / gøgler) also flow through this: the
 // "team" is one person and the personnel projection is queried with
