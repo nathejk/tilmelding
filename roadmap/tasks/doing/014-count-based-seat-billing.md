@@ -1,8 +1,10 @@
 # 014 — Count-based billing for participation and t-shirts (seats)
 
-**Status:** open
+**Status:** doing
 **Priority:** high
 **Created:** 2026-07-31
+**Picked up by:** agent (opus)
+**Started:** 2026-07-31
 
 ## Description
 
@@ -54,3 +56,4 @@ Related files:
 ## Progress Log
 
 - 2026-07-31 10:00 — Task created from PRD 001.
+- 2026-07-31 10:10 — Picked up. Plan: add `PaidQuantityBySKU` to order Queries/querier; replace the `(sku, memberId)` `PaidLineKeys` filter in `SetDerivedLines` with a count-based drop (drop up to paidQty[sku] desired lines per SKU); remove now-unused `PaidLineKeys`. Verifies fcc870d1: 4 paid seats → 0 participation due, 4 t-shirts (0 paid) → 700 kr due.
