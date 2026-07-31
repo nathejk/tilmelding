@@ -1,8 +1,10 @@
 # 017 — Server-side member-count caps (max on add, block pay below min)
 
-**Status:** open
+**Status:** doing
 **Priority:** high
 **Created:** 2026-07-31
+**Picked up by:** agent (opus)
+**Started:** 2026-07-31
 
 ## Description
 
@@ -42,3 +44,4 @@ Related files:
 ## Progress Log
 
 - 2026-07-31 10:00 — Task created from PRD 001.
+- 2026-07-31 13:25 — Picked up. Plan: define patrulje/klan min-max consts (reuse in buildTeamConfig calls); enforce max in add member handlers (reject when active count >= max); enforce min on payment paths (updatePatrulje/updateKlan payment-link branch + PUT /api/pay/:id). Checking error-response helpers + the pay handler first.
