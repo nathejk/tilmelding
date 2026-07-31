@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -13,6 +14,14 @@ import (
 	"nathejk.dk/internal/payment/mobilepay"
 	"nathejk.dk/nathejk/table/order"
 	"nathejk.dk/nathejk/table/patrulje"
+)
+
+// Patrulje team-size bounds. min is the number of members required before a
+// team may pay; max is the largest roster allowed. Also fed into the show
+// endpoint's TeamConfig so the UI and the server agree.
+const (
+	patruljeMinMembers = 3
+	patruljeMaxMembers = 7
 )
 
 type TeamConfig struct {
@@ -109,7 +118,7 @@ func (app *application) showPatruljeHandler(w http.ResponseWriter, r *http.Reque
 		log.Printf("GetSpejdere %q", err)
 	}
 
-	config := app.buildTeamConfig(r.Context(), "participation.patrulje", 3, 7)
+	config := app.buildTeamConfig(r.Context(), "participation.patrulje", patruljeMinMembers, patruljeMaxMembers)
 	contact, _ := app.models.Teams.GetContact(teamID)
 
 	// Re-derive the open order's lines from the current member projection
@@ -204,8 +213,23 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 	}
 	log.Printf("order %s total=%d paid=%d due=%d", o.OrderID, o.TotalAmount, o.PaidAmount, o.DueAmount)
 
+	// Count the active members actually submitted (lag-free) to gate payment.
+	activeMembers := 0
+	for _, m := range input.Members {
+		if !m.Deleted {
+			activeMembers++
+		}
+	}
+
 	paymentLink := ""
-	if o.DueAmount > 0 {
+	paymentError := ""
+	switch {
+	case o.DueAmount <= 0:
+		// nothing to pay
+	case activeMembers < patruljeMinMembers:
+		// Block payment for a team below the minimum size: no link is issued.
+		paymentError = fmt.Sprintf("en patrulje skal have mindst %d spejdere for at kunne betale", patruljeMinMembers)
+	default:
 		signup, _ := app.models.Signup.GetByID(r.Context(), teamID)
 		if (input.Contact.Phone == "") && (signup != nil) && (signup.Phone != nil) {
 			input.Contact.Phone = *signup.Phone
@@ -221,7 +245,7 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", input.Contact.Phone, input.Contact.Email, teamUrl, o.OrderID, "order")
 	}
 	team, _ := app.models.Teams.GetPatrulje(teamID)
-	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "order": o, "paymentLink": paymentLink}, nil)
+	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "order": o, "paymentLink": paymentLink, "paymentError": paymentError}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
@@ -295,6 +319,15 @@ func (app *application) addPatruljeMemberHandler(w http.ResponseWriter, r *http.
 	}
 	if err := app.ReadJSON(w, r, &input); err != nil {
 		app.BadRequestResponse(w, r, err)
+		return
+	}
+
+	// Enforce the team maximum server-side. Count the current active members
+	// from the projection; reject the add if the team is already full.
+	if members, _, err := app.models.Members.GetSpejdere(data.Filters{TeamID: teamID}); err == nil && len(members) >= patruljeMaxMembers {
+		app.FailedValidationResponse(w, r, map[string]string{
+			"members": fmt.Sprintf("en patrulje kan højst have %d spejdere", patruljeMaxMembers),
+		})
 		return
 	}
 

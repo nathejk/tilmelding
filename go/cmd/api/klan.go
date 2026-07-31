@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -13,6 +14,14 @@ import (
 	"nathejk.dk/internal/payment/mobilepay"
 	"nathejk.dk/nathejk/table/klan"
 	"nathejk.dk/nathejk/table/order"
+)
+
+// Klan team-size bounds. min is the number of members required before a team
+// may pay; max is the largest roster allowed. Also fed into the show
+// endpoint's TeamConfig so the UI and the server agree.
+const (
+	klanMinMembers = 1
+	klanMaxMembers = 4
 )
 
 func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +47,7 @@ func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) 
 		log.Printf("GetSenior %q", err)
 	}
 
-	config := app.buildTeamConfig(r.Context(), "participation.klan", 1, 4)
+	config := app.buildTeamConfig(r.Context(), "participation.klan", klanMinMembers, klanMaxMembers)
 	//contact, _ := app.models.Teams.GetContact(teamId)
 
 	// Re-derive the open order's lines from the current member projection
@@ -232,8 +241,22 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 	}
 	log.Printf("klan order %s total=%d paid=%d due=%d", o.OrderID, o.TotalAmount, o.PaidAmount, o.DueAmount)
 
+	// Count the active seniors actually submitted (lag-free) to gate payment.
+	activeMembers := 0
+	for _, m := range seniors {
+		if !m.Deleted {
+			activeMembers++
+		}
+	}
+
 	paymentLink := ""
-	if o.DueAmount > 0 {
+	paymentError := ""
+	switch {
+	case o.DueAmount <= 0:
+		// nothing to pay
+	case activeMembers < klanMinMembers:
+		paymentError = fmt.Sprintf("en klan skal have mindst %d seniorer for at kunne betale", klanMinMembers)
+	default:
 		signup, _ := app.models.Signup.GetByID(r.Context(), teamID)
 
 		phone := types.PhoneNumber("")
@@ -251,7 +274,7 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", phone, email, teamUrl, o.OrderID, "order")
 	}
 	team, _ := app.models.Teams.GetKlan(teamID)
-	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "order": o, "paymentLink": paymentLink}, nil)
+	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "order": o, "paymentLink": paymentLink, "paymentError": paymentError}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
@@ -305,6 +328,14 @@ func (app *application) addKlanMemberHandler(w http.ResponseWriter, r *http.Requ
 	}
 	if err := app.ReadJSON(w, r, &input); err != nil {
 		app.BadRequestResponse(w, r, err)
+		return
+	}
+
+	// Enforce the team maximum server-side.
+	if members, _, err := app.models.Members.GetSeniore(data.Filters{TeamID: teamID}); err == nil && len(members) >= klanMaxMembers {
+		app.FailedValidationResponse(w, r, map[string]string{
+			"members": fmt.Sprintf("en klan kan højst have %d seniorer", klanMaxMembers),
+		})
 		return
 	}
 
