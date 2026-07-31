@@ -18,6 +18,19 @@ type Commands interface {
 	UpdateMembers(context.Context, types.TeamID, Team, []Senior) error
 	AssignToLok(context.Context, types.TeamID, string) error
 	Delete(context.Context, types.TeamID) error
+
+	// AddMember issues a memberId (if the caller didn't supply one) and
+	// publishes a single senior.updated event carrying the teamId so the
+	// projector upserts a new row. Returns the assigned memberId. This is the
+	// only member command that creates an identity.
+	AddMember(ctx context.Context, teamID types.TeamID, m Senior) (types.MemberID, error)
+
+	// UpdateMember publishes a single senior.updated event WITHOUT a teamId,
+	// so the projector only UPDATEs an existing row and never creates one.
+	UpdateMember(ctx context.Context, teamID types.TeamID, m Senior) error
+
+	// DeleteMember publishes a single senior.deleted event.
+	DeleteMember(ctx context.Context, teamID types.TeamID, memberID types.MemberID) error
 }
 
 type commander struct {
@@ -164,6 +177,71 @@ func (c *commander) Delete(ctx context.Context, teamID types.TeamID) error {
 		return err
 	}
 	return nil
+}
+
+// AddMember — see Commands.AddMember.
+func (c *commander) AddMember(ctx context.Context, teamID types.TeamID, m Senior) (types.MemberID, error) {
+	if m.MemberID == "" {
+		m.MemberID = types.MemberID(uuid.New().String())
+	}
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.updated", "2026", m.MemberID)))
+	// Include teamId so the senior projector's two-phase decode does an
+	// INSERT IGNORE for the brand-new member (see senior/consumer.go). This
+	// is the create path.
+	msg.SetBody(&struct {
+		messages.NathejkSeniorUpdated
+		TeamID types.TeamID `json:"teamId"`
+	}{
+		NathejkSeniorUpdated: newSeniorUpdated(m),
+		TeamID:               teamID,
+	})
+	if err := c.p.Publish(msg); err != nil {
+		return "", err
+	}
+	return m.MemberID, nil
+}
+
+// UpdateMember — see Commands.UpdateMember.
+func (c *commander) UpdateMember(ctx context.Context, teamID types.TeamID, m Senior) error {
+	if m.MemberID == "" {
+		return fmt.Errorf("UpdateMember: empty memberId")
+	}
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.updated", "2026", m.MemberID)))
+	// No teamId in the body: the projector skips its INSERT IGNORE branch and
+	// performs a pure UPDATE, so a stale/unknown memberId is a no-op rather
+	// than resurrecting a member. Update never creates an identity.
+	body := newSeniorUpdated(m)
+	msg.SetBody(&body)
+	return c.p.Publish(msg)
+}
+
+// DeleteMember — see Commands.DeleteMember.
+func (c *commander) DeleteMember(ctx context.Context, teamID types.TeamID, memberID types.MemberID) error {
+	if memberID == "" {
+		return fmt.Errorf("DeleteMember: empty memberId")
+	}
+	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.deleted", "2026", memberID)))
+	msg.SetBody(&messages.NathejkMemberDeleted{
+		MemberID: memberID,
+		TeamID:   teamID,
+	})
+	return c.p.Publish(msg)
+}
+
+// newSeniorUpdated projects a Senior command value into the wire event body
+// shared by UpdateMembers / AddMember / UpdateMember.
+func newSeniorUpdated(m Senior) messages.NathejkSeniorUpdated {
+	return messages.NathejkSeniorUpdated{
+		MemberID:   m.MemberID,
+		Name:       m.Name,
+		Address:    m.Address,
+		PostalCode: m.PostalCode,
+		Email:      m.Email,
+		Phone:      m.Phone,
+		BirthDate:  m.Birthday,
+		TShirtSize: m.TShirtSize,
+		Diet:       m.Diet,
+	}
 }
 
 // Team is the team-level slice of an UpdateMembers command.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -252,6 +253,147 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 	team, _ := app.models.Teams.GetKlan(teamID)
 	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "order": o, "paymentLink": paymentLink}, nil)
 	if err != nil {
+		app.ServerErrorResponse(w, r, err)
+	}
+}
+
+// rederiveKlanOrder recomputes the open order's derived lines from the current
+// senior projection, with the given member's lines replaced (add/update) or
+// removed (delete via a nil replacement). Mirrors rederivePatruljeOrder.
+func (app *application) rederiveKlanOrder(ctx context.Context, teamID types.TeamID, changedMemberID string, replacement []order.DesiredLine) (*order.Order, error) {
+	members, _, err := app.models.Members.GetSeniore(data.Filters{TeamID: teamID})
+	if err != nil {
+		log.Printf("GetSeniore %q", err)
+	}
+	desired := replaceMemberLines(derivedLinesForKlanSeniore(members), changedMemberID, replacement)
+	o, err := app.commands.Order.EnsureOpenOrder(ctx, types.TeamTypeKlan, string(teamID))
+	if err != nil {
+		return nil, err
+	}
+	return app.setDerivedLinesAfterCreate(ctx, o.OrderID, desired)
+}
+
+// addKlanMemberHandler adds a single member (senior) to a klan team.
+//
+// @Summary      Add a member to a klan team
+// @Description  Issues a server-side memberId, persists the member (one create event), recomputes the open order, and returns the created member (with its memberId) plus the order.
+// @Tags         klan
+// @Accept       json
+// @Produce      json
+// @Param        id     path  string                      true  "Team ID"
+// @Param        body   body  object{member=klan.Senior}    true  "New member"
+// @Success      200    {object}  object{member=klan.Senior,order=order.Order}
+// @Failure      400    {object}  object{error=string}
+// @Failure      404    {object}  object{error=string}
+// @Router       /api/klan/{id}/member [post]
+func (app *application) addKlanMemberHandler(w http.ResponseWriter, r *http.Request) {
+	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
+	if teamID == "" {
+		app.NotFoundResponse(w, r)
+		return
+	}
+	if _, err := app.models.Teams.GetKlan(teamID); err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.NotFoundResponse(w, r)
+		} else {
+			app.ServerErrorResponse(w, r, err)
+		}
+		return
+	}
+	var input struct {
+		Member klan.Senior `json:"member"`
+	}
+	if err := app.ReadJSON(w, r, &input); err != nil {
+		app.BadRequestResponse(w, r, err)
+		return
+	}
+
+	memberID, err := app.commands.Klan.AddMember(r.Context(), teamID, input.Member)
+	if err != nil {
+		app.ServerErrorResponse(w, r, err)
+		return
+	}
+	input.Member.MemberID = memberID
+
+	o, err := app.rederiveKlanOrder(r.Context(), teamID, string(memberID), derivedLinesForKlan([]klan.Senior{input.Member}))
+	if err != nil {
+		log.Printf("rederiveKlanOrder %q", err)
+	}
+	if err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"member": input.Member, "order": o}, nil); err != nil {
+		app.ServerErrorResponse(w, r, err)
+	}
+}
+
+// updateKlanMemberHandler updates a single existing member (senior).
+//
+// @Summary      Update a klan member
+// @Description  Publishes one update event for the member (never creates an identity) and recomputes the open order.
+// @Tags         klan
+// @Accept       json
+// @Produce      json
+// @Param        id        path  string                      true  "Team ID"
+// @Param        memberId  path  string                      true  "Member ID"
+// @Param        body      body  object{member=klan.Senior}    true  "Member fields"
+// @Success      200       {object}  object{member=klan.Senior,order=order.Order}
+// @Failure      400       {object}  object{error=string}
+// @Failure      404       {object}  object{error=string}
+// @Router       /api/klan/{id}/member/{memberId} [put]
+func (app *application) updateKlanMemberHandler(w http.ResponseWriter, r *http.Request) {
+	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
+	memberID := types.MemberID(app.ReadNamedParam(r, "memberId"))
+	if teamID == "" || memberID == "" {
+		app.NotFoundResponse(w, r)
+		return
+	}
+	var input struct {
+		Member klan.Senior `json:"member"`
+	}
+	if err := app.ReadJSON(w, r, &input); err != nil {
+		app.BadRequestResponse(w, r, err)
+		return
+	}
+	input.Member.MemberID = memberID // path is authoritative
+
+	if err := app.commands.Klan.UpdateMember(r.Context(), teamID, input.Member); err != nil {
+		app.ServerErrorResponse(w, r, err)
+		return
+	}
+	o, err := app.rederiveKlanOrder(r.Context(), teamID, string(memberID), derivedLinesForKlan([]klan.Senior{input.Member}))
+	if err != nil {
+		log.Printf("rederiveKlanOrder %q", err)
+	}
+	if err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"member": input.Member, "order": o}, nil); err != nil {
+		app.ServerErrorResponse(w, r, err)
+	}
+}
+
+// deleteKlanMemberHandler removes a single member (senior).
+//
+// @Summary      Delete a klan member
+// @Description  Publishes one delete event, vacating the member's seat, and recomputes the open order.
+// @Tags         klan
+// @Produce      json
+// @Param        id        path  string  true  "Team ID"
+// @Param        memberId  path  string  true  "Member ID"
+// @Success      200       {object}  object{order=order.Order}
+// @Failure      404       {object}  object{error=string}
+// @Router       /api/klan/{id}/member/{memberId} [delete]
+func (app *application) deleteKlanMemberHandler(w http.ResponseWriter, r *http.Request) {
+	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
+	memberID := types.MemberID(app.ReadNamedParam(r, "memberId"))
+	if teamID == "" || memberID == "" {
+		app.NotFoundResponse(w, r)
+		return
+	}
+	if err := app.commands.Klan.DeleteMember(r.Context(), teamID, memberID); err != nil {
+		app.ServerErrorResponse(w, r, err)
+		return
+	}
+	o, err := app.rederiveKlanOrder(r.Context(), teamID, string(memberID), nil)
+	if err != nil {
+		log.Printf("rederiveKlanOrder %q", err)
+	}
+	if err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"order": o}, nil); err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
 }

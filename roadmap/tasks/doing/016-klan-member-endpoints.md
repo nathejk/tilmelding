@@ -1,8 +1,10 @@
 # 016 — Klan/senior member endpoints (add/edit/delete)
 
-**Status:** open
+**Status:** doing
 **Priority:** high
 **Created:** 2026-07-31
+**Picked up by:** agent (opus)
+**Started:** 2026-07-31
 
 ## Description
 
@@ -49,3 +51,4 @@ Related files:
 ## Progress Log
 
 - 2026-07-31 10:00 — Task created from PRD 001.
+- 2026-07-31 13:05 — Picked up. Plan: mirror task 015 for klan/senior — add AddMember/UpdateMember/DeleteMember to klan commands (senior events), add POST/PUT/DELETE /api/klan/{id}/member[/{memberId}] handlers re-deriving the order, register routes, OpenAPI annotations. Confirming senior projector parity first.
