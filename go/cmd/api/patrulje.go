@@ -227,6 +227,167 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// replaceMemberLines returns base with any lines belonging to memberID removed,
+// then the replacement lines appended. Used to re-derive a patrulje order after
+// a single-member add/update/delete without waiting for the member projection
+// to catch up: the change is applied on top of the (possibly stale) projection
+// so the recomputed order is correct immediately.
+//
+//   - add / update: replacement = the member's derived lines (participation +
+//     optional t-shirt); any stale lines for that member are dropped first.
+//   - delete: replacement = nil, so the member's lines are simply removed.
+func replaceMemberLines(base []order.DesiredLine, memberID string, replacement []order.DesiredLine) []order.DesiredLine {
+	out := make([]order.DesiredLine, 0, len(base)+len(replacement))
+	for _, l := range base {
+		if l.MemberID == memberID {
+			continue
+		}
+		out = append(out, l)
+	}
+	return append(out, replacement...)
+}
+
+// rederivePatruljeOrder recomputes the open order's derived lines from the
+// current member projection, with the given member's lines replaced (add/update)
+// or removed (delete via a nil replacement). Ensures an open order exists first.
+func (app *application) rederivePatruljeOrder(ctx context.Context, teamID types.TeamID, changedMemberID string, replacement []order.DesiredLine) (*order.Order, error) {
+	members, _, err := app.models.Members.GetSpejdere(data.Filters{TeamID: teamID})
+	if err != nil {
+		log.Printf("GetSpejdere %q", err)
+	}
+	desired := replaceMemberLines(derivedLinesForPatruljeSpejdere(members), changedMemberID, replacement)
+	o, err := app.commands.Order.EnsureOpenOrder(ctx, types.TeamTypePatrulje, string(teamID))
+	if err != nil {
+		return nil, err
+	}
+	return app.setDerivedLinesAfterCreate(ctx, o.OrderID, desired)
+}
+
+// addPatruljeMemberHandler adds a single member to a patrulje team.
+//
+// @Summary      Add a member to a patrulje team
+// @Description  Issues a server-side memberId, persists the member (one create event), recomputes the open order, and returns the created member (with its memberId) plus the order.
+// @Tags         patrulje
+// @Accept       json
+// @Produce      json
+// @Param        id     path  string                         true  "Team ID"
+// @Param        body   body  object{member=patrulje.Spejder}  true  "New member"
+// @Success      200    {object}  object{member=patrulje.Spejder,order=order.Order}
+// @Failure      400    {object}  object{error=string}
+// @Failure      404    {object}  object{error=string}
+// @Router       /api/patrulje/{id}/member [post]
+func (app *application) addPatruljeMemberHandler(w http.ResponseWriter, r *http.Request) {
+	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
+	if teamID == "" {
+		app.NotFoundResponse(w, r)
+		return
+	}
+	if _, err := app.models.Teams.GetPatrulje(teamID); err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.NotFoundResponse(w, r)
+		} else {
+			app.ServerErrorResponse(w, r, err)
+		}
+		return
+	}
+	var input struct {
+		Member patrulje.Spejder `json:"member"`
+	}
+	if err := app.ReadJSON(w, r, &input); err != nil {
+		app.BadRequestResponse(w, r, err)
+		return
+	}
+
+	memberID, err := app.commands.Patrulje.AddMember(r.Context(), teamID, input.Member)
+	if err != nil {
+		app.ServerErrorResponse(w, r, err)
+		return
+	}
+	input.Member.MemberID = memberID
+
+	o, err := app.rederivePatruljeOrder(r.Context(), teamID, string(memberID), derivedLinesForPatrulje([]patrulje.Spejder{input.Member}))
+	if err != nil {
+		log.Printf("rederivePatruljeOrder %q", err)
+	}
+	if err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"member": input.Member, "order": o}, nil); err != nil {
+		app.ServerErrorResponse(w, r, err)
+	}
+}
+
+// updatePatruljeMemberHandler updates a single existing member.
+//
+// @Summary      Update a patrulje member
+// @Description  Publishes one update event for the member (never creates an identity) and recomputes the open order.
+// @Tags         patrulje
+// @Accept       json
+// @Produce      json
+// @Param        id        path  string                         true  "Team ID"
+// @Param        memberId  path  string                         true  "Member ID"
+// @Param        body      body  object{member=patrulje.Spejder}  true  "Member fields"
+// @Success      200       {object}  object{member=patrulje.Spejder,order=order.Order}
+// @Failure      400       {object}  object{error=string}
+// @Failure      404       {object}  object{error=string}
+// @Router       /api/patrulje/{id}/member/{memberId} [put]
+func (app *application) updatePatruljeMemberHandler(w http.ResponseWriter, r *http.Request) {
+	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
+	memberID := types.MemberID(app.ReadNamedParam(r, "memberId"))
+	if teamID == "" || memberID == "" {
+		app.NotFoundResponse(w, r)
+		return
+	}
+	var input struct {
+		Member patrulje.Spejder `json:"member"`
+	}
+	if err := app.ReadJSON(w, r, &input); err != nil {
+		app.BadRequestResponse(w, r, err)
+		return
+	}
+	input.Member.MemberID = memberID // path is authoritative
+
+	if err := app.commands.Patrulje.UpdateMember(r.Context(), teamID, input.Member); err != nil {
+		app.ServerErrorResponse(w, r, err)
+		return
+	}
+	o, err := app.rederivePatruljeOrder(r.Context(), teamID, string(memberID), derivedLinesForPatrulje([]patrulje.Spejder{input.Member}))
+	if err != nil {
+		log.Printf("rederivePatruljeOrder %q", err)
+	}
+	if err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"member": input.Member, "order": o}, nil); err != nil {
+		app.ServerErrorResponse(w, r, err)
+	}
+}
+
+// deletePatruljeMemberHandler removes a single member.
+//
+// @Summary      Delete a patrulje member
+// @Description  Publishes one delete event, vacating the member's seat, and recomputes the open order.
+// @Tags         patrulje
+// @Produce      json
+// @Param        id        path  string  true  "Team ID"
+// @Param        memberId  path  string  true  "Member ID"
+// @Success      200       {object}  object{order=order.Order}
+// @Failure      404       {object}  object{error=string}
+// @Router       /api/patrulje/{id}/member/{memberId} [delete]
+func (app *application) deletePatruljeMemberHandler(w http.ResponseWriter, r *http.Request) {
+	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
+	memberID := types.MemberID(app.ReadNamedParam(r, "memberId"))
+	if teamID == "" || memberID == "" {
+		app.NotFoundResponse(w, r)
+		return
+	}
+	if err := app.commands.Patrulje.DeleteMember(r.Context(), teamID, memberID); err != nil {
+		app.ServerErrorResponse(w, r, err)
+		return
+	}
+	o, err := app.rederivePatruljeOrder(r.Context(), teamID, string(memberID), nil)
+	if err != nil {
+		log.Printf("rederivePatruljeOrder %q", err)
+	}
+	if err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"order": o}, nil); err != nil {
+		app.ServerErrorResponse(w, r, err)
+	}
+}
+
 // derivedLinesForPatrulje translates the team-form member list into the
 // derived order lines the patrulje order should hold. Two lines per active
 // member at most:
