@@ -1,8 +1,10 @@
 # 019 — Frontend: migrate KlanView to member endpoints
 
-**Status:** open
+**Status:** doing
 **Priority:** high
 **Created:** 2026-07-31
+**Picked up by:** agent (opus)
+**Started:** 2026-07-31
 
 ## Description
 
@@ -34,3 +36,4 @@ Related files:
 ## Progress Log
 
 - 2026-07-31 10:00 — Task created from PRD 001.
+- 2026-07-31 14:10 — Picked up. Plan: mirror task 018 for KlanView.vue, plus map the FE `vegitarian` bool ↔ `diet` string when calling the klan member endpoints.
