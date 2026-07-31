@@ -1,8 +1,10 @@
 # 020 — Remove member lifecycle from roster PUT handlers
 
-**Status:** open
+**Status:** doing
 **Priority:** high
 **Created:** 2026-07-31
+**Picked up by:** agent (opus)
+**Started:** 2026-07-31
 
 ## Description
 
@@ -39,3 +41,4 @@ Related files:
 ## Progress Log
 
 - 2026-07-31 10:00 — Task created from PRD 001.
+- 2026-07-31 14:30 — Picked up. Plan: patrulje — make Update team/contact-only (drop members param, loop, uuid minting); handler re-derives order from projection; FE putState drops members. Klan — make the roster PUT team/status-only (drop member loop + placeholder rows + minting from UpdateMembers); FE putState drops members. Checking callers first.
