@@ -1,10 +1,11 @@
 # 016 — Klan/senior member endpoints (add/edit/delete)
 
-**Status:** doing
+**Status:** done
 **Priority:** high
 **Created:** 2026-07-31
 **Picked up by:** agent (opus)
 **Started:** 2026-07-31
+**Completed:** 2026-07-31
 
 ## Description
 
@@ -38,17 +39,21 @@ Related files:
 
 ## Acceptance Criteria
 
-- [ ] `POST /api/klan/{teamId}/member` issues a `memberId`, emits one create
+- [x] `POST /api/klan/{teamId}/member` issues a `memberId`, emits one create
       event, returns the created member with its id.
-- [ ] `PUT /api/klan/{teamId}/member/{memberId}` emits one update event, never
+- [x] `PUT /api/klan/{teamId}/member/{memberId}` emits one update event, never
       creates.
-- [ ] `DELETE /api/klan/{teamId}/member/{memberId}` emits one delete event.
-- [ ] Senior projector confirmed to insert/update/delete by `memberId`.
-- [ ] Member add/delete re-derives the open order (count-based).
-- [ ] OpenAPI annotations added for all three endpoints.
-- [ ] `go build` and `go vet` clean.
+- [x] `DELETE /api/klan/{teamId}/member/{memberId}` emits one delete event.
+- [x] Senior projector confirmed to insert/update/delete by `memberId`.
+- [x] Member add/delete re-derives the open order (count-based).
+- [x] OpenAPI annotations added for all three endpoints.
+- [x] `go build` and `go vet` clean.
 
 ## Progress Log
 
 - 2026-07-31 10:00 — Task created from PRD 001.
 - 2026-07-31 13:05 — Picked up. Plan: mirror task 015 for klan/senior — add AddMember/UpdateMember/DeleteMember to klan commands (senior events), add POST/PUT/DELETE /api/klan/{id}/member[/{memberId}] handlers re-deriving the order, register routes, OpenAPI annotations. Confirming senior projector parity first.
+- 2026-07-31 13:10 — Confirmed senior projector (senior/consumer.go) is identical to spejder: INSERT IGNORE when teamId present + UPDATE by memberId; DELETE by memberId. Same command pattern applies.
+- 2026-07-31 13:15 — Added AddMember/UpdateMember/DeleteMember + `newSeniorUpdated` to klan/commands.go; added handlers + `rederiveKlanOrder` in klan.go (reusing the shared `replaceMemberLines` from patrulje.go); registered 3 routes with swaggo annotations. build/vet/staticcheck clean.
+- 2026-07-31 13:20 — ✅ Verified against dev klan team 753e8354: POST +1 row returning member+order, PUT changed tshirt l→m with NO new row (still 127), DELETE -1 row. All criteria met.
+- 2026-07-31 13:21 — Completed. Klan `reservedMemberCount` is legacy naming for seats (task 014 already bills klan participation by count); klan roster PUT still handles members until task 020.
