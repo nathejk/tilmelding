@@ -254,6 +254,14 @@ const tshirtSizeLabel = (slug) => {
   }
   return ''
 }
+// birthdayLabel renders a stored ISO-8601 birthday as "d/m yyyy" (local date),
+// e.g. 2010-03-05T00:00:00Z → "5/3 2010".
+const birthdayLabel = (value) => {
+  if (!value) return ''
+  const d = new Date(value)
+  if (isNaN(d.getTime())) return value
+  return `${d.getDate()}/${d.getMonth() + 1} ${d.getFullYear()}`
+}
 </script>
 
 <template>
@@ -395,7 +403,9 @@ const tshirtSizeLabel = (slug) => {
               </p>
             </template>
           </Column>
-          <Column field="birthday" header="Fødselsdag"></Column>
+          <Column field="birthday" header="Fødselsdag">
+            <template #body="row">{{ birthdayLabel(row.data.birthday) }}</template>
+          </Column>
           <Column field="tshirt" header="T-Shirt">
             <template #body="row" style="font-size: 0.8rem">
               {{ tshirtSizeLabel(row.data.tshirtSize) }}
