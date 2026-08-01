@@ -1,8 +1,10 @@
 # 021 — Tests: seat reuse, one-event-per-action, idempotency, caps
 
-**Status:** open
+**Status:** doing
 **Priority:** medium
 **Created:** 2026-07-31
+**Picked up by:** agent (opus)
+**Started:** 2026-07-31
 
 ## Description
 
@@ -42,3 +44,4 @@ Related files:
 ## Progress Log
 
 - 2026-07-31 10:00 — Task created from PRD 001.
+- 2026-07-31 15:05 — Picked up. Plan: table-driven tests for the pure billing/reconciliation logic (order.ApplyPaidOffset: seat reuse, +1 charged, t-shirt count, free size change; replaceMemberLines: add/update/delete). Then, if the stream Publisher is easily fakeable, command-level one-event-per-action tests. Inspecting stream interfaces first.
