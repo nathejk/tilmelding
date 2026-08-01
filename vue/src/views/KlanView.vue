@@ -166,8 +166,7 @@ const putState = async () => {
   const headers = { 'Content-Type': 'application/json' }
   const body = JSON.stringify({
     team: team.value,
-    contact: contact.value,
-    members: members.value
+    contact: contact.value
   })
   const response = await fetch('/api/klan/' + props.teamId, {
     method: 'PUT',

@@ -15,7 +15,7 @@ import (
 type Commands interface {
 	RequestMemberCount(context.Context, types.YearSlug, types.TeamID, uint32) (uint32, error)
 	Update(context.Context, types.TeamID, UpdateCommand) error
-	UpdateMembers(context.Context, types.TeamID, Team, []Senior) error
+	UpdateTeam(context.Context, types.TeamID, Team) error
 	AssignToLok(context.Context, types.TeamID, string) error
 	Delete(context.Context, types.TeamID) error
 
@@ -268,15 +268,13 @@ type Senior struct {
 	TShirtSize string             `json:"tshirtSize"`
 }
 
-// UpdateMembers projects the team form into the klan-side write events:
-// one NathejkKlanUpdated for the team slice, optional status transitions
-// when the global senior cap is reached, and one NathejkSeniorUpdated
-// (or NathejkMemberDeleted) per member.
-//
-// Members slice may be empty; in that case, MemberCount placeholder rows
-// are emitted so the projection can grow to the requested size before any
-// senior identities are filled in.
-func (c *commander) UpdateMembers(ctx context.Context, teamID types.TeamID, team Team, members []Senior) error {
+// UpdateTeam projects the team-level slice of a klan save into write events:
+// one NathejkKlanUpdated for the team fields, plus the status transitions that
+// depend on the global senior cap. Members are NOT touched here — their
+// lifecycle is owned by the dedicated AddMember / UpdateMember / DeleteMember
+// commands, so a routine team save can never create or delete a senior
+// identity (and the old memberCount placeholder rows are gone).
+func (c *commander) UpdateTeam(ctx context.Context, teamID types.TeamID, team Team) error {
 	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.updated", "2026", teamID)))
 	msg.SetBody(&messages.NathejkKlanUpdated{
 		TeamID:    teamID,
@@ -311,61 +309,5 @@ func (c *commander) UpdateMembers(ctx context.Context, teamID types.TeamID, team
 			return err
 		}
 	}
-
-	if len(members) == 0 {
-		for i := 0; i < team.MemberCount; i++ {
-			members = append(members, Senior{})
-		}
-	}
-
-	for i := range members {
-		m := &members[i]
-		if m.Deleted {
-			msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.deleted", "2026", m.MemberID)))
-			msg.SetBody(&messages.NathejkMemberDeleted{
-				MemberID: m.MemberID,
-				TeamID:   teamID,
-			})
-			if err := c.p.Publish(msg); err != nil {
-				return err
-			}
-			continue
-		}
-
-		// Assign a fresh ID to brand-new members. Mutating through the
-		// slice index (not the loop copy) so the caller's slice carries
-		// the assigned IDs back — derivedLinesForKlan needs them on the
-		// same slice to key the order lines by memberId.
-		if m.MemberID == "" {
-			m.MemberID = types.MemberID(uuid.New().String())
-		}
-		msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.updated", "2026", m.MemberID)))
-		// Include teamId in the body so the senior projector's two-phase
-		// decode (see senior/consumer.go) can do an INSERT IGNORE for
-		// brand-new members. Without it the row is never created and the
-		// subsequent UPDATE matches zero rows, leaving order lines that
-		// reference a senior the projection never knew about.
-		msg.SetBody(&struct {
-			messages.NathejkSeniorUpdated
-			TeamID types.TeamID `json:"teamId"`
-		}{
-			NathejkSeniorUpdated: messages.NathejkSeniorUpdated{
-				MemberID:   m.MemberID,
-				Name:       m.Name,
-				Address:    m.Address,
-				PostalCode: m.PostalCode,
-				Email:      m.Email,
-				Phone:      m.Phone,
-				BirthDate:  m.Birthday,
-				TShirtSize: m.TShirtSize,
-				Diet:       m.Diet,
-			},
-			TeamID: teamID,
-		})
-		if err := c.p.Publish(msg); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }

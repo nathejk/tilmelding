@@ -170,44 +170,12 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
 	var input struct {
-		Team    klan.Team `json:"team"`
-		Members []struct {
-			MemberID   types.MemberID     `json:"memberId"`
-			Deleted    bool               `json:"deleted"`
-			Name       string             `json:"name"`
-			Address    string             `json:"address"`
-			PostalCode string             `json:"postalCode"`
-			Email      types.EmailAddress `json:"email"`
-			Phone      types.PhoneNumber  `json:"phone"`
-			Birthday   types.Date         `json:"birthday"`
-			Vegitarian bool               `json:"vegitarian"`
-			TShirtSize string             `json:"tshirtSize"`
-		} `json:"members"`
+		Team klan.Team `json:"team"`
 	}
 	if err := app.ReadJSON(w, r, &input); err != nil {
 		log.Printf("ReadJSON %q", err)
 		app.BadRequestResponse(w, r, err)
 		return
-	}
-
-	var seniors []klan.Senior
-	for _, m := range input.Members {
-		diet := ""
-		if m.Vegitarian {
-			diet = "vegetar"
-		}
-		seniors = append(seniors, klan.Senior{
-			MemberID:   m.MemberID,
-			Deleted:    m.Deleted,
-			Name:       m.Name,
-			Address:    m.Address,
-			PostalCode: m.PostalCode,
-			Email:      m.Email,
-			Phone:      m.Phone,
-			Birthday:   m.Birthday,
-			TShirtSize: m.TShirtSize,
-			Diet:       diet,
-		})
 	}
 	_, err := app.models.Teams.GetKlan(teamID)
 	if err != nil {
@@ -215,46 +183,48 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		app.BadRequestResponse(w, r, err)
 		return
 	}
-	err = app.commands.Klan.UpdateMembers(r.Context(), teamID, input.Team, seniors)
+	// Team + status only. Seniors are managed through the dedicated member
+	// endpoints, so this save can never create or delete a senior identity.
+	err = app.commands.Klan.UpdateTeam(r.Context(), teamID, input.Team)
 	if err != nil {
 		log.Printf("UpdateKlan  %q", err)
 		app.BadRequestResponse(w, r, err)
 		return
 	}
 
-	// Project members into derived order lines (one participation +
-	// optional t-shirt per active senior, keyed by memberId). This
-	// supersedes any reservation-only lines created earlier in
-	// requestSeatHandler — same SetDerivedLines call replaces them.
-	desired := derivedLinesForKlan(seniors)
-
-	o, err := app.commands.Order.EnsureOpenOrder(r.Context(), types.TeamTypeKlan, string(teamID))
+	// Re-derive the open order from the current senior projection (self-heal).
+	members, _, err := app.models.Members.GetSeniore(data.Filters{TeamID: teamID})
 	if err != nil {
-		app.ServerErrorResponse(w, r, err)
-		return
+		log.Printf("GetSeniore %q", err)
 	}
-	o, err = app.commands.Order.SetDerivedLines(r.Context(), o.OrderID, desired)
-	if err != nil {
-		log.Printf("SetDerivedLines %q", err)
-		app.BadRequestResponse(w, r, err)
-		return
-	}
-	log.Printf("klan order %s total=%d paid=%d due=%d", o.OrderID, o.TotalAmount, o.PaidAmount, o.DueAmount)
-
-	// Count the active seniors actually submitted (lag-free) to gate payment.
-	activeMembers := 0
-	for _, m := range seniors {
-		if !m.Deleted {
-			activeMembers++
+	desired := derivedLinesForKlanSeniore(members)
+	openOrder, _ := app.loadOrders(r.Context(), types.TeamTypeKlan, string(teamID))
+	if openOrder == nil && len(desired) > 0 {
+		if o, err := app.commands.Order.EnsureOpenOrder(r.Context(), types.TeamTypeKlan, string(teamID)); err == nil {
+			openOrder = o
 		}
+	}
+	if openOrder != nil && app.derivedLinesNeedSync(r.Context(), openOrder, desired) {
+		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder.OrderID, desired); err == nil {
+			openOrder = o
+		} else {
+			log.Printf("setDerivedLinesAfterCreate %s: %v", openOrder.OrderID, err)
+		}
+	}
+
+	due := 0
+	orderID := ""
+	if openOrder != nil {
+		due = openOrder.DueAmount
+		orderID = openOrder.OrderID
 	}
 
 	paymentLink := ""
 	paymentError := ""
 	switch {
-	case o.DueAmount <= 0:
+	case due <= 0:
 		// nothing to pay
-	case activeMembers < klanMinMembers:
+	case len(members) < klanMinMembers:
 		paymentError = fmt.Sprintf("en klan skal have mindst %d seniorer for at kunne betale", klanMinMembers)
 	default:
 		signup, _ := app.models.Signup.GetByID(r.Context(), teamID)
@@ -268,13 +238,13 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		if (signup != nil) && (signup.Email != nil) {
 			email = *signup.Email
 		}
-		amount := mobilepay.Amount{Value: int64(o.DueAmount), Currency: mobilepay.Currency(types.CurrencyDKK)}
+		amount := mobilepay.Amount{Value: int64(due), Currency: mobilepay.Currency(types.CurrencyDKK)}
 		teamUrl := "https://tilmelding.nathejk.dk/klan/" + string(teamID)
 
-		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", phone, email, teamUrl, o.OrderID, "order")
+		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", phone, email, teamUrl, orderID, "order")
 	}
 	team, _ := app.models.Teams.GetKlan(teamID)
-	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "order": o, "paymentLink": paymentLink, "paymentError": paymentError}, nil)
+	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "order": openOrder, "paymentLink": paymentLink, "paymentError": paymentError}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}

@@ -171,9 +171,8 @@ func (app *application) assignNumberHandler(w http.ResponseWriter, r *http.Reque
 func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
 	var input struct {
-		Team    patrulje.Team      `json:"team"`
-		Contact patrulje.Contact   `json:"contact"`
-		Members []patrulje.Spejder `json:"members"`
+		Team    patrulje.Team    `json:"team"`
+		Contact patrulje.Contact `json:"contact"`
 	}
 	if err := app.ReadJSON(w, r, &input); err != nil {
 		log.Printf("ReadJSON %q", err)
@@ -186,47 +185,49 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 		app.BadRequestResponse(w, r, err)
 		return
 	}
-	err = app.commands.Patrulje.Update(r.Context(), teamID, input.Team, input.Contact, input.Members)
+	// Team + contact only. Members are managed through the dedicated member
+	// endpoints, so this save can never create or delete a member identity.
+	err = app.commands.Patrulje.Update(r.Context(), teamID, input.Team, input.Contact)
 	if err != nil {
 		log.Printf("UpdatePatrulje  %q", err)
 		app.BadRequestResponse(w, r, err)
 		return
 	}
 
-	// Project the team form into derived order lines: one participation line
-	// per active member, plus a t-shirt line per member who picked a size.
-	// Lines are keyed by memberId so removing a member from the form
-	// naturally removes their lines on the next SetDerivedLines.
-	desired := derivedLinesForPatrulje(input.Members)
-
-	o, err := app.commands.Order.EnsureOpenOrder(r.Context(), types.TeamTypePatrulje, string(teamID))
+	// Re-derive the open order from the current member projection (self-heal),
+	// same as the show handler. Members aren't in the request any more.
+	members, _, err := app.models.Members.GetSpejdere(data.Filters{TeamID: teamID})
 	if err != nil {
-		log.Printf("EnsureOpenOrder %q", err)
-		app.ServerErrorResponse(w, r, err)
-		return
+		log.Printf("GetSpejdere %q", err)
 	}
-	o, err = app.commands.Order.SetDerivedLines(r.Context(), o.OrderID, desired)
-	if err != nil {
-		log.Printf("SetDerivedLines %q", err)
-		app.BadRequestResponse(w, r, err)
-		return
-	}
-	log.Printf("order %s total=%d paid=%d due=%d", o.OrderID, o.TotalAmount, o.PaidAmount, o.DueAmount)
-
-	// Count the active members actually submitted (lag-free) to gate payment.
-	activeMembers := 0
-	for _, m := range input.Members {
-		if !m.Deleted {
-			activeMembers++
+	desired := derivedLinesForPatruljeSpejdere(members)
+	openOrder, _ := app.loadOrders(r.Context(), types.TeamTypePatrulje, string(teamID))
+	if openOrder == nil && len(desired) > 0 {
+		if o, err := app.commands.Order.EnsureOpenOrder(r.Context(), types.TeamTypePatrulje, string(teamID)); err == nil {
+			openOrder = o
 		}
+	}
+	if openOrder != nil && app.derivedLinesNeedSync(r.Context(), openOrder, desired) {
+		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder.OrderID, desired); err == nil {
+			openOrder = o
+		} else {
+			log.Printf("setDerivedLinesAfterCreate %s: %v", openOrder.OrderID, err)
+		}
+	}
+
+	due := 0
+	orderID := ""
+	if openOrder != nil {
+		due = openOrder.DueAmount
+		orderID = openOrder.OrderID
 	}
 
 	paymentLink := ""
 	paymentError := ""
 	switch {
-	case o.DueAmount <= 0:
+	case due <= 0:
 		// nothing to pay
-	case activeMembers < patruljeMinMembers:
+	case len(members) < patruljeMinMembers:
 		// Block payment for a team below the minimum size: no link is issued.
 		paymentError = fmt.Sprintf("en patrulje skal have mindst %d spejdere for at kunne betale", patruljeMinMembers)
 	default:
@@ -239,13 +240,13 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 		}
 		// Order.DueAmount is already in minor units (øre), unlike the
 		// legacy DKK arithmetic that needed *100.
-		amount := mobilepay.Amount{Value: int64(o.DueAmount), Currency: mobilepay.Currency(types.CurrencyDKK)}
+		amount := mobilepay.Amount{Value: int64(due), Currency: mobilepay.Currency(types.CurrencyDKK)}
 		teamUrl := "https://tilmelding.nathejk.dk/patrulje/" + string(teamID)
 
-		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", input.Contact.Phone, input.Contact.Email, teamUrl, o.OrderID, "order")
+		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", input.Contact.Phone, input.Contact.Email, teamUrl, orderID, "order")
 	}
 	team, _ := app.models.Teams.GetPatrulje(teamID)
-	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "order": o, "paymentLink": paymentLink, "paymentError": paymentError}, nil)
+	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "order": openOrder, "paymentLink": paymentLink, "paymentError": paymentError}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
