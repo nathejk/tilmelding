@@ -22,7 +22,7 @@ Everything in that file applies here unless explicitly overridden below.
 - `docker/Dockerfile` — multistage build (dev targets: `ui-dev`, `base`; prod target: `prod`)
 - `docker-compose.yml` — dev environment
 - `roadmap/tasks/TASKS.md` — task board conventions
-- `roadmap/prd/` — Product Requirements Documents (see `roadmap/prd/README.md`)
+- `roadmap/prd/README.md` — PRD conventions and `draft/doing/done` lifecycle
 
 ---
 
@@ -30,3 +30,6 @@ Everything in that file applies here unless explicitly overridden below.
 
 - All endpoints must have OpenAPI annotations
 - New features and significant changes require a PRD (`prd` skill) before implementation
+- PRDs live in `roadmap/prd/{draft,doing,done}/`. The folder is the status — move
+  the file and update its `Status` header together, never one without the other.
+  Refer to a PRD by number ("PRD 003"), not by path.
