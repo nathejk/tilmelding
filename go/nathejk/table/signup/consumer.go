@@ -3,27 +3,25 @@ package signup
 import (
 	"fmt"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
-	"nathejk.dk/pkg/tablerow"
 )
 
 type consumer struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func (c *consumer) Consumes() []stream.Subject {
-	return []stream.Subject{
-		subject.FromStr("NATHEJK:*.*.*.signedup"),
-		subject.FromStr("NATHEJK:*.*.*.mail.validate.sent"),
-		subject.FromStr("NATHEJK:*.*.*.sms.validate.sent"),
-		subject.FromStr("NATHEJK:*.*.*.emailaddress.verified"),
-		subject.FromStr("NATHEJK:*.*.*.phonenumber.verified"),
+func (c *consumer) Consumes() []cqrs.Subject {
+	return []cqrs.Subject{
+		cqrs.SubjectFromStr("NATHEJK:*.*.*.signedup"),
+		cqrs.SubjectFromStr("NATHEJK:*.*.*.mail.validate.sent"),
+		cqrs.SubjectFromStr("NATHEJK:*.*.*.sms.validate.sent"),
+		cqrs.SubjectFromStr("NATHEJK:*.*.*.emailaddress.verified"),
+		cqrs.SubjectFromStr("NATHEJK:*.*.*.phonenumber.verified"),
 	}
 }
 
-func (c *consumer) HandleMessage(msg stream.Message) error {
+func (c *consumer) HandleMessage(msg cqrs.Message) error {
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.*.*.signedup"):
 		//case "NATHEJK.year.created":

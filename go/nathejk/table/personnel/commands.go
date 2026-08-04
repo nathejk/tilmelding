@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 )
@@ -33,11 +32,11 @@ type Person struct {
 }
 
 type commander struct {
-	p stream.Publisher
+	p cqrs.Publisher
 }
 
 func (c *commander) Update(ctx context.Context, userID types.UserID, userType types.TeamType, person Person) error {
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.updated", "2026", userType, userID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.updated", "2026", userType, userID)))
 	msg.SetBody(&messages.NathejkPersonnelUpdated{
 		UserID:      userID,
 		Name:        person.Name,

@@ -4,27 +4,25 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/pkg/tablerow"
 )
 
 type consumer struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func (c *consumer) Consumes() (subjs []stream.Subject) {
-	return []stream.Subject{
-		subject.FromStr("NATHEJK:*.patrulje.*.signedup"),
-		subject.FromStr("NATHEJK:*.patrulje.*.updated"),
-		subject.FromStr("NATHEJK:*.patrulje.*.numberassigned"),
-		subject.FromStr("NATHEJK:*.patrulje.*.started"),
+func (c *consumer) Consumes() (subjs []cqrs.Subject) {
+	return []cqrs.Subject{
+		cqrs.SubjectFromStr("NATHEJK:*.patrulje.*.signedup"),
+		cqrs.SubjectFromStr("NATHEJK:*.patrulje.*.updated"),
+		cqrs.SubjectFromStr("NATHEJK:*.patrulje.*.numberassigned"),
+		cqrs.SubjectFromStr("NATHEJK:*.patrulje.*.started"),
 	}
 }
 
-func (c *consumer) HandleMessage(msg stream.Message) error {
+func (c *consumer) HandleMessage(msg cqrs.Message) error {
 	//log.Printf("patrulje.go RECEIVED %q", msg.Subject().Subject())
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.patrulje.*.signedup"):

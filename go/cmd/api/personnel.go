@@ -9,8 +9,8 @@ import (
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
-	"nathejk.dk/internal/payment/mobilepay"
 	"nathejk.dk/nathejk/table/order"
+	payments "nathejk.dk/nathejk/table/payment"
 	"nathejk.dk/nathejk/table/personnel"
 )
 
@@ -116,7 +116,7 @@ func (app *application) updatePersonnelHandler(w http.ResponseWriter, r *http.Re
 		if (signup != nil) && (signup.Email != nil) {
 			email = *signup.Email
 		}
-		amount := mobilepay.Amount{Value: int64(o.DueAmount), Currency: mobilepay.Currency(types.CurrencyDKK)}
+		amount := payments.Amount{Value: int64(o.DueAmount), Currency: types.CurrencyDKK}
 		teamUrl := "https://tilmelding.nathejk.dk/badut/" + string(userID)
 
 		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk gøglertilmelding", phone, email, teamUrl, o.OrderID, "order")

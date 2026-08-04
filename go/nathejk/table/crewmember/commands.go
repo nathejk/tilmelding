@@ -6,8 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	tables "nathejk.dk/nathejk/table"
@@ -37,7 +36,7 @@ type UpdateFields struct {
 }
 
 type commander struct {
-	p stream.Publisher
+	p cqrs.Publisher
 	q Queries
 }
 
@@ -57,7 +56,7 @@ func (c commander) Register(ctx context.Context, year types.YearSlug, name strin
 		Phone:  phone,
 		Email:  email,
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(
 		fmt.Sprintf("NATHEJK.%s.crewmember.%s.registered", year, userID),
 	))
 	msg.SetBody(&body)
@@ -89,7 +88,7 @@ func (c commander) Update(ctx context.Context, year types.YearSlug, userID types
 		Diet:        f.Diet,
 		Additionals: f.Additionals,
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(
 		fmt.Sprintf("NATHEJK.%s.crewmember.%s.updated", year, userID),
 	))
 	msg.SetBody(&body)
@@ -125,7 +124,7 @@ func (c commander) AssignSection(ctx context.Context, year types.YearSlug, userI
 		UserID:      userID,
 		SectionSlug: section,
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(
 		fmt.Sprintf("NATHEJK.%s.crewmember.%s.section.assigned", year, userID),
 	))
 	msg.SetBody(&body)
@@ -135,7 +134,7 @@ func (c commander) AssignSection(ctx context.Context, year types.YearSlug, userI
 // Delete publishes NathejkCrewMemberDeleted (soft delete in the read model).
 func (c commander) Delete(ctx context.Context, year types.YearSlug, userID types.UserID) error {
 	body := messages.NathejkCrewMemberDeleted{UserID: userID}
-	msg := c.p.MessageFunc()(subject.FromStr(
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(
 		fmt.Sprintf("NATHEJK.%s.crewmember.%s.deleted", year, userID),
 	))
 	msg.SetBody(&body)

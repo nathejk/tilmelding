@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
 	tables "nathejk.dk/nathejk/table"
 )
 
 type querier struct {
-	db *sql.DB
+	db cqrs.Reader
 }
 
 /*

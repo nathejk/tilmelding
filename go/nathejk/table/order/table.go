@@ -23,13 +23,11 @@
 package order
 
 import (
-	"database/sql"
 	"log"
 
-	"github.com/jrgensen/stream"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/nathejk/table/product"
-	"nathejk.dk/pkg/tablerow"
 
 	_ "embed"
 )
@@ -107,7 +105,7 @@ type table struct {
 
 // New wires the order package: creates the orders / order_line tables (idempotently),
 // and constructs a value that exposes the command API (Commands), the read API
-// (Queries), and the projector (stream.Consumer).
+// (Queries), and the projector (cqrs.Consumer).
 //
 // year is the active Nathejk year that the commander stamps on newly-created
 // orders. The Product dependency is used at command time to validate
@@ -115,18 +113,18 @@ type table struct {
 //
 // Self-healing schema: after creating the tables it ensures any columns
 // or indexes added since the original schema landed are present.
-func New(p stream.Publisher, w tablerow.Consumer, r *sql.DB, year types.YearSlug, products product.Queries) *table {
+func New(p cqrs.Publisher, w cqrs.Writer, r cqrs.Reader, year types.YearSlug, products product.Queries) *table {
 	q := querier{db: r}
 	c := commander{p: p, q: &q, products: products, year: year}
 	t := &table{commander: c, consumer: consumer{w: w}, querier: q}
 	if err := w.Consume(tableSchema); err != nil {
 		log.Fatalf("Error creating order table %q", err)
 	}
-	if err := tablerow.EnsureColumn(r, w, "order_line", "memberId",
+	if err := cqrs.EnsureColumn(r, w, "order_line", "memberId",
 		"memberId VARCHAR(64) NOT NULL DEFAULT '' AFTER productName"); err != nil {
 		log.Fatalf("Error migrating order_line.memberId %q", err)
 	}
-	if err := tablerow.EnsureIndex(r, w, "order_line", "idx_order_line_member",
+	if err := cqrs.EnsureIndex(r, w, "order_line", "idx_order_line_member",
 		"ALTER TABLE order_line ADD INDEX idx_order_line_member (memberId)"); err != nil {
 		log.Fatalf("Error migrating order_line.idx_order_line_member %q", err)
 	}

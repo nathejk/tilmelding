@@ -6,11 +6,9 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/mysql"
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/pkg/tablerow"
 )
 
 // bodyNathejkSectionsSorted is the wire body for NATHEJK.{year}.sections.sorted.
@@ -33,19 +31,19 @@ type bodyNathejkSectionMoved struct {
 }
 
 type consumer struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func (c *consumer) Consumes() []stream.Subject {
-	return []stream.Subject{
-		subject.FromStr("NATHEJK.*.section.*.added"),
-		subject.FromStr("NATHEJK.*.section.*.moved"),
-		subject.FromStr("NATHEJK.*.section.*.deleted"),
-		subject.FromStr("NATHEJK.*.sections.sorted"),
+func (c *consumer) Consumes() []cqrs.Subject {
+	return []cqrs.Subject{
+		cqrs.SubjectFromStr("NATHEJK.*.section.*.added"),
+		cqrs.SubjectFromStr("NATHEJK.*.section.*.moved"),
+		cqrs.SubjectFromStr("NATHEJK.*.section.*.deleted"),
+		cqrs.SubjectFromStr("NATHEJK.*.sections.sorted"),
 	}
 }
 
-func (c *consumer) HandleMessage(msg stream.Message) error {
+func (c *consumer) HandleMessage(msg cqrs.Message) error {
 	dialect := goqu.Dialect("mysql")
 
 	switch true {

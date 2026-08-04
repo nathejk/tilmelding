@@ -1,12 +1,10 @@
 package personnel
 
 import (
-	"database/sql"
 	"log"
 
-	"github.com/jrgensen/stream"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/pkg/tablerow"
 
 	_ "embed"
 )
@@ -31,7 +29,7 @@ type table struct {
 	querier
 }
 
-func New(p stream.Publisher, w tablerow.Consumer, r *sql.DB) *table {
+func New(p cqrs.Publisher, w cqrs.Writer, r cqrs.Reader) *table {
 	q := querier{db: r}
 	c := commander{p: p}
 	table := &table{commander: c, consumer: consumer{w: w}, querier: q}

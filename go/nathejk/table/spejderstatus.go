@@ -3,9 +3,8 @@ package table
 import (
 	"log"
 
-	"github.com/jrgensen/stream"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/pkg/tablerow"
 
 	_ "embed"
 )
@@ -18,10 +17,10 @@ type SpejderStatus struct {
 }
 
 type spejderstatus struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func NewSpejderStatus(w tablerow.Consumer) *spejderstatus {
+func NewSpejderStatus(w cqrs.Writer) *spejderstatus {
 	table := &spejderstatus{w: w}
 	if err := w.Consume(table.CreateTableSql()); err != nil {
 		log.Fatalf("Error creating table %q", err)
@@ -36,13 +35,13 @@ func (t *spejderstatus) CreateTableSql() string {
 	return spejderStatusSchema
 }
 
-func (c *spejderstatus) Consumes() (subjs []stream.Subject) {
-	return []stream.Subject{
-		//	subject.FromStr("nathejk"),
+func (c *spejderstatus) Consumes() (subjs []cqrs.Subject) {
+	return []cqrs.Subject{
+		//	cqrs.SubjectFromStr("nathejk"),
 	}
 }
 
-func (c *spejderstatus) HandleMessage(msg stream.Message) error {
+func (c *spejderstatus) HandleMessage(msg cqrs.Message) error {
 	/*
 		switch msg.Subject().Subject() {
 			case "nathejk:member.status.changed":

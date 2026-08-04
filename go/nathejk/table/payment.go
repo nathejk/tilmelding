@@ -1,16 +1,13 @@
 package table
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	queries "nathejk.dk/nathejk/table/payment"
-	"nathejk.dk/pkg/tablerow"
 
 	_ "embed"
 )
@@ -31,10 +28,10 @@ type Payment struct {
 type payment struct {
 	queries.Query
 
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func NewPayment(w tablerow.Consumer, r *sql.DB) *payment {
+func NewPayment(w cqrs.Writer, r cqrs.Reader) *payment {
 	table := &payment{Query: queries.Query{DB: r}, w: w}
 	if err := w.Consume(table.CreateTableSql()); err != nil {
 		log.Fatalf("Error creating table %q", err)
@@ -49,17 +46,17 @@ func (t *payment) CreateTableSql() string {
 	return paymentSchema
 }
 
-func (c *payment) Consumes() (subjs []stream.Subject) {
-	return []stream.Subject{
-		//subject.FromStr("monolith:nathejk_team"),
-		//subject.FromStr("nathejk"),
-		subject.FromStr("NATHEJK.2026.payment.*.requested"),
-		subject.FromStr("NATHEJK.2026.payment.*.reserved"),
-		subject.FromStr("NATHEJK.2026.payment.*.received"),
+func (c *payment) Consumes() (subjs []cqrs.Subject) {
+	return []cqrs.Subject{
+		//cqrs.SubjectFromStr("monolith:nathejk_team"),
+		//cqrs.SubjectFromStr("nathejk"),
+		cqrs.SubjectFromStr("NATHEJK.2026.payment.*.requested"),
+		cqrs.SubjectFromStr("NATHEJK.2026.payment.*.reserved"),
+		cqrs.SubjectFromStr("NATHEJK.2026.payment.*.received"),
 	}
 }
 
-func (c *payment) HandleMessage(msg stream.Message) error {
+func (c *payment) HandleMessage(msg cqrs.Message) error {
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.payment.*.requested"):
 		var body messages.NathejkPaymentRequested

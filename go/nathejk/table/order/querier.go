@@ -8,6 +8,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
 	tables "nathejk.dk/nathejk/table"
 )
@@ -44,7 +45,7 @@ type Queries interface {
 }
 
 type querier struct {
-	db *sql.DB
+	db cqrs.Reader
 }
 
 // orderColumns is the column list reused by GetByID / FindOpenOrder /

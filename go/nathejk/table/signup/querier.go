@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
 	tables "nathejk.dk/nathejk/table"
 )
@@ -14,7 +15,7 @@ type Queries interface {
 }
 
 type querier struct {
-	db *sql.DB
+	db cqrs.Reader
 }
 
 func (q querier) GetByID(ctx context.Context, teamID types.TeamID) (*Signup, error) {

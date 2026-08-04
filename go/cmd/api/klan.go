@@ -11,9 +11,9 @@ import (
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
-	"nathejk.dk/internal/payment/mobilepay"
 	"nathejk.dk/nathejk/table/klan"
 	"nathejk.dk/nathejk/table/order"
+	payments "nathejk.dk/nathejk/table/payment"
 )
 
 // Klan team-size bounds. min is the number of members required before a team
@@ -155,7 +155,7 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 		orderEnvelope = o
 
 		if o.DueAmount > 0 {
-			amount := mobilepay.Amount{Value: int64(o.DueAmount), Currency: mobilepay.Currency(types.CurrencyDKK)}
+			amount := payments.Amount{Value: int64(o.DueAmount), Currency: types.CurrencyDKK}
 			teamUrl := "https://tilmelding.nathejk.dk/klan/" + string(teamID)
 			paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", *signup.Phone, *signup.Email, teamUrl, o.OrderID, "order")
 		}
@@ -238,7 +238,7 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		if (signup != nil) && (signup.Email != nil) {
 			email = *signup.Email
 		}
-		amount := mobilepay.Amount{Value: int64(due), Currency: mobilepay.Currency(types.CurrencyDKK)}
+		amount := payments.Amount{Value: int64(due), Currency: types.CurrencyDKK}
 		teamUrl := "https://tilmelding.nathejk.dk/klan/" + string(teamID)
 
 		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", phone, email, teamUrl, orderID, "order")

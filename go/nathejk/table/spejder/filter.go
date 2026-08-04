@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/internal/validator"
+	tables "nathejk.dk/nathejk/table"
 )
 
 type Filter struct {
@@ -18,13 +18,13 @@ type Filter struct {
 	UserTypes    []string
 }
 
-func (f *Filter) Validate(v validator.Validator) {
+func (f *Filter) Validate(v tables.Validator) {
 	// Check that the page and page_size parameters contain sensible values.
 	v.Check(f.Page > 0, "page", "must be greater than zero")
 	v.Check(f.PageSize > 0, "page_size", "must be greater than zero")
 
 	// Check that the sort parameter matches a value in the safelist.
-	v.Check(validator.PermittedValue(f.Sort, f.SortSafelist...), "sort", "invalid sort value")
+	v.Check(tables.PermittedValue(f.Sort, f.SortSafelist...), "sort", "invalid sort value")
 }
 
 // Check that the client-provided Sort field matches one of the entries in our safelist

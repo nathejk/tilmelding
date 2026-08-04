@@ -7,12 +7,13 @@ import (
 	"errors"
 	"log"
 
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
 	tables "nathejk.dk/nathejk/table"
 )
 
 type querier struct {
-	db *sql.DB
+	db cqrs.Reader
 }
 
 func (q *querier) GetAll(ctx context.Context, filter Filter) ([]Staff, error) {

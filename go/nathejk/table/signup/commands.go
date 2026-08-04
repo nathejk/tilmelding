@@ -7,8 +7,7 @@ import (
 	"math/big"
 
 	"github.com/google/uuid"
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	tables "nathejk.dk/nathejk/table"
@@ -23,7 +22,7 @@ type Commands interface {
 }
 
 type commander struct {
-	p stream.Publisher
+	p cqrs.Publisher
 	q Queries
 	r repository
 }
@@ -37,7 +36,7 @@ type SignupCommand struct {
 
 func (c *commander) Signup(ctx context.Context, year types.YearSlug, cmd SignupCommand) (types.TeamID, error) {
 	teamID := types.TeamID(uuid.New().String())
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.signedup", year, cmd.TeamType, teamID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.signedup", year, cmd.TeamType, teamID)))
 	msg.SetBody(&messages.NathejkTeamSignedUp{
 		TeamID: teamID,
 		Name:   cmd.Name,
@@ -74,7 +73,7 @@ func (c *commander) SendVerificationEmail(ctx context.Context, teamID types.Team
 		body.Error = err.Error()
 	}
 	sub := fmt.Sprintf("NATHEJK:%s.%s.%s.mail.%s.%s", team.Year, team.TeamType, team.TeamID, types.PingTypeValidate, ok)
-	msg := c.p.MessageFunc()(subject.FromStr(sub))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(sub))
 	msg.SetBody(&body)
 
 	return c.p.Publish(msg)
@@ -106,7 +105,7 @@ func (c *commander) SendVerificationSms(ctx context.Context, teamID types.TeamID
 		ok = "failed"
 		body.Error = err.Error()
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.sms.%s.%s", team.Year, team.TeamType, teamID, types.PingTypeValidate, ok)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.sms.%s.%s", team.Year, team.TeamType, teamID, types.PingTypeValidate, ok)))
 	msg.SetBody(body)
 
 	return c.p.Publish(msg)
@@ -120,7 +119,7 @@ func (c *commander) VerifyEmail(ctx context.Context, teamID types.TeamID, secret
 		return tables.ErrVerificationFailed
 	}
 
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.emailaddress.verified", signup.TeamType, types.TeamTypeKlan, teamID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.emailaddress.verified", signup.TeamType, types.TeamTypeKlan, teamID)))
 	msg.SetBody(&messages.NathejkSignupEmailVerified{
 		TeamID: teamID,
 		Email:  signup.EmailPending,
@@ -141,7 +140,7 @@ func (c *commander) VerifyPhone(ctx context.Context, teamID types.TeamID, pincod
 		return tables.ErrVerificationFailed
 	}
 
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.phonenumber.verified", signup.TeamType, types.TeamTypeKlan, teamID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.phonenumber.verified", signup.TeamType, types.TeamTypeKlan, teamID)))
 	msg.SetBody(&messages.NathejkSignupPhoneVerified{
 		TeamID:  teamID,
 		Phone:   signup.PhonePending,
@@ -159,7 +158,7 @@ func (c *commander) Delete(ctx context.Context, teamID types.TeamID) error {
 		return err
 	}
 
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", klan.Year, teamID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", klan.Year, teamID)))
 	msg.SetBody(&messages.NathejkKlanStatusChanged{
 		TeamID: teamID,
 		Status: types.SignupStatus("deleted"),

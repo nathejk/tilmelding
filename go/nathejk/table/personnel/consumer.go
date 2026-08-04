@@ -5,23 +5,21 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
-	"nathejk.dk/pkg/tablerow"
 
 	_ "embed"
 )
 
 type consumer struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func (*consumer) Consumes() []stream.Subject {
-	return []stream.Subject{
-		subject.FromStr("NATHEJK.*.gøgler.*.signedup"),
-		subject.FromStr("NATHEJK.*.gøgler.*.updated"),
-		subject.FromStr("NATHEJK.*.gøgler.*.status.changed"),
+func (*consumer) Consumes() []cqrs.Subject {
+	return []cqrs.Subject{
+		cqrs.SubjectFromStr("NATHEJK.*.gøgler.*.signedup"),
+		cqrs.SubjectFromStr("NATHEJK.*.gøgler.*.updated"),
+		cqrs.SubjectFromStr("NATHEJK.*.gøgler.*.status.changed"),
 		// Crew signups are projected into the crewmember table now, not here.
 		// See nathejk/table/crewmember/consumer.go. The gøgler (badut) flow
 		// still lives on personnel.
@@ -29,16 +27,16 @@ func (*consumer) Consumes() []stream.Subject {
 		// Legacy subjects from the pre-rename era. The personnel projection
 		// continues to consume these so old staff/friend events can still flow
 		// into the table for historical records.
-		subject.FromStr("NATHEJK.*.staff.*.signedup"),
-		subject.FromStr("NATHEJK.*.staff.*.updated"),
-		subject.FromStr("NATHEJK.*.staff.*.status.changed"),
-		subject.FromStr("NATHEJK.*.friend.*.signedup"),
-		subject.FromStr("NATHEJK.*.friend.*.updated"),
-		subject.FromStr("NATHEJK.*.friend.*.status.changed"),
+		cqrs.SubjectFromStr("NATHEJK.*.staff.*.signedup"),
+		cqrs.SubjectFromStr("NATHEJK.*.staff.*.updated"),
+		cqrs.SubjectFromStr("NATHEJK.*.staff.*.status.changed"),
+		cqrs.SubjectFromStr("NATHEJK.*.friend.*.signedup"),
+		cqrs.SubjectFromStr("NATHEJK.*.friend.*.updated"),
+		cqrs.SubjectFromStr("NATHEJK.*.friend.*.status.changed"),
 	}
 }
 
-func (c *consumer) HandleMessage(msg stream.Message) error {
+func (c *consumer) HandleMessage(msg cqrs.Message) error {
 	switch true {
 
 	case msg.Subject().Match("NATHEJK.*.*.*.signedup"):

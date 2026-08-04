@@ -4,27 +4,25 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
-	"nathejk.dk/pkg/tablerow"
 
 	_ "embed"
 )
 
 type consumer struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func (c *consumer) Consumes() []stream.Subject {
-	return []stream.Subject{
-		subject.FromStr("NATHEJK.*.senior.*.updated"),
-		subject.FromStr("NATHEJK.*.senior.*.deleted"),
-		subject.FromStr("NATHEJK.*.bandit.*.armNumber.assigned"),
+func (c *consumer) Consumes() []cqrs.Subject {
+	return []cqrs.Subject{
+		cqrs.SubjectFromStr("NATHEJK.*.senior.*.updated"),
+		cqrs.SubjectFromStr("NATHEJK.*.senior.*.deleted"),
+		cqrs.SubjectFromStr("NATHEJK.*.bandit.*.armNumber.assigned"),
 	}
 }
 
-func (c *consumer) HandleMessage(msg stream.Message) error {
+func (c *consumer) HandleMessage(msg cqrs.Message) error {
 	switch true {
 	case msg.Subject().Match("nathejk.*.senior.*.updated"):
 		// Two-phase decode mirroring spejder/consumer.go: the legacy

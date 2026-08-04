@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/pkg/tablerow"
 
 	_ "embed"
 )
@@ -27,10 +25,10 @@ type Patrulje struct {
 }
 
 type patrulje struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func NewPatrulje(w tablerow.Consumer) *patrulje {
+func NewPatrulje(w cqrs.Writer) *patrulje {
 	table := &patrulje{w: w}
 	if err := w.Consume(table.CreateTableSql()); err != nil {
 		log.Fatalf("Error creating table %q", err)
@@ -45,17 +43,17 @@ func (t *patrulje) CreateTableSql() string {
 	return patruljeSchema
 }
 
-func (c *patrulje) Consumes() (subjs []stream.Subject) {
-	return []stream.Subject{
-		//subject.FromStr("monolith:nathejk_team"),
-		//subject.FromStr("nathejk"),
-		subject.FromStr("NATHEJK.2026.patrulje.*.signedup"),
-		subject.FromStr("NATHEJK.*.patrulje.*.updated"),
-		subject.FromStr("NATHEJK.*.patrulje.*.numberassigned"),
+func (c *patrulje) Consumes() (subjs []cqrs.Subject) {
+	return []cqrs.Subject{
+		//cqrs.SubjectFromStr("monolith:nathejk_team"),
+		//cqrs.SubjectFromStr("nathejk"),
+		cqrs.SubjectFromStr("NATHEJK.2026.patrulje.*.signedup"),
+		cqrs.SubjectFromStr("NATHEJK.*.patrulje.*.updated"),
+		cqrs.SubjectFromStr("NATHEJK.*.patrulje.*.numberassigned"),
 	}
 }
 
-func (c *patrulje) HandleMessage(msg stream.Message) error {
+func (c *patrulje) HandleMessage(msg cqrs.Message) error {
 	//log.Printf("patrulje.go RECEIVED %q", msg.Subject().Subject())
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.patrulje.*.signedup"):

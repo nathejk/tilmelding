@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
 )
 
@@ -31,7 +32,7 @@ type Payment struct {
 }
 
 type Query struct {
-	DB *sql.DB
+	DB cqrs.Reader
 }
 
 func (q Query) GetAll(teamID types.TeamID) ([]Payment, Metadata, error) {

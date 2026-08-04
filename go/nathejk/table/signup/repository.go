@@ -1,23 +1,18 @@
 package signup
 
-import (
-	"nathejk.dk/internal/mailer"
-	"nathejk.dk/internal/sms"
-)
-
 type repository struct {
-	sms  sms.Sender
-	mail mailer.Mailer
+	sms  SmsSender
+	mail Mailer
 }
 
 type service func(*repository)
 
-func WithSms(s sms.Sender) service {
+func WithSms(s SmsSender) service {
 	return func(r *repository) {
 		r.sms = s
 	}
 }
-func WithMailer(s mailer.Mailer) service {
+func WithMailer(s Mailer) service {
 	return func(r *repository) {
 		r.mail = s
 	}

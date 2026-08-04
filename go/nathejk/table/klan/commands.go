@@ -6,8 +6,7 @@ import (
 	"math"
 
 	"github.com/google/uuid"
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 )
@@ -34,7 +33,7 @@ type Commands interface {
 }
 
 type commander struct {
-	p stream.Publisher
+	p cqrs.Publisher
 	q Queries
 	r repository
 }
@@ -56,7 +55,7 @@ func (c *commander) RequestMemberCount(ctx context.Context, year types.YearSlug,
 	if cap > actualMemberCount {
 		action = "reserved"
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.%s", year, types.TeamTypeKlan, teamID, action)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.%s.%s.%s", year, types.TeamTypeKlan, teamID, action)))
 	msg.SetBody(&messages.NathejkTeamMembersRequested{
 		TeamID:      teamID,
 		MemberCount: int(memberCount),
@@ -127,7 +126,7 @@ func (c *commander) Update(ctx context.Context, teamID types.TeamID, cmd UpdateC
 		return nil
 	}
 
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.updated", klan.Year, teamID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.updated", klan.Year, teamID)))
 	msg.SetBody(&messages.NathejkKlanUpdated{
 		TeamID:    teamID,
 		Name:      name,
@@ -151,7 +150,7 @@ func (c *commander) AssignToLok(ctx context.Context, teamID types.TeamID, lok st
 		return nil
 	}
 
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.assigned", klan.Year, teamID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.assigned", klan.Year, teamID)))
 	msg.SetBody(&messages.NathejkKlanAssigned{
 		TeamID: teamID,
 		Lok:    lok,
@@ -168,7 +167,7 @@ func (c *commander) Delete(ctx context.Context, teamID types.TeamID) error {
 		return err
 	}
 
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", klan.Year, teamID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", klan.Year, teamID)))
 	msg.SetBody(&messages.NathejkKlanStatusChanged{
 		TeamID: teamID,
 		Status: types.SignupStatus("deleted"),
@@ -184,7 +183,7 @@ func (c *commander) AddMember(ctx context.Context, teamID types.TeamID, m Senior
 	if m.MemberID == "" {
 		m.MemberID = types.MemberID(uuid.New().String())
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.updated", "2026", m.MemberID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.updated", "2026", m.MemberID)))
 	// Include teamId so the senior projector's two-phase decode does an
 	// INSERT IGNORE for the brand-new member (see senior/consumer.go). This
 	// is the create path.
@@ -206,7 +205,7 @@ func (c *commander) UpdateMember(ctx context.Context, teamID types.TeamID, m Sen
 	if m.MemberID == "" {
 		return fmt.Errorf("UpdateMember: empty memberId")
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.updated", "2026", m.MemberID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.updated", "2026", m.MemberID)))
 	// No teamId in the body: the projector skips its INSERT IGNORE branch and
 	// performs a pure UPDATE, so a stale/unknown memberId is a no-op rather
 	// than resurrecting a member. Update never creates an identity.
@@ -220,7 +219,7 @@ func (c *commander) DeleteMember(ctx context.Context, teamID types.TeamID, membe
 	if memberID == "" {
 		return fmt.Errorf("DeleteMember: empty memberId")
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.deleted", "2026", memberID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.senior.%s.deleted", "2026", memberID)))
 	msg.SetBody(&messages.NathejkMemberDeleted{
 		MemberID: memberID,
 		TeamID:   teamID,
@@ -275,7 +274,7 @@ type Senior struct {
 // commands, so a routine team save can never create or delete a senior
 // identity (and the old memberCount placeholder rows are gone).
 func (c *commander) UpdateTeam(ctx context.Context, teamID types.TeamID, team Team) error {
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.updated", "2026", teamID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.updated", "2026", teamID)))
 	msg.SetBody(&messages.NathejkKlanUpdated{
 		TeamID:    teamID,
 		Name:      team.Name,
@@ -294,7 +293,7 @@ func (c *commander) UpdateTeam(ctx context.Context, teamID types.TeamID, team Te
 
 	seniorCount, _ := c.q.RequestedSeniorCount(ctx, "2026")
 	if seniorCount > 115 {
-		statusMsg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2026", teamID)))
+		statusMsg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2026", teamID)))
 		statusMsg.SetBody(&messages.NathejkKlanStatusChanged{TeamID: teamID, Status: types.SignupStatusOnHold})
 		if klan != nil && (klan.Status != types.SignupStatusPay) && (klan.Status != types.SignupStatusPaid) {
 			if err := c.p.Publish(statusMsg); err != nil {
@@ -303,7 +302,7 @@ func (c *commander) UpdateTeam(ctx context.Context, teamID types.TeamID, team Te
 		}
 	}
 	if klan != nil && klan.Status == "" {
-		statusMsg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2026", teamID)))
+		statusMsg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.klan.%s.status.changed", "2026", teamID)))
 		statusMsg.SetBody(&messages.NathejkKlanStatusChanged{TeamID: teamID, Status: types.SignupStatusPay})
 		if err := c.p.Publish(statusMsg); err != nil {
 			return err

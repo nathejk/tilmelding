@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/pkg/tablerow"
 
 	_ "embed"
 )
@@ -19,10 +17,10 @@ type Pincode struct {
 }
 
 type pincode struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func NewPincode(w tablerow.Consumer) *pincode {
+func NewPincode(w cqrs.Writer) *pincode {
 	table := &pincode{w: w}
 	if err := w.Consume(table.CreateTableSql()); err != nil {
 		log.Fatalf("Error creating table %q", err)
@@ -37,13 +35,13 @@ func (t *pincode) CreateTableSql() string {
 	return pincodeSchema
 }
 
-func (c *pincode) Consumes() (subjs []stream.Subject) {
-	return []stream.Subject{
-		subject.FromStr("nathejk"),
+func (c *pincode) Consumes() (subjs []cqrs.Subject) {
+	return []cqrs.Subject{
+		cqrs.SubjectFromStr("nathejk"),
 	}
 }
 
-func (c *pincode) HandleMessage(msg stream.Message) {
+func (c *pincode) HandleMessage(msg cqrs.Message) {
 	switch msg.Subject().Subject() {
 	case "nathejk:patrulje.signedup", "nathejk:klan.signedup":
 		var body messages.NathejkTeamSignedUp

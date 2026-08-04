@@ -5,51 +5,49 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/internal/payment/mobilepay"
 )
 
 // Commands is the payment write-side API. Methods publish payment events
-// onto the stream and (where relevant) drive the MobilePay client.
+// onto the stream and (where relevant) drive the payment provider.
 type Commands interface {
-	Request(amount mobilepay.Amount, desc string, phone types.PhoneNumber, email types.EmailAddress, returnUrl, orderForeignKey, orderType string) (string, error)
+	Request(amount Amount, desc string, phone types.PhoneNumber, email types.EmailAddress, returnUrl, orderForeignKey, orderType string) (string, error)
 	Capture(reference string) error
 }
 
 type commander struct {
-	p  stream.Publisher
-	pp mobilepay.Client
+	p  cqrs.Publisher
+	pp Provider
 }
 
 // NewCommands wires a payment commander. The publisher is used for
 // emitting the NathejkPayment* events that drive the projections; the
-// MobilePay client is used to create and capture authorisations.
-func NewCommands(p stream.Publisher, pp mobilepay.Client) Commands {
+// provider is used to create and capture authorisations.
+func NewCommands(p cqrs.Publisher, pp Provider) Commands {
 	return &commander{p: p, pp: pp}
 }
 
-func (c *commander) Request(amount mobilepay.Amount, desc string, phone types.PhoneNumber, email types.EmailAddress, returnUrl string, orderForeignKey string, orderType string) (string, error) {
+func (c *commander) Request(amount Amount, desc string, phone types.PhoneNumber, email types.EmailAddress, returnUrl string, orderForeignKey string, orderType string) (string, error) {
 	reference := uuid.New().String()
-	p := mobilepay.Payment{
-		Amount:             amount,
-		PaymentMethod:      mobilepay.PaymentMethod{Type: mobilepay.PaymentMethodType("WALLET")},
-		Customer:           mobilepay.Customer{PhoneNumber: phone.InternationalNumber()},
-		Reference:          mobilepay.PaymentReference(reference),
-		ReturnUrl:          "https://tilmelding.nathejk.dk/callback/mobilepay/" + reference,
-		UserFlow:           mobilepay.UserFlowWeb,
-		PaymentDescription: desc,
-	}
-	key := uuid.New().String()
-	resp, err := c.pp.CreatePayment(key, p)
+	resp, err := c.pp.CreatePayment(PaymentRequest{
+		IdempotencyKey: uuid.New().String(),
+		Reference:      reference,
+		Amount:         amount,
+		Description:    desc,
+		PhoneNumber:    phone.InternationalNumber(),
+		// TODO: hard-coded production host. A non-production deployment sends
+		// the payer to production on return. Pre-dates this refactor; left
+		// as-is to keep the change behaviour-preserving.
+		CallbackURL: "https://tilmelding.nathejk.dk/callback/mobilepay/" + reference,
+	})
 	if err != nil {
 		return "", err
 	}
 
 	body := messages.NathejkPaymentRequested{
-		Reference:       string(resp.Reference),
+		Reference:       resp.Reference,
 		ReceiptEmail:    email,
 		ReturnUrl:       returnUrl,
 		Amount:          int(amount.Value),
@@ -60,48 +58,52 @@ func (c *commander) Request(amount mobilepay.Amount, desc string, phone types.Ph
 		OrderForeignKey: orderForeignKey,
 		OrderType:       orderType,
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.payment.%s.requested", "2026", resp.Reference)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.payment.%s.requested", "2026", resp.Reference)))
 	msg.SetBody(body)
 
 	if err := c.p.Publish(msg); err != nil {
 		return "", err
 	}
-	return resp.RedirectUrl, nil
+	return resp.RedirectURL, nil
 }
 
 func (c *commander) Capture(reference string) error {
-	mpp, err := c.pp.GetPayment(mobilepay.PaymentReference(reference))
+	auth, err := c.pp.GetAuthorization(reference)
 	if err != nil {
 		return err
 	}
 
-	availableAmount := mpp.Amount
-	availableAmount.Value = mpp.Aggregate.AuthorizedAmount.Value - mpp.Aggregate.CapturedAmount.Value
+	// Capture only what is authorised and not yet taken. Both totals are
+	// cumulative, so this stays correct across partial captures.
+	available := Amount{
+		Currency: auth.Currency,
+		Value:    auth.AuthorizedAmount - auth.CapturedAmount,
+	}
 
-	if (mpp.State != mobilepay.PaymentStateAuthorized) || (availableAmount.Value <= 0) {
+	if !auth.Authorized || available.Value <= 0 {
 		return nil
 	}
 
 	body := &messages.NathejkPaymentReserved{
 		Reference: reference,
-		Amount:    int(availableAmount.Value),
-		Currency:  string(availableAmount.Currency),
+		Amount:    int(available.Value),
+		Currency:  string(available.Currency),
 		Timestamp: time.Now(),
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK.%s.payment.%s.reserved", "2026", reference)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK.%s.payment.%s.reserved", "2026", reference)))
 	msg.SetBody(body)
 
 	if err := c.p.Publish(msg); err != nil {
 		return err
 	}
-	if _, err := c.pp.CapturePayment(mobilepay.PaymentReference(reference), availableAmount); err != nil {
+	if err := c.pp.CapturePayment(reference, available); err != nil {
 		return err
 	}
-	msg = c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.payment.%s.received", "2026", reference)))
+	msg = c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.payment.%s.received", "2026", reference)))
 	msg.SetBody(&messages.NathejkPaymentReceived{
 		Reference: reference,
-		Amount:    int(availableAmount.Value),
-		Currency:  string(availableAmount.Currency),
+		Amount:    int(available.Value),
+		Currency:  string(available.Currency),
 		Timestamp: time.Now(),
 	})
 

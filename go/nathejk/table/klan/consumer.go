@@ -4,33 +4,31 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/pkg/tablerow"
 
 	_ "embed"
 )
 
 type consumer struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func (c *consumer) Consumes() []stream.Subject {
-	return []stream.Subject{
-		//subject.FromStr("monolith:nathejk_team"),
-		//subject.FromStr("nathejk"),
-		subject.FromStr("NATHEJK:*.klan.*.signedup"),
-		subject.FromStr("NATHEJK:*.klan.*.requested"),
-		subject.FromStr("NATHEJK:*.klan.*.reserved"),
-		subject.FromStr("NATHEJK:*.klan.*.updated"),
-		subject.FromStr("NATHEJK.*.klan.*.status.changed"),
-		subject.FromStr("NATHEJK.*.klan.*.assigned"),
+func (c *consumer) Consumes() []cqrs.Subject {
+	return []cqrs.Subject{
+		//cqrs.SubjectFromStr("monolith:nathejk_team"),
+		//cqrs.SubjectFromStr("nathejk"),
+		cqrs.SubjectFromStr("NATHEJK:*.klan.*.signedup"),
+		cqrs.SubjectFromStr("NATHEJK:*.klan.*.requested"),
+		cqrs.SubjectFromStr("NATHEJK:*.klan.*.reserved"),
+		cqrs.SubjectFromStr("NATHEJK:*.klan.*.updated"),
+		cqrs.SubjectFromStr("NATHEJK.*.klan.*.status.changed"),
+		cqrs.SubjectFromStr("NATHEJK.*.klan.*.assigned"),
 	}
 }
 
-func (c *consumer) HandleMessage(msg stream.Message) error {
+func (c *consumer) HandleMessage(msg cqrs.Message) error {
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.klan.*.signedup"):
 		var body messages.NathejkTeamSignedUp

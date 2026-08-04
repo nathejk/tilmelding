@@ -8,6 +8,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
 	tables "nathejk.dk/nathejk/table"
 )
@@ -20,7 +21,7 @@ type Queries interface {
 }
 
 type querier struct {
-	db *sql.DB
+	db cqrs.Reader
 }
 
 func (q *querier) RequestedMemberCount(ctx context.Context, year types.YearSlug) (uint32, error) {

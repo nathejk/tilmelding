@@ -8,11 +8,10 @@
 package product
 
 import (
-	"database/sql"
 	"log"
 
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/pkg/tablerow"
 
 	_ "embed"
 )
@@ -89,7 +88,7 @@ type table struct {
 // that have been added since the original schema landed are present.
 // This is the codebase-wide complement to CREATE TABLE IF NOT EXISTS,
 // which only handles initial creation.
-func New(w tablerow.Consumer, r *sql.DB) *table {
+func New(w cqrs.Writer, r cqrs.Reader) *table {
 	t := &table{
 		querier: querier{db: r},
 		seeder:  seeder{w: w},
@@ -97,7 +96,7 @@ func New(w tablerow.Consumer, r *sql.DB) *table {
 	if err := w.Consume(tableSchema); err != nil {
 		log.Fatalf("Error creating product table %q", err)
 	}
-	if err := tablerow.EnsureColumn(r, w, "product", "sizes",
+	if err := cqrs.EnsureColumn(r, w, "product", "sizes",
 		"sizes VARCHAR(255) NOT NULL DEFAULT '' AFTER eligibleFor"); err != nil {
 		log.Fatalf("Error migrating product.sizes %q", err)
 	}

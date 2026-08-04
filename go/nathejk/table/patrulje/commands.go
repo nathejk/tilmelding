@@ -7,8 +7,7 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 	tables "nathejk.dk/nathejk/table"
@@ -71,7 +70,7 @@ type Spejder struct {
 }
 
 type commander struct {
-	p stream.Publisher
+	p cqrs.Publisher
 	q *querier
 }
 
@@ -80,7 +79,7 @@ type commander struct {
 // AddMember / UpdateMember / DeleteMember commands, so a routine team save can
 // never create or delete a member identity.
 func (c *commander) Update(ctx context.Context, teamID types.TeamID, team Team, contact Contact) error {
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.patrulje.%s.updated", "2026", teamID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.patrulje.%s.updated", "2026", teamID)))
 	msg.SetBody(&messages.NathejkTeamUpdated{
 		TeamID:            teamID,
 		Type:              types.TeamTypePatrulje,
@@ -103,7 +102,7 @@ func (c *commander) AddMember(ctx context.Context, teamID types.TeamID, m Spejde
 	if m.MemberID == "" {
 		m.MemberID = types.MemberID(uuid.New().String())
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.updated", "2026", m.MemberID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.updated", "2026", m.MemberID)))
 	// Include teamId so the projector's two-phase decode does an INSERT IGNORE
 	// for the brand-new member (see spejder/consumer.go). This is the create
 	// path.
@@ -125,7 +124,7 @@ func (c *commander) UpdateMember(ctx context.Context, teamID types.TeamID, m Spe
 	if m.MemberID == "" {
 		return fmt.Errorf("UpdateMember: empty memberId")
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.updated", "2026", m.MemberID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.updated", "2026", m.MemberID)))
 	// No teamId in the body: the projector skips its INSERT IGNORE branch and
 	// performs a pure UPDATE, so a stale/unknown memberId is a no-op rather
 	// than resurrecting a member. Update never creates an identity.
@@ -139,7 +138,7 @@ func (c *commander) DeleteMember(ctx context.Context, teamID types.TeamID, membe
 	if memberID == "" {
 		return fmt.Errorf("DeleteMember: empty memberId")
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.deleted", "2026", memberID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.spejder.%s.deleted", "2026", memberID)))
 	msg.SetBody(&messages.NathejkMemberDeleted{
 		MemberID: memberID,
 		TeamID:   teamID,
@@ -178,7 +177,7 @@ func (c *commander) AssignNumber(ctx context.Context, teamID types.TeamID) error
 	} else if err != nil && !errors.Is(err, tables.ErrRecordNotFound) {
 		return err
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(fmt.Sprintf("NATHEJK.%s.patrulje.%s.numberassigned", "2026", teamID)))
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK.%s.patrulje.%s.numberassigned", "2026", teamID)))
 	msg.SetBody(&messages.NathejkPatrolNumberAssigned{
 		TeamID:     teamID,
 		TeamNumber: fmt.Sprintf("%d", nr),

@@ -3,25 +3,23 @@ package spejder
 import (
 	"fmt"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
-	"nathejk.dk/pkg/tablerow"
 )
 
 type consumer struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func (c *consumer) Consumes() (subjs []stream.Subject) {
-	return []stream.Subject{
-		subject.FromStr("NATHEJK.*.spejder.*.updated"),
-		subject.FromStr("NATHEJK.*.spejder.*.deleted"),
-		subject.FromStr("NATHEJK:*.patrulje.*.started"),
+func (c *consumer) Consumes() (subjs []cqrs.Subject) {
+	return []cqrs.Subject{
+		cqrs.SubjectFromStr("NATHEJK.*.spejder.*.updated"),
+		cqrs.SubjectFromStr("NATHEJK.*.spejder.*.deleted"),
+		cqrs.SubjectFromStr("NATHEJK:*.patrulje.*.started"),
 	}
 }
 
-func (c *consumer) HandleMessage(msg stream.Message) error {
+func (c *consumer) HandleMessage(msg cqrs.Message) error {
 	switch true {
 	case msg.Subject().Match("nathejk.*.spejder.*.added"):
 		var body messages.NathejkMemberAdded

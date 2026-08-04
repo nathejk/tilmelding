@@ -11,9 +11,9 @@ import (
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
-	"nathejk.dk/internal/payment/mobilepay"
 	"nathejk.dk/nathejk/table/order"
 	"nathejk.dk/nathejk/table/patrulje"
+	payments "nathejk.dk/nathejk/table/payment"
 )
 
 // Patrulje team-size bounds. min is the number of members required before a
@@ -240,7 +240,7 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 		}
 		// Order.DueAmount is already in minor units (øre), unlike the
 		// legacy DKK arithmetic that needed *100.
-		amount := mobilepay.Amount{Value: int64(due), Currency: mobilepay.Currency(types.CurrencyDKK)}
+		amount := payments.Amount{Value: int64(due), Currency: types.CurrencyDKK}
 		teamUrl := "https://tilmelding.nathejk.dk/patrulje/" + string(teamID)
 
 		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", input.Contact.Phone, input.Contact.Email, teamUrl, orderID, "order")

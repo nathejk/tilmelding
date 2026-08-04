@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/pkg/tablerow"
 )
 
 // Seed describes a row of the catalogue intended to be inserted at startup.
@@ -36,7 +36,7 @@ type Seed struct {
 }
 
 type seeder struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
 // Seed inserts the given products into the catalogue, updating any rows that

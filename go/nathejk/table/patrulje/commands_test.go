@@ -4,24 +4,19 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/streamtest"
+	"github.com/jrgensen/cqrs"
+	"github.com/jrgensen/cqrs/cqrstest"
 )
 
-func newTestCommander() (*commander, *streamtest.SingleDomainPublisher) {
-	pub := make(streamtest.SingleDomainPublisher, 16)
-	return &commander{p: &pub}, &pub
+func newTestCommander() (*commander, *cqrstest.Publisher) {
+	pub := &cqrstest.Publisher{}
+	return &commander{p: pub}, pub
 }
 
-func drain(pub *streamtest.SingleDomainPublisher) []stream.Message {
-	var msgs []stream.Message
-	for {
-		m, ok := pub.Pop()
-		if !ok {
-			break
-		}
-		msgs = append(msgs, m)
-	}
+// drain returns everything published since the last call, and clears the spy.
+func drain(pub *cqrstest.Publisher) []cqrs.Message {
+	msgs := pub.Messages
+	pub.Reset()
 	return msgs
 }
 

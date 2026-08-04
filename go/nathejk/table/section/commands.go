@@ -5,8 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
 )
@@ -22,7 +21,7 @@ type Commands interface {
 }
 
 type commander struct {
-	p stream.Publisher
+	p cqrs.Publisher
 	q Queries
 }
 
@@ -53,7 +52,7 @@ func (c commander) Add(ctx context.Context, year types.YearSlug, slug types.Slug
 		ParentSectionSlug: parent,
 		Label:             label,
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(
 		fmt.Sprintf("NATHEJK.%s.section.%s.added", year, slug),
 	))
 	msg.SetBody(&body)
@@ -81,7 +80,7 @@ func (c commander) Rename(ctx context.Context, year types.YearSlug, slug types.S
 		ParentSectionSlug: existing.ParentSlug,
 		Label:             label,
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(
 		fmt.Sprintf("NATHEJK.%s.section.%s.added", year, slug),
 	))
 	msg.SetBody(&body)
@@ -106,7 +105,7 @@ func (c commander) Sort(ctx context.Context, year types.YearSlug, parent types.S
 		ParentSectionSlug: parent,
 		SortedSlugs:       sortedSlugs,
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(
 		fmt.Sprintf("NATHEJK.%s.sections.sorted", year),
 	))
 	msg.SetBody(&body)
@@ -164,7 +163,7 @@ func (c commander) Move(ctx context.Context, year types.YearSlug, slug types.Slu
 		Slug:              slug,
 		ParentSectionSlug: newParent,
 	}
-	msg := c.p.MessageFunc()(subject.FromStr(
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(
 		fmt.Sprintf("NATHEJK.%s.section.%s.moved", year, slug),
 	))
 	msg.SetBody(&body)
@@ -188,7 +187,7 @@ func (c commander) Delete(ctx context.Context, year types.YearSlug, slug types.S
 	}
 
 	body := messages.NathejkSectionDeleted{Slug: slug}
-	msg := c.p.MessageFunc()(subject.FromStr(
+	msg := c.p.MessageFunc()(cqrs.SubjectFromStr(
 		fmt.Sprintf("NATHEJK.%s.section.%s.deleted", year, slug),
 	))
 	msg.SetBody(&body)
@@ -241,7 +240,7 @@ func (c commander) CopyFromYear(ctx context.Context, source, dest types.YearSlug
 				ParentSectionSlug: s.ParentSlug,
 				Label:             s.Label,
 			}
-			msg := c.p.MessageFunc()(subject.FromStr(
+			msg := c.p.MessageFunc()(cqrs.SubjectFromStr(
 				fmt.Sprintf("NATHEJK.%s.section.%s.added", dest, s.Slug),
 			))
 			msg.SetBody(&body)
@@ -261,7 +260,7 @@ func (c commander) CopyFromYear(ctx context.Context, source, dest types.YearSlug
 					ParentSectionSlug: s.ParentSlug,
 					Label:             s.Label,
 				}
-				msg := c.p.MessageFunc()(subject.FromStr(
+				msg := c.p.MessageFunc()(cqrs.SubjectFromStr(
 					fmt.Sprintf("NATHEJK.%s.section.%s.added", dest, s.Slug),
 				))
 				msg.SetBody(&body)

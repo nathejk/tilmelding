@@ -2,15 +2,15 @@ package spejder
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"time"
 
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
 )
 
 type querier struct {
-	db *sql.DB
+	db cqrs.Reader
 }
 
 func (q querier) GetByID(c context.Context, memberID types.MemberID) (*Spejder, error) {
@@ -22,9 +22,9 @@ func (q querier) GetAll(c context.Context, filters Filter) ([]*Spejder, Metadata
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	query := `Select 
-  s.memberId, 
-  s.teamId, 
+	query := `Select
+  s.memberId,
+  s.teamId,
   IF(ss.status IS NULL, IF(ps.startedUts > 0, 'started', 'paid'), ss.status) AS status,
   name,
   address,

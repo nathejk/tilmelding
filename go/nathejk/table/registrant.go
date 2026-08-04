@@ -4,19 +4,17 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
-	"nathejk.dk/pkg/tablerow"
 
 	_ "embed"
 )
 
 type registrant struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func NewRegistrant(w tablerow.Consumer) *registrant {
+func NewRegistrant(w cqrs.Writer) *registrant {
 	table := &registrant{w: w}
 	if err := w.Consume(table.CreateTableSql()); err != nil {
 		log.Fatalf("Error creating table %q", err)
@@ -31,13 +29,13 @@ func (t *registrant) CreateTableSql() string {
 	return registrantSchema
 }
 
-func (c *registrant) Consumes() (subjs []stream.Subject) {
-	return []stream.Subject{
-		subject.FromStr("nathejk"),
+func (c *registrant) Consumes() (subjs []cqrs.Subject) {
+	return []cqrs.Subject{
+		cqrs.SubjectFromStr("nathejk"),
 	}
 }
 
-func (c *registrant) HandleMessage(msg stream.Message) {
+func (c *registrant) HandleMessage(msg cqrs.Message) {
 	switch msg.Subject().Subject() {
 	case "nathejk:patrulje.signedup", "nathejk:klan.signedup":
 		var body messages.NathejkTeamSignedUp

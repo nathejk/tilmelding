@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/pkg/tablerow"
 
 	_ "embed"
 )
@@ -23,10 +21,10 @@ type Klan struct {
 }
 
 type klan struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func NewKlan(w tablerow.Consumer) *klan {
+func NewKlan(w cqrs.Writer) *klan {
 	table := &klan{w: w}
 	if err := w.Consume(table.CreateTableSql()); err != nil {
 		log.Fatalf("Error creating table %q", err)
@@ -41,17 +39,17 @@ func (t *klan) CreateTableSql() string {
 	return klanSchema
 }
 
-func (c *klan) Consumes() (subjs []stream.Subject) {
-	return []stream.Subject{
-		//subject.FromStr("monolith:nathejk_team"),
-		//subject.FromStr("nathejk"),
-		subject.FromStr("NATHEJK.2026.klan.*.signedup"),
-		subject.FromStr("NATHEJK.*.klan.*.updated"),
-		subject.FromStr("NATHEJK.*.klan.*.status.changed"),
+func (c *klan) Consumes() (subjs []cqrs.Subject) {
+	return []cqrs.Subject{
+		//cqrs.SubjectFromStr("monolith:nathejk_team"),
+		//cqrs.SubjectFromStr("nathejk"),
+		cqrs.SubjectFromStr("NATHEJK.2026.klan.*.signedup"),
+		cqrs.SubjectFromStr("NATHEJK.*.klan.*.updated"),
+		cqrs.SubjectFromStr("NATHEJK.*.klan.*.status.changed"),
 	}
 }
 
-func (c *klan) HandleMessage(msg stream.Message) error {
+func (c *klan) HandleMessage(msg cqrs.Message) error {
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.klan.*.signedup"):
 		var body messages.NathejkTeamSignedUp

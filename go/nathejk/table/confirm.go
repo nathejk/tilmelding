@@ -4,18 +4,16 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/pkg/tablerow"
 )
 
 type confirm struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func NewConfirm(w tablerow.Consumer) *confirm {
+func NewConfirm(w cqrs.Writer) *confirm {
 	table := &confirm{w: w}
 	if err := w.Consume(table.CreateTableSql()); err != nil {
 		log.Fatalf("Error creating table %q", err)
@@ -34,13 +32,13 @@ CREATE TABLE IF NOT EXISTS confirm (
 `
 }
 
-func (t *confirm) Consumes() []stream.Subject {
-	return []stream.Subject{
-		subject.FromStr(fmt.Sprintf("NATHEJK:%s.*.*.mail.%s.sent", "2026", types.PingTypeSignup)),
+func (t *confirm) Consumes() []cqrs.Subject {
+	return []cqrs.Subject{
+		cqrs.SubjectFromStr(fmt.Sprintf("NATHEJK:%s.*.*.mail.%s.sent", "2026", types.PingTypeSignup)),
 	}
 }
 
-func (t *confirm) HandleMessage(msg stream.Message) error {
+func (t *confirm) HandleMessage(msg cqrs.Message) error {
 	switch msg.Subject().Subject() {
 	//case "NATHEJK.year.created":
 	default:

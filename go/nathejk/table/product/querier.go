@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
 	tables "nathejk.dk/nathejk/table"
 )
@@ -19,7 +20,7 @@ type Queries interface {
 }
 
 type querier struct {
-	db *sql.DB
+	db cqrs.Reader
 }
 
 // GetBySKU returns the product with the given (sku, year). Inactive products

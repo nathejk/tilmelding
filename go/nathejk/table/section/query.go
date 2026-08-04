@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/types"
 	tables "nathejk.dk/nathejk/table"
 )
@@ -19,7 +20,7 @@ type Queries interface {
 }
 
 type querier struct {
-	db *sql.DB
+	db cqrs.Reader
 	r  *goqu.Database
 }
 

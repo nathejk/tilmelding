@@ -4,17 +4,15 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jrgensen/stream"
-	"github.com/jrgensen/stream/subject"
+	"github.com/jrgensen/cqrs"
 	"github.com/nathejk/shared-go/messages"
-	"nathejk.dk/pkg/tablerow"
 )
 
 type signup struct {
-	w tablerow.Consumer
+	w cqrs.Writer
 }
 
-func NewSignup(w tablerow.Consumer) *signup {
+func NewSignup(w cqrs.Writer) *signup {
 	table := &signup{w: w}
 	if err := w.Consume(table.CreateTableSql()); err != nil {
 		log.Fatalf("Error creating table %q", err)
@@ -39,13 +37,13 @@ CREATE TABLE IF NOT EXISTS signup (
 `
 }
 
-func (t *signup) Consumes() []stream.Subject {
-	return []stream.Subject{
-		subject.FromStr("NATHEJK:*.*.*.signedup"),
+func (t *signup) Consumes() []cqrs.Subject {
+	return []cqrs.Subject{
+		cqrs.SubjectFromStr("NATHEJK:*.*.*.signedup"),
 	}
 }
 
-func (t *signup) HandleMessage(msg stream.Message) error {
+func (t *signup) HandleMessage(msg cqrs.Message) error {
 	switch true {
 	case msg.Subject().Match("NATHEJK.*.*.*.signedup"):
 		//case "NATHEJK.year.created":

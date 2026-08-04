@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jrgensen/cqrs/deadletter"
+	"github.com/jrgensen/cqrs/sqlpersister"
 	"github.com/jrgensen/stream"
 	"github.com/jrgensen/stream/jetstream"
 	"github.com/jrgensen/stream/metatagger"
@@ -38,8 +40,6 @@ import (
 	"nathejk.dk/nathejk/table/senior"
 	"nathejk.dk/nathejk/table/signup"
 	"nathejk.dk/nathejk/table/spejder"
-	"nathejk.dk/pkg/deadletter"
-	"nathejk.dk/pkg/sqlpersister"
 )
 
 var (
@@ -162,6 +162,11 @@ func main() {
 
 	mailclient := mailer.NewFromConfig(cfg.smtp).AddOptions(mailer.WithGlobalVar("baseurl", cfg.baseurl))
 
+	// The three collaborators every entity below is constructed with. They are
+	// the only concrete infrastructure choices in the application; the entities
+	// themselves see nothing but the cqrs.Publisher / cqrs.Writer / cqrs.Reader
+	// interfaces, which is what keeps them portable and testable.
+	//
 	// publisher wraps the JetStream connection so every command-published
 	// message inherits a default producer and build version in its metadata,
 	// rather than each call site setting the producer tag by hand.
@@ -169,6 +174,7 @@ func main() {
 	if err != nil {
 		logger.PrintFatal(err, nil)
 	}
+	// reader serves the query side straight off the connection pool.
 	reader := db.DB()
 	// writer persists the read-model projections. It is wrapped in a
 	// dead-letter writer so a single failing statement (e.g. a value that
@@ -279,11 +285,14 @@ func main() {
 		db:        reader,
 		publisher: publisher,
 		commands: commands{
-			Signup:     tableSignup,
-			Klan:       tableKlan,
-			Patrulje:   tablePatrulje,
-			Personnel:  tableStaff,
-			Payment:    payments.NewCommands(publisher, paymentClient),
+			Signup:    tableSignup,
+			Klan:      tableKlan,
+			Patrulje:  tablePatrulje,
+			Personnel: tableStaff,
+			// The payment commands speak payments.Provider; the MobilePay
+			// client is adapted to it here (see mobilepayprovider.go) so the
+			// entity never names a specific provider.
+			Payment:    payments.NewCommands(publisher, newMobilepayProvider(paymentClient)),
 			Order:      tableOrder,
 			Section:    tableSection,
 			Crewmember: tableCrewmember,
