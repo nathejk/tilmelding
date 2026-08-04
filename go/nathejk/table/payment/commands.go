@@ -37,9 +37,11 @@ func (c *commander) Request(amount Amount, desc string, phone types.PhoneNumber,
 		Amount:         amount,
 		Description:    desc,
 		PhoneNumber:    phone.InternationalNumber(),
-		// TODO: hard-coded production host. A non-production deployment sends
-		// the payer to production on return. Pre-dates this refactor; left
-		// as-is to keep the change behaviour-preserving.
+		// TODO(task 024): hard-coded production host. A non-production
+		// deployment sends the payer back to production after paying, so the
+		// payment flow cannot be exercised outside production. cfg.baseurl
+		// already exists for this. Pre-dates the provider port; left as-is to
+		// keep that refactor behaviour-preserving.
 		CallbackURL: "https://tilmelding.nathejk.dk/callback/mobilepay/" + reference,
 	})
 	if err != nil {
