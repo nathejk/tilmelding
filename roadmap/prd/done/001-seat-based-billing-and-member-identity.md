@@ -1,9 +1,11 @@
 # PRD 001 — Seat-based team billing & stable member identity
 
-**Status:** draft
+**Status:** done
 **Author:** agent session
 **Created:** 2026-07-31
-**Last updated:** 2026-07-31
+**Last updated:** 2026-08-04
+**Approved:** 2026-07-31
+**Shipped:** 2026-08-01
 **Target users:** team leader (patrulje/klan contact person), organizer
 
 ---
