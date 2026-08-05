@@ -98,30 +98,8 @@ func (m SignupModel) GetByID(teamID types.TeamID) (*Signup, error) {
 	}
 	return &p, nil
 }
-func (m SignupModel) ConfirmBySecret(secret string) (types.TeamID, error) {
-	//ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	//defer cancel()
 
-	query := "UPDATE signup s JOIN confirm c ON s.teamId = c.teamId SET s.email = c.emailPending WHERE secret = ?"
-	//result, err := m.DB.Exec(query, secret)
-	_, err := m.DB.Exec(query, secret)
-	if err != nil {
-		return "", err
-	}
-	/*
-		rowCount, err := result.RowsAffected()
-		if err != nil {
-			return "", err
-		}
-		if rowCount != 1 {
-			return "", fmt.Errorf("e-mail not found")
-		}
-	*/
-	var teamID types.TeamID
-	err = m.DB.QueryRow(`SELECT teamId FROM confirm WHERE secret = ?`, secret).Scan(&teamID)
-	if err != nil {
-		return "", err
-	}
-
-	return teamID, nil
-}
+// SignupModel.ConfirmBySecret was removed together with the confirm projector.
+// It read a `confirm` table that nothing populates or creates any more, and it
+// had no callers — the live e-mail verification path is
+// signup.Commands.VerifyEmail, driven from validateEmailCallbackHandler.

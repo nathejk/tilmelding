@@ -67,11 +67,6 @@ type Models struct {
 		Update(*User) error
 		GetForToken(string, string) (*User, error)
 	}
-	/*
-		Signup interface {
-			GetByID(types.TeamID) (*Signup, error)
-			ConfirmBySecret(string) (types.TeamID, error)
-		}*/
 	Payment    PaymentInterface
 	Personnel  PersonnelInterface
 	Patrulje   PatruljeInterface

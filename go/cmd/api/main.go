@@ -260,7 +260,6 @@ func main() {
 		// Projectors still owned by this repo. The tables they build are read
 		// by the shared-go entities below, which do not project them — see
 		// task 028.
-		table.NewConfirm(writer),
 		table.NewPatruljeStatus(writer),
 		table.NewSpejderStatus(writer),
 		// Entities from github.com/nathejk/shared-go/tables.
