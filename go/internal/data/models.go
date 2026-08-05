@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"time"
 
 	"github.com/nathejk/shared-go/tables/crewmember"
 	"github.com/nathejk/shared-go/tables/klan"
@@ -39,33 +38,13 @@ type PatruljeInterface interface {
 
 type Models struct {
 	Teams interface {
-		GetStartedTeamIDs(Filters) ([]types.TeamID, Metadata, error)
-		GetPatruljer(Filters) ([]*Patrulje, Metadata, error)
 		GetPatrulje(types.TeamID) (*Patrulje, error)
 		GetKlan(types.TeamID) (*Klan, error)
 		GetContact(types.TeamID) (*Contact, error)
-		RequestedSeniorCount() int
-		GetLastPatruljeID() (*types.TeamID, error)
 	}
 	Members interface {
 		GetSpejdere(Filters) ([]*Spejder, Metadata, error)
 		GetSeniore(Filters) ([]*Senior, Metadata, error)
-		GetInactive(Filters) ([]*SpejderStatus, Metadata, error)
-	}
-	Permissions interface {
-		AddForUser(int64, ...string) error
-		GetAllForUser(int64) (Permissions, error)
-	}
-	Tokens interface {
-		New(userID int64, ttl time.Duration, scope string) (*Token, error)
-		Insert(token *Token) error
-		DeleteAllForUser(scope string, userID int64) error
-	}
-	Users interface {
-		Insert(*User) error
-		GetByEmail(string) (*User, error)
-		Update(*User) error
-		GetForToken(string, string) (*User, error)
 	}
 	Payment    PaymentInterface
 	Personnel  PersonnelInterface
@@ -80,12 +59,8 @@ type Models struct {
 
 func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterface, patrulje PatruljeInterface, s signup.Queries, k klan.Queries, o order.Queries, pr product.Queries, sec section.Queries, cm crewmember.Queries) Models {
 	return Models{
-		Teams:       TeamModel{DB: db},
-		Members:     MemberModel{DB: db},
-		Permissions: PermissionModel{DB: db},
-		Tokens:      TokenModel{DB: db},
-		Users:       UserModel{DB: db},
-		//Signup:      SignupModel{DB: db},
+		Teams:      TeamModel{DB: db},
+		Members:    MemberModel{DB: db},
 		Payment:    payment,
 		Personnel:  personnel,
 		Patrulje:   patrulje,

@@ -2,57 +2,24 @@ package data
 
 import (
 	"math"
-	"strings"
 
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/internal/validator"
 )
 
+// Filters carries the query parameters the read models accept. Callers only
+// ever set TeamID today; Year/Page/PageSize are consumed by the queries and by
+// calculateMetadata.
+//
+// The Sort / SortSafelist fields were removed together with Validate,
+// SortColumn, SortDirection, Offset and Limit — no caller invoked any of them,
+// in handlers or in this package, so the sort-safelist machinery was dead. Note
+// SortColumn panicked on an unrecognised value, which is worth knowing if
+// sorting is ever reintroduced: build it to return an error instead.
 type Filters struct {
-	Year         string
-	Page         int
-	PageSize     int
-	Sort         string
-	SortSafelist []string
-	TeamID       types.TeamID
-}
-
-func (f *Filters) Validate(v validator.Validator) {
-	// Check that the page and page_size parameters contain sensible values.
-	v.Check(f.Page > 0, "page", "must be greater than zero")
-	v.Check(f.PageSize > 0, "page_size", "must be greater than zero")
-
-	// Check that the sort parameter matches a value in the safelist.
-	v.Check(validator.PermittedValue(f.Sort, f.SortSafelist...), "sort", "invalid sort value")
-}
-
-// Check that the client-provided Sort field matches one of the entries in our safelist
-// and if it does, extract the column name from the Sort field by stripping the leading
-// hyphen character (if one exists).
-func (f Filters) SortColumn() string {
-	for _, safeValue := range f.SortSafelist {
-		if f.Sort == safeValue {
-			return strings.TrimPrefix(f.Sort, "-")
-		}
-	}
-	panic("unsafe sort parameter: " + f.Sort)
-}
-
-// Return the sort direction ("ASC" or "DESC") depending on the prefix character of the
-// Sort field.
-func (f Filters) SortDirection() string {
-	if strings.HasPrefix(f.Sort, "-") {
-		return "DESC"
-	}
-	return "ASC"
-}
-
-func (f Filters) Offset() int {
-	return (f.Page - 1) * f.PageSize
-}
-
-func (f Filters) Limit() int {
-	return f.PageSize
+	Year     string
+	Page     int
+	PageSize int
+	TeamID   types.TeamID
 }
 
 type Metadata struct {
