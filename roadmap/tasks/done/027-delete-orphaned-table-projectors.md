@@ -1,8 +1,9 @@
 # 027 — Delete the orphaned projectors in nathejk/table
 
-**Status:** open
+**Status:** done
 **Priority:** medium
 **Created:** 2026-08-04
+**Completed:** 2026-08-04
 
 ## Description
 
@@ -60,15 +61,15 @@ Checked for helpers shared with the three *live* projectors (`NewConfirm`,
 
 ## Acceptance Criteria
 
-- [ ] `klan.go`, `klan.sql`, `patrulje.go`, `patrulje.sql`, `signup.go`,
+- [x] `klan.go`, `klan.sql`, `patrulje.go`, `patrulje.sql`, `signup.go`,
       `pincode.go`, `pincode.sql`, `registrant.go`, `registrant.sql` deleted
-- [ ] `senior.sql` and `spejder.sql` deleted
-- [ ] The stale commented-out `AddConsumer` entries removed from `main.go`
-- [ ] The three live projectors (`confirm`, `patruljestatus`, `spejderstatus`)
+- [x] `senior.sql` and `spejder.sql` deleted
+- [x] The stale commented-out `AddConsumer` entries removed from `main.go`
+- [x] The three live projectors (`confirm`, `patruljestatus`, `spejderstatus`)
       still wired and their tables still created
-- [ ] Decision recorded on `filters.go` (`Filters`/`Metadata`) and
+- [x] Decision recorded on `filters.go` (`Filters`/`Metadata`) and
       `confirm.go`'s `escapeNull` — delete or keep
-- [ ] `go build ./...`, `go vet ./...`, `go tool staticcheck ./...`,
+- [x] `go build ./...`, `go vet ./...`, `go tool staticcheck ./...`,
       `go test ./...` pass in the workspace **and** with `GOWORK=off`
 
 ## Progress Log
@@ -78,3 +79,27 @@ Checked for helpers shared with the three *live* projectors (`NewConfirm`,
   for references with commented-out code stripped: 3 live, 5 orphaned. Verified
   the live three are load-bearing (their tables are genuinely read) before
   proposing any deletion — see task 028, which covers who should own them.
+- 2026-08-04 — Done. Deleted all five orphaned projectors and their embedded
+  schemas, plus the two orphaned `.sql` files and `filters.go`.
+
+  Decisions on the two open questions:
+  - `filters.go` — **deleted**. `Filters` and `Metadata` are referenced nowhere
+    in tilmelding or shared-go, and no other module imports `nathejk.dk`, so
+    exported-but-unused meant dead. Its `calculateMetadata` was already
+    commented out.
+  - `escapeNull` — **correction to this task's own description**: it was never a
+    live declaration *anywhere*. Both copies (`confirm.go` and `signup.go`) sat
+    inside `/* */` blocks, which is the real reason the package compiled with
+    two apparent definitions — not, as written above, that `confirm.go` held
+    the only real one. Removed the dead block from `confirm.go`; the other went
+    with `signup.go`.
+
+  Also rewrote the `mux.AddConsumer(...)` call, which was a single unreadable
+  line carrying the stale comments. It is now one consumer per line, grouped by
+  owner (locally-projected / shared-go entities / not-yet-shared), with a
+  pointer to task 028. Verified the consumer set is unchanged: 15 before, 15
+  after, same names.
+
+  `nathejk/table` is now down to what task 028 covers (`confirm.go`,
+  `patruljestatus.go`, `spejderstatus.go`), `errors.go`, and `personnel/`.
+  Build, vet, staticcheck and tests pass in the workspace and with `GOWORK=off`.

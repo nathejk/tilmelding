@@ -64,11 +64,3 @@ func (t *confirm) HandleMessage(msg cqrs.Message) error {
 	}
 	return nil
 }
-
-/*
-func escapeNull(s *time.Time) string {
-	if s == nil {
-		return "NULL"
-	}
-	return fmt.Sprintf("%q", s)
-}*/

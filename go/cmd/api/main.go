@@ -255,8 +255,28 @@ func main() {
 	})
 
 	mux := xstream.NewMux(js)
-	mux.AddConsumer(detector, table.NewConfirm(writer), tableKlan, tableSenior /*table.NewPatrulje(sqlw),*/, table.NewPatruljeStatus(writer) /*table.NewPatruljeMerged(sqlw),*/, tableSpejder, table.NewSpejderStatus(writer), tablePayment, tableStaff, tablePatrulje, tableSignup, tableOrder, orderSaga, tableSection, tableCrewmember)
-	//mux.AddConsumer(table.NewSpejder(sqlw), table.NewSpejderStatus(sqlw))
+	mux.AddConsumer(
+		detector,
+		// Projectors still owned by this repo. The tables they build are read
+		// by the shared-go entities below, which do not project them — see
+		// task 028.
+		table.NewConfirm(writer),
+		table.NewPatruljeStatus(writer),
+		table.NewSpejderStatus(writer),
+		// Entities from github.com/nathejk/shared-go/tables.
+		tableKlan,
+		tableSenior,
+		tableSpejder,
+		tablePayment,
+		tablePatrulje,
+		tableSignup,
+		tableOrder,
+		orderSaga,
+		tableSection,
+		tableCrewmember,
+		// Local, not yet shared.
+		tableStaff,
+	)
 	if err := mux.Run(context.Background()); err != nil {
 		logger.PrintFatal(err, nil)
 	}
