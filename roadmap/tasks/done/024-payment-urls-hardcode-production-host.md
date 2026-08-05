@@ -1,8 +1,9 @@
 # 024 — Payment URLs hard-code the production host
 
-**Status:** open
+**Status:** done
 **Priority:** medium
 **Created:** 2026-08-04
+**Completed:** 2026-08-04
 **Picked up by:**
 **Started:**
 **Completed:**
@@ -80,16 +81,16 @@ hostname regardless — fixing this makes staging work, not localhost.
 
 ## Acceptance Criteria
 
-- [ ] No Go file outside tests builds a URL from a hard-coded
+- [x] No Go file outside tests builds a URL from a hard-coded
       `https://tilmelding.nathejk.dk`.
-- [ ] The MobilePay callback URL derives from `cfg.baseurl`.
-- [ ] The five `returnUrl` sites derive from `cfg.baseurl`.
-- [ ] Setting `BASEURL=https://staging.example.com` produces callback and
+- [x] The MobilePay callback URL derives from `cfg.baseurl`.
+- [x] The five `returnUrl` sites derive from `cfg.baseurl`.
+- [x] Setting `BASEURL=https://staging.example.com` produces callback and
       return URLs on that host (verify by unit test or by inspecting the
       `NathejkPaymentRequested` event, not by a live payment).
-- [ ] `nathejk/table/payment/commands_test.go` no longer asserts a production
+- [x] `nathejk/table/payment/commands_test.go` no longer asserts a production
       hostname it does not control.
-- [ ] `go build ./...` and `go test ./...` pass.
+- [x] `go build ./...` and `go test ./...` pass.
 
 ## Progress Log
 
@@ -99,3 +100,19 @@ hostname regardless — fixing this makes staging work, not localhost.
   Grepping for the host turned up five more instances in the handlers, so this
   is a pattern rather than a one-off. Production is unaffected — `cfg.baseurl`
   defaults to the same value — which is presumably why it has survived.
+- 2026-08-04 — Done, Option B. Dropped `CallbackURL` from
+  `payments.PaymentRequest`: `/callback/mobilepay/` names a provider, so
+  building it belongs in the adapter, not the domain. `mobilepayProvider` now
+  takes a `baseURL` (trailing slash trimmed) and derives the callback as
+  `baseURL + "/callback/mobilepay/" + reference`; `main.go` passes
+  `cfg.baseurl`. This also shrinks the port by one field.
+  The five handler `returnUrl` sites (klan ×2, patrulje, personnel, crew) now
+  use `app.config.baseurl` instead of the literal host.
+  Added `cmd/api/mobilepayprovider_test.go` with a fake `mobilepay.Client`
+  proving the callback tracks `BASEURL` (production, staging, trailing-slash)
+  — the AC's staging check, without a live payment. Removed the now-invalid
+  `CallbackURL` assertion from the payment commander test. Confirmed no
+  hard-coded host remains in non-test Go outside the `BASEURL` flag default.
+  Note (unchanged, out of scope): a working callback must be reachable by
+  MobilePay from the public internet, so local dev still needs a tunnel — this
+  fixes staging, not localhost.

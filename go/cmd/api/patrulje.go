@@ -241,7 +241,7 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 		// Order.DueAmount is already in minor units (øre), unlike the
 		// legacy DKK arithmetic that needed *100.
 		amount := payments.Amount{Value: int64(due), Currency: types.CurrencyDKK}
-		teamUrl := "https://tilmelding.nathejk.dk/patrulje/" + string(teamID)
+		teamUrl := app.config.baseurl + "/patrulje/" + string(teamID)
 
 		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", input.Contact.Phone, input.Contact.Email, teamUrl, orderID, "order")
 	}

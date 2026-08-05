@@ -156,7 +156,7 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 
 		if o.DueAmount > 0 {
 			amount := payments.Amount{Value: int64(o.DueAmount), Currency: types.CurrencyDKK}
-			teamUrl := "https://tilmelding.nathejk.dk/klan/" + string(teamID)
+			teamUrl := app.config.baseurl + "/klan/" + string(teamID)
 			paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", *signup.Phone, *signup.Email, teamUrl, o.OrderID, "order")
 		}
 	}
@@ -239,7 +239,7 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 			email = *signup.Email
 		}
 		amount := payments.Amount{Value: int64(due), Currency: types.CurrencyDKK}
-		teamUrl := "https://tilmelding.nathejk.dk/klan/" + string(teamID)
+		teamUrl := app.config.baseurl + "/klan/" + string(teamID)
 
 		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", phone, email, teamUrl, orderID, "order")
 	}

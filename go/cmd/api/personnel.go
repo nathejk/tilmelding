@@ -117,7 +117,7 @@ func (app *application) updatePersonnelHandler(w http.ResponseWriter, r *http.Re
 			email = *signup.Email
 		}
 		amount := payments.Amount{Value: int64(o.DueAmount), Currency: types.CurrencyDKK}
-		teamUrl := "https://tilmelding.nathejk.dk/badut/" + string(userID)
+		teamUrl := app.config.baseurl + "/badut/" + string(userID)
 
 		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk gøglertilmelding", phone, email, teamUrl, o.OrderID, "order")
 	}

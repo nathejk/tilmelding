@@ -85,10 +85,6 @@ func TestRequestAuthorisesAndPublishes(t *testing.T) {
 	if req.IdempotencyKey == "" || req.IdempotencyKey == req.Reference {
 		t.Errorf("idempotency key %q must be present and distinct from reference %q", req.IdempotencyKey, req.Reference)
 	}
-	// The callback returns the payer to this specific payment.
-	if !strings.HasSuffix(req.CallbackURL, req.Reference) {
-		t.Errorf("callback %q should end in the reference %q", req.CallbackURL, req.Reference)
-	}
 
 	if len(pub.Messages) != 1 {
 		t.Fatalf("want 1 event, got %d", len(pub.Messages))

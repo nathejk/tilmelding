@@ -292,7 +292,7 @@ func main() {
 			// The payment commands speak payments.Provider; the MobilePay
 			// client is adapted to it here (see mobilepayprovider.go) so the
 			// entity never names a specific provider.
-			Payment:    payments.NewCommands(publisher, newMobilepayProvider(paymentClient)),
+			Payment:    payments.NewCommands(publisher, newMobilepayProvider(paymentClient, cfg.baseurl)),
 			Order:      tableOrder,
 			Section:    tableSection,
 			Crewmember: tableCrewmember,

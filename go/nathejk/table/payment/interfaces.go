@@ -35,10 +35,6 @@ type PaymentRequest struct {
 	// PhoneNumber identifies the payer to a wallet provider, in international
 	// form.
 	PhoneNumber string
-
-	// CallbackURL is where the provider returns the payer once they have
-	// approved or rejected the payment.
-	CallbackURL string
 }
 
 // PaymentCreated is the result of authorising a payment. RedirectURL is where

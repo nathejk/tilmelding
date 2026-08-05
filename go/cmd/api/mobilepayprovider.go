@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/internal/payment/mobilepay"
 	payments "nathejk.dk/nathejk/table/payment"
@@ -12,24 +14,31 @@ import (
 // it joins: payments must not know which provider it is talking to, and the
 // mobilepay client must not know it is being used to satisfy a Nathejk port.
 // Everything MobilePay-shaped about a payment — the WALLET payment method, the
-// WEB_REDIRECT user flow, the aggregate amount fields — is confined to this
-// file. Adding a second provider means adding a sibling, not editing a domain
-// package.
+// WEB_REDIRECT user flow, the aggregate amount fields, and the callback route
+// the payer is returned to — is confined to this file. Adding a second provider
+// means adding a sibling, not editing a domain package.
 type mobilepayProvider struct {
-	client mobilepay.Client
+	client  mobilepay.Client
+	baseURL string
 }
 
-func newMobilepayProvider(client mobilepay.Client) mobilepayProvider {
-	return mobilepayProvider{client: client}
+// newMobilepayProvider builds the adapter. baseURL is the public host of this
+// deployment (cfg.baseurl); the MobilePay callback route is derived from it, so
+// a non-production deployment returns the payer to itself rather than to
+// production. It is stored without a trailing slash.
+func newMobilepayProvider(client mobilepay.Client, baseURL string) mobilepayProvider {
+	return mobilepayProvider{client: client, baseURL: strings.TrimRight(baseURL, "/")}
 }
 
 func (p mobilepayProvider) CreatePayment(req payments.PaymentRequest) (payments.PaymentCreated, error) {
 	resp, err := p.client.CreatePayment(req.IdempotencyKey, mobilepay.Payment{
-		Amount:             amountTo(req.Amount),
-		PaymentMethod:      mobilepay.PaymentMethod{Type: mobilepay.PaymentMethodType("WALLET")},
-		Customer:           mobilepay.Customer{PhoneNumber: req.PhoneNumber},
-		Reference:          mobilepay.PaymentReference(req.Reference),
-		ReturnUrl:          req.CallbackURL,
+		Amount:        amountTo(req.Amount),
+		PaymentMethod: mobilepay.PaymentMethod{Type: mobilepay.PaymentMethodType("WALLET")},
+		Customer:      mobilepay.Customer{PhoneNumber: req.PhoneNumber},
+		Reference:     mobilepay.PaymentReference(req.Reference),
+		// Where MobilePay returns the payer after they approve/reject. This is
+		// the /callback/mobilepay/:ref route (routes.go), which drives Capture.
+		ReturnUrl:          p.baseURL + "/callback/mobilepay/" + req.Reference,
 		UserFlow:           mobilepay.UserFlowWeb,
 		PaymentDescription: req.Description,
 	})
