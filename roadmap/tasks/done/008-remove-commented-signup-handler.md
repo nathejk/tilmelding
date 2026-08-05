@@ -1,8 +1,9 @@
 # 008 — Remove commented-out createSignupHandler block
 
-**Status:** open
+**Status:** done
 **Priority:** low
 **Created:** 2026-06-04
+**Completed:** 2026-08-04
 
 ## Description
 
@@ -21,3 +22,11 @@ Related files:
 ## Progress Log
 
 - 2026-06-04 21:54 — Task created.
+- 2026-08-04 — Done. The large `/* … */` block with the stale `app.mailer.Send`
+  call was already gone — removed by earlier post-cutover work — and
+  `createSignupHandler` already uses `signup.SendVerificationEmail`, so the
+  main acceptance criterion held on arrival. Confirmed no `mailer.Send`
+  pattern remains anywhere in the file. Tidied the three trailing pre-cutover
+  `//` comment lines (a commented struct field in each of
+  `validatePhoneNumberHandler` and `createSignupHandler`, plus a `//log.Print`)
+  so no stale leftovers remain. Build and vet pass.

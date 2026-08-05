@@ -42,7 +42,6 @@ func (app *application) validatePhoneNumberHandler(w http.ResponseWriter, r *htt
 	var input struct {
 		TeamID  types.TeamID `json:"teamId"`
 		Pincode string       `json:"pincode"`
-		//PhoneNumber types.PhoneNumber `json:"phone"`
 	}
 	if err := app.ReadJSON(w, r, &input); err != nil {
 		app.BadRequestResponse(w, r, err)
