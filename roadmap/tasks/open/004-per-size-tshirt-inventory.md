@@ -27,3 +27,20 @@ Related files:
 ## Progress Log
 
 - 2026-06-04 21:54 — Task created.
+- 2026-08-04 — Assessed while clearing the open board; **recommend defer, left
+  open pending a product signal.** This is a speculative feature — the task
+  itself is conditional ("If needed (\"50 XL, 200 M\" enforcement)") — and its
+  acceptance criteria require building a real subsystem: a
+  `product_variant_stock` table, per-variant logic in
+  `order.commander.checkStock` (today it aggregates strictly per-SKU, lines
+  391–409), per-size seed values, and FE remaining-stock-per-size display.
+
+  There is no current requirement for per-size caps: `product.sizes` is
+  captured and `Stock` is a single per-SKU pool, which has been sufficient.
+  Building per-variant inventory with no product need would be gold-plating and
+  adds a schema + projection surface to maintain. Deliberately not built.
+
+  The groundwork already exists if it becomes needed: order lines capture
+  `Attributes.size`, and `checkStock` is the single, well-isolated enforcement
+  point to extend. Revisit when product actually wants per-size limits;
+  needs a product decision, not just engineering. Flagged to the user.
