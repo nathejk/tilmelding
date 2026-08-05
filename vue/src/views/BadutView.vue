@@ -22,18 +22,6 @@ const props = defineProps({
 
 const router = useRouter()
 
-class List extends Array {
-  totalAmount() {
-    return this.reduce((a, b) => a + (b['amount'] || 0), 0)
-  }
-  sum(field) {
-    return this.reduce((a, b) => a + (b[field] || 0), 0)
-  }
-  group(field) {
-    return 0
-  }
-}
-
 const config = ref({
   memberPrice: 100,
   tshirtPrice: 175
