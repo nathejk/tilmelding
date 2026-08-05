@@ -72,16 +72,57 @@ Worth resolving as part of this task, or splitting out once diagnosed.
 
 ## Acceptance Criteria
 
-- [ ] Decision recorded on ownership of `patruljestatus`, `spejderstatus`,
+- [x] Decision recorded on ownership of `patruljestatus`, `spejderstatus`,
       `confirm` (move to shared-go vs document + startup assertion)
 - [ ] If moving: projectors live in shared-go, tilmelding wires them from
       `main.go`, and the local copies are removed
 - [ ] A service using the shared entities cannot silently get empty joins —
       either it projects the tables, or startup fails loudly if they are absent
-- [ ] `patruljemerged` diagnosed: table exists (and needs a projector) or the
+- [x] `patruljemerged` diagnosed: table exists (and needs a projector) or the
       live query in `internal/data/team.go` is dead and removed
-- [ ] `go build ./...` / `go test ./...` pass in the workspace and with
+- [x] `go build ./...` / `go test ./...` pass in the workspace and with
       `GOWORK=off`
+
+## Decision (2026-08-04)
+
+**Option 1 — move the three projectors into shared-go**, each as its own entity
+package (`tables/confirm`, `tables/patruljestatus`, `tables/spejderstatus`).
+`patruljestatus` must be its own package rather than folded into a reader,
+because four separate entities (`klan`, `patrulje`, `senior`, `spejder`) join
+it. Option 3 (document only) was rejected: it leaves the silent-empty-join trap
+in place, and the whole point of shipping these entities in a shared module is
+that a consumer gets working state without reading tilmelding's `main.go`.
+
+**Not implemented here.** The change belongs in the shared-go module, which is
+out of scope for this repo. It also cannot land as one atomic tilmelding commit:
+switching `main.go` to shared projectors would break `GOWORK=off` (the CI and
+production resolution path) until shared-go is committed, pushed, and its
+version bumped in `go.mod`. Sequencing therefore matters.
+
+### Steps, in order
+
+1. **In shared-go**, add three entity packages, ported verbatim from
+   tilmelding's `nathejk/table/`:
+   - `tables/confirm/` — from `confirm.go` (schema is inline in
+     `CreateTableSql()`, not an embedded `.sql`; keep or convert to
+     `table.sql` to match the other entities).
+   - `tables/patruljestatus/` — from `patruljestatus.go` + `patruljestatus.sql`.
+   - `tables/spejderstatus/` — from `spejderstatus.go` + `spejderstatus.sql`.
+   Follow the existing convention: `table.go` with `New(w cqrs.Writer, ...)`,
+   `consumer.go`, `table.sql`. They need only `cqrs`, `shared-go/messages` and
+   `shared-go/types` — no new dependencies.
+2. **In shared-go**, delete the dead `TeamModel.GetSpejder` in
+   `tables/spejder/querier.go`. It joins the unprojected `patruljemerged` table
+   and is uncalled — the copies in tilmelding were removed under this task.
+3. Commit and push shared-go.
+4. **In tilmelding**, bump the shared-go version in `go.mod`, wire the three
+   from `main.go` (they are already grouped and commented there, see task 027),
+   and delete `nathejk/table/{confirm.go,patruljestatus.go,patruljestatus.sql,
+   spejderstatus.go,spejderstatus.sql}`.
+5. Check whether `nathejk/table/errors.go` still has any consumer once those
+   go. If not, the root `table` package disappears entirely and only
+   `nathejk/table/personnel/` remains (blocked on task 001).
+6. Verify with `GOWORK=off` as well as the workspace.
 
 ## Progress Log
 
@@ -90,3 +131,19 @@ Worth resolving as part of this task, or splitting out once diagnosed.
   of the three tables with commented-out code distinguished from live, which is
   also how the `patruljemerged` gap surfaced. No code change yet — the ownership
   question needs deciding first.
+- 2026-08-04 — `patruljemerged` half **done**. Diagnosed: nothing projects the
+  table, and **both** references were unreachable, which corrects this task's
+  original "live code" framing. `GetDiscontinuedTeamIDs` was declared in the
+  `Models.Teams` interface but never called; `TeamModel.GetSpejder` (singular)
+  was in no interface and never called — the live callers use
+  `Members.GetSpejdere` (plural), a different method. So the broken joins could
+  not fail in production. Removed both with a comment at each site. Noted that
+  `shared-go/tables/spejder/querier.go` holds a copy of the same dead method.
+- 2026-08-04 — Ownership half: decision recorded above (Option 1). Began the
+  shared-go implementation and stopped — modifying the shared-go module was
+  declined, and it is not this repo's to change. Left the task open with the
+  ordered steps rather than a partial migration: adding the packages to
+  shared-go while tilmelding still projects the same tables would mean two
+  projectors for one table across two repos, which is worse than the current
+  documented gap. Nothing here is blocking tilmelding; the gap only bites a
+  *second* service adopting these entities.
