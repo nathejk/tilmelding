@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync/atomic"
 	"time"
 
 	"github.com/jrgensen/cqrs"
@@ -51,7 +52,26 @@ type saga struct {
 	q        Queries
 	payments PaymentReader
 	settle   time.Duration
+
+	// live is false until CaughtUp fires, i.e. while the saga is replaying the
+	// historical stream on startup. During replay the settle delay is skipped
+	// (see HandleMessage), turning an N×settle startup cost into none.
+	live atomic.Bool
+
+	// sleep is a test seam; nil means time.Sleep.
+	sleep func(time.Duration)
 }
+
+// CaughtUp marks the saga live: the stream has been replayed up to the point
+// it had reached when the process started, so subsequent events are new rather
+// than historical. It satisfies stream.CatchupListener, which the jetstream
+// Subscribe path invokes once this consumer's backlog has drained (fixed in
+// jrgensen/stream v0.1.2). The interface is discovered by a runtime type
+// assertion on the concrete type, so this package need not import stream to
+// participate — the local assertion below documents the contract instead.
+func (s *saga) CaughtUp() { s.live.Store(true) }
+
+var _ interface{ CaughtUp() } = (*saga)(nil)
 
 // NewSaga wires the payment->order paid saga. Pass the order Queries
 // (typically the *table returned by order.New), a PaymentReader (typically
@@ -77,6 +97,14 @@ func (s *saga) Consumes() []cqrs.Subject {
 	}
 }
 
+func (s *saga) nap(d time.Duration) {
+	if s.sleep != nil {
+		s.sleep(d)
+		return
+	}
+	time.Sleep(d)
+}
+
 func (s *saga) HandleMessage(msg cqrs.Message) error {
 	var body messages.NathejkPaymentReceived
 	if err := msg.Body(&body); err != nil {
@@ -91,7 +119,15 @@ func (s *saga) HandleMessage(msg cqrs.Message) error {
 	// {'reserved','received'}; if we read before the projector has
 	// caught up we may see status='requested' and miss the just-received
 	// amount.
-	time.Sleep(s.settle)
+	//
+	// Skipped during replay: while catching up on startup this fixed delay
+	// is pure cost, and CaughtUp has not fired yet. Note this does not make
+	// replay perfectly race-free against the payment/order projectors, which
+	// replay on independent consumers — hardening that read is task 002's
+	// bounded-retry loop, not this flag.
+	if s.live.Load() {
+		s.nap(s.settle)
+	}
 
 	pmt, err := s.payments.GetByReference(body.Reference)
 	if err != nil {

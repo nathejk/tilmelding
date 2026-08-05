@@ -1,8 +1,9 @@
 # 006 — Event replay safety for the saga
 
-**Status:** open
+**Status:** done
 **Priority:** low
 **Created:** 2026-06-04
+**Completed:** 2026-08-04
 
 ## Description
 
@@ -79,3 +80,19 @@ replay") is exactly this task. Consider merging them.
   handler, implementing `CaughtUp()` on the concrete `*saga` is now sufficient
   and self-contained — the original approach, viable again. No code change
   here; the dependency bump that unblocks it is a separate commit.
+- 2026-08-04 — Done. Added a `live atomic.Bool` set by `CaughtUp()`;
+  `HandleMessage` skips the settle wait while `live` is false (replay).
+  Wiring is automatic — the mux subscribes the saga as its own handler and
+  jetstream v0.1.2 type-asserts `CatchupListener`, so `main.go` is unchanged.
+  Kept the order package free of a direct `stream` import (the 022 invariant):
+  the method presence is locked with a local
+  `var _ interface{ CaughtUp() } = (*saga)(nil)` rather than a
+  `stream.CatchupListener` assertion. Added a `sleep` test seam and
+  `saga_test.go` (5 cases): asserts the consumer implements `CaughtUp()`,
+  that the settle wait is skipped during replay and taken once live, and that
+  the fully-paid/open transition and its guards behave.
+  Two caveats recorded honestly: (1) this speeds startup but does not make
+  replay race-free against the independently-replaying payment/order
+  projectors — that hardening is task 002's bounded-retry loop; (2) correctness
+  depends on stream ≥ v0.1.2 calling `CaughtUp()`; if it never fires the saga
+  stays in no-settle mode, which is why the v0.1.2 bump preceded this.
