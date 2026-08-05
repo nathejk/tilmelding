@@ -468,6 +468,12 @@ func reservationLineID(i uint32) string {
 // required-MemberID rule and makes the placeholder nature obvious in
 // reports built off order_line.memberId. updateKlanHandler later
 // supersedes these with real senior IDs via SetDerivedLines.
+//
+// Reporting convention (task 009 decision): the placeholder approach is kept
+// deliberately — deferring order creation until members are known would cost
+// the reservation-time payment link, a worse UX. No report surfaces these IDs
+// today. Any future "members per order" report must exclude them with
+// `memberId NOT LIKE 'pending-%'`; the prefix exists precisely so it can.
 func pendingMemberID(i uint32) string {
 	return "pending-" + uintToStr(i)
 }
