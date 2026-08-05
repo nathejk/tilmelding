@@ -25,9 +25,25 @@ type querier struct {
 }
 
 func (q *querier) RequestedMemberCount(ctx context.Context, year types.YearSlug) (uint32, error) {
-	query := `SELECT SUM(reservedMemberCount) FROM klan WHERE year=?`
+	// Sourced from the order projection (task 005) so the klan capacity gate
+	// and the order commander's checkStock read the same underlying data
+	// instead of the parallel klan.reservedMemberCount column. Counts
+	// participation.klan seats on non-cancelled orders; deliberately identical
+	// in shape to order.querier.ReservedQuantity.
+	//
+	// Behaviour-preserving: klan.reservedMemberCount was written only on the
+	// .reserved event (waitlisted .requested teams set a different column), and
+	// those same reserved teams are the ones for which participation.klan order
+	// lines are created — so both sums cover the same seats. The one divergence
+	// is that a cancelled order frees its seats here (status <> 'cancelled'),
+	// which the stale klan column did not; that is the intended direction.
+	const query = `
+		SELECT COALESCE(SUM(l.quantity), 0)
+		FROM order_line l
+		JOIN orders o ON o.orderId = l.orderId
+		WHERE o.year = ? AND l.productSku = 'participation.klan' AND o.status <> 'cancelled'`
 	var count uint32
-	if err := q.db.QueryRow(query, year).Scan(&count); err != nil {
+	if err := q.db.QueryRowContext(ctx, query, year).Scan(&count); err != nil {
 		return 0, err
 	}
 	return count, nil
