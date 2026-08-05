@@ -9,7 +9,7 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.16.2
 	github.com/google/uuid v1.6.0
 	github.com/jrgensen/cqrs v0.1.0
-	github.com/jrgensen/stream v0.1.1
+	github.com/jrgensen/stream v0.1.2
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/lib/pq v1.12.3
 	github.com/moul/http2curl v1.0.0

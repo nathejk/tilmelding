@@ -96,8 +96,8 @@ github.com/invopop/jsonschema v0.14.0 h1:MHQqLhvpNUZfw+hM3AZDYK7jxO8FZoQeQM77g8i
 github.com/invopop/jsonschema v0.14.0/go.mod h1:ygm6C2EaVNMBDPpaPlnOA2pFAxBnxGjFlMZABxm9n2I=
 github.com/jrgensen/cqrs v0.1.0 h1:c1+jZ/1pL6ZQzP/S55RUM0qCbrRs843wutFtcNmvrjA=
 github.com/jrgensen/cqrs v0.1.0/go.mod h1:iEhgVzTdXjGkD3u0EIt4kD+/Y+SzBfhPaCumwJA1Y1Q=
-github.com/jrgensen/stream v0.1.1 h1:jftyHFZAkaOh0EBIOeQCd2nUsEOPNtd5qiJkJjwo08k=
-github.com/jrgensen/stream v0.1.1/go.mod h1:JxYchHK7RMIrdNM7E2VT1ZCcUccAz22ec+s/LyZ1yFw=
+github.com/jrgensen/stream v0.1.2 h1:dGaTEychCOsFVTWDWEjoBIlMArPnv1vdUsNS5k/xJ5I=
+github.com/jrgensen/stream v0.1.2/go.mod h1:JxYchHK7RMIrdNM7E2VT1ZCcUccAz22ec+s/LyZ1yFw=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
 github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7C0MuV77Wo=
