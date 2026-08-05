@@ -1,8 +1,9 @@
 # 002 — NathejkOrderPaid saga timing
 
-**Status:** open
+**Status:** done
 **Priority:** low
 **Created:** 2026-06-04
+**Completed:** 2026-08-04
 
 ## Description
 
@@ -38,9 +39,9 @@ Related files:
 
 ## Acceptance Criteria
 
-- [ ] Saga reliably transitions orders to `paid` even if the payment projection lags by several seconds
-- [ ] Timing behaviour is covered by a unit test using the `settle` seam
-- [ ] No N×2s startup delay when JetStream replays old events (this is task 006 — decide whether to merge)
+- [x] Saga reliably transitions orders to `paid` even if the payment projection lags by several seconds
+- [x] Timing behaviour is covered by a unit test using the `settle` seam
+- [x] No N×2s startup delay when JetStream replays old events (this is task 006 — decide whether to merge)
 
 ## Progress Log
 
@@ -52,3 +53,22 @@ Related files:
   multi-payment orders. Corrected the related-files list (the mirrored 2s wait
   is in `cmd/api/payment.go`) and added a test acceptance criterion. No code
   change.
+- 2026-08-04 — Done. Replaced the single fixed sleep-then-read with a
+  read-first bounded retry: `HandleMessage` reads up to `attempts`
+  (`DefaultSagaAttempts` = 5) times, transitioning as soon as the order shows
+  fully paid, and waiting `settle/attempts` between reads only when live.
+  Consequences: an order whose projection is already current transitions
+  immediately (no up-front wait, which the old code always paid); a lagging
+  projection is tolerated within the budget; a genuinely under-paid order
+  exhausts the attempts and stays open (safe). Extracted the read/decide into
+  `attemptTransition`, returning a retry flag so only "open but not yet fully
+  paid" is retried — unknown/legacy reference, already-paid, cancelled and free
+  orders are terminal.
+  This supersedes the always-sleep timing that task 006 introduced; updated
+  `saga_test.go` accordingly (retry-until-caught-up, give-up-after-max,
+  immediate-when-already-paid, replay-never-waits).
+  Left the `GetByReference` not-found path as a terminal no-op rather than
+  retrying it: we react to a `payment.received`, so the row should already
+  exist from `.requested`/`.reserved`; the real lag is in the joined
+  `paidAmount`, which the retry covers. Did not merge with 006 — both are now
+  done, so the overlap is moot.
