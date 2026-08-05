@@ -229,6 +229,13 @@ func scanOrder(r scanRow) (*Order, error) {
 		o.PaidAmount = o.TotalAmount
 		o.DueAmount = 0
 	default:
+		// DueAmount can go negative here if a payment overpays the order
+		// (legacy data, or a future partial-refund flow). That is tolerated
+		// deliberately: there is no refund flow today, so the order model does
+		// not represent credit/refund state, and the frontend clamps the
+		// display with max(0, due). Modelling overpay/refund properly is
+		// deferred until refunds become a real flow — see task 003 for the
+		// decision and the sketch to revisit then.
 		o.DueAmount = o.TotalAmount - o.PaidAmount
 	}
 	return &o, nil
