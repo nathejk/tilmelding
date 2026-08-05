@@ -57,12 +57,12 @@ func (m TeamModel) GetStartedTeamIDs(filters Filters) ([]types.TeamID, Metadata,
 	return m.query(filters, sql, args)
 }
 
-func (m TeamModel) GetDiscontinuedTeamIDs(filters Filters) ([]types.TeamID, Metadata, error) {
-	//sql := "SELECT teamId FROM patruljestatus WHERE startedUts > 0 AND (LOWER(year) = LOWER($1) OR $1 = '')"
-	sql := `SELECT DISTINCT m.teamId FROM patruljemerged m JOIN patruljestatus s ON m.teamId = s.teamId WHERE s.startedUts > 0 AND (LOWER(year) = LOWER(?) OR ? = '')`
-	args := []any{filters.Year, filters.Year}
-	return m.query(filters, sql, args)
-}
+// GetDiscontinuedTeamIDs was removed (task 028). It queried a `patruljemerged`
+// table that nothing in this repo or in shared-go projects — the projector that
+// presumably built it is long gone, surviving only as a stale comment removed
+// in task 027. The method had no callers, so the broken query was unreachable
+// rather than failing in production. Reinstate it only together with a
+// projector that actually maintains the table.
 
 type Patrulje struct {
 	ID          types.TeamID `json:"id"`

@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"log"
 	"time"
 
@@ -203,33 +202,9 @@ WHERE (LOWER(s.year) = LOWER(?) OR ? = '')`
 	return sss, metadata, nil
 }
 
-func (m TeamModel) GetSpejder(teamID types.TeamID) (*Patrulje, error) {
-	if len(teamID) == 0 {
-		return nil, ErrRecordNotFound
-	}
-
-	query := `SELECT p.teamId, p.teamNumber, p.name, p.groupName, p.korps, p.memberCount, IF(pm.parentTeamId IS NOT NULL, "JOIN", IF(startedUts > 0, "STARTED",  signupStatus))
-		FROM patrulje p
-		JOIN patruljestatus ps ON p.teamId = ps.teamID
-		LEFT JOIN patruljemerged pm ON p.teamId = pm.teamId
-		WHERE p.teamId = ?`
-	var p Patrulje
-	err := m.DB.QueryRow(query, teamID).Scan(
-		&p.ID,
-		&p.Number,
-		&p.Name,
-		&p.Group,
-		&p.Korps,
-		&p.MemberCount,
-		&p.Status,
-	)
-	if err != nil {
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return nil, ErrRecordNotFound
-		default:
-			return nil, err
-		}
-	}
-	return &p, nil
-}
+// TeamModel.GetSpejder was removed (task 028). Like GetDiscontinuedTeamIDs in
+// team.go it joined a `patruljemerged` table that nothing projects, and it was
+// dead: not part of the Models.Teams interface and never called — the live
+// callers use Members.GetSpejdere (plural), which is a different method.
+// shared-go/tables/spejder/querier.go carries a copy of this same dead method;
+// it should go the same way.
