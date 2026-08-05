@@ -8,12 +8,12 @@ import (
 	"net/http"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/nathejk/shared-go/tables/klan"
+	"github.com/nathejk/shared-go/tables/order"
+	payments "github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
-	"nathejk.dk/nathejk/table/klan"
-	"nathejk.dk/nathejk/table/order"
-	payments "nathejk.dk/nathejk/table/payment"
 )
 
 // Klan team-size bounds. min is the number of members required before a team

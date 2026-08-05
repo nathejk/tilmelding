@@ -8,8 +8,8 @@ import (
 	"log"
 
 	"github.com/jrgensen/cqrs"
+	"github.com/nathejk/shared-go/tables"
 	"github.com/nathejk/shared-go/types"
-	tables "nathejk.dk/nathejk/table"
 )
 
 type querier struct {

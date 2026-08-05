@@ -3,8 +3,8 @@ package personnel
 import (
 	"strings"
 
+	"github.com/nathejk/shared-go/tables"
 	"github.com/nathejk/shared-go/types"
-	tables "nathejk.dk/nathejk/table"
 )
 
 type Filter struct {

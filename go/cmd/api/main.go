@@ -20,6 +20,16 @@ import (
 	"github.com/jrgensen/stream/subject"
 	"github.com/jrgensen/stream/xstream"
 	"github.com/nathejk/shared-go/messages"
+	"github.com/nathejk/shared-go/tables/crewmember"
+	"github.com/nathejk/shared-go/tables/klan"
+	"github.com/nathejk/shared-go/tables/order"
+	"github.com/nathejk/shared-go/tables/patrulje"
+	payments "github.com/nathejk/shared-go/tables/payment"
+	"github.com/nathejk/shared-go/tables/product"
+	"github.com/nathejk/shared-go/tables/section"
+	"github.com/nathejk/shared-go/tables/senior"
+	"github.com/nathejk/shared-go/tables/signup"
+	"github.com/nathejk/shared-go/tables/spejder"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
@@ -29,17 +39,7 @@ import (
 	"nathejk.dk/internal/sms"
 	"nathejk.dk/internal/vcs"
 	"nathejk.dk/nathejk/table"
-	"nathejk.dk/nathejk/table/crewmember"
-	"nathejk.dk/nathejk/table/klan"
-	"nathejk.dk/nathejk/table/order"
-	"nathejk.dk/nathejk/table/patrulje"
-	payments "nathejk.dk/nathejk/table/payment"
 	"nathejk.dk/nathejk/table/personnel"
-	"nathejk.dk/nathejk/table/product"
-	"nathejk.dk/nathejk/table/section"
-	"nathejk.dk/nathejk/table/senior"
-	"nathejk.dk/nathejk/table/signup"
-	"nathejk.dk/nathejk/table/spejder"
 )
 
 var (
@@ -200,7 +200,7 @@ func main() {
 		logger.PrintFatal(err, nil)
 	}
 
-	tablePayment := table.NewPayment(writer, reader)
+	tablePayment := payments.New(writer, reader)
 	tableStaff := personnel.New(publisher, writer, reader)
 	tablePatrulje := patrulje.New(publisher, writer, reader)
 	tableSpejder := spejder.New(writer, reader)

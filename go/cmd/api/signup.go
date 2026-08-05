@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/nathejk/shared-go/tables/signup"
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
-	"nathejk.dk/nathejk/table/signup"
 )
 
 func (app *application) showSignupHandler(w http.ResponseWriter, r *http.Request) {

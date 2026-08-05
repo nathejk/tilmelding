@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/nathejk/shared-go/tables/order"
+	"github.com/nathejk/shared-go/tables/patrulje"
+	payments "github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
-	"nathejk.dk/nathejk/table/order"
-	"nathejk.dk/nathejk/table/patrulje"
-	payments "nathejk.dk/nathejk/table/payment"
 )
 
 // Patrulje team-size bounds. min is the number of members required before a

@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"nathejk.dk/nathejk/table/order"
+	"github.com/nathejk/shared-go/tables/order"
 )
 
 // TestReplaceMemberLines covers the single-member reconciliation the member

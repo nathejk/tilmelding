@@ -43,13 +43,14 @@ go/
 │   ├── templates/        # text/html templates
 │   ├── validator/        # request validation helpers
 │   └── vcs/              # build-time version embedding
-├── nathejk/              # domain layer — projections + commands by aggregate
+├── nathejk/              # domain layer — what is still local
 │   ├── commands/         # command bus + per-aggregate command structs
 │   ├── config/           # static domain config
-│   └── table/            # one sub-pkg per aggregate (klan, patrulje,
-│                         #   personnel, signup, order, product, senior, …).
-│                         # Each `table` is a SQL projector + read API +
-│                         # often a saga, consumed via xstream.Mux.
+│   └── table/            # legacy projectors not yet migrated (confirm,
+│                         #   patruljestatus, spejderstatus, pincode, …) plus
+│                         #   `personnel/`, the one entity still local.
+│                         # The other ten entities now live in shared-go —
+│                         #   see "Where the entities live" below.
 └── www/                  # placeholder static dir for dev (prod replaces it)
 ```
 
@@ -77,13 +78,38 @@ generic code belongs in an external module.
 
 ---
 
+## Where the entities live
+
+Ten of the eleven table entities have moved to `github.com/nathejk/shared-go`
+and are imported from there, not reimplemented here:
+
+```
+github.com/nathejk/shared-go/tables            # ErrRecordNotFound, Validator, PermittedValue
+github.com/nathejk/shared-go/tables/crewmember klan     order    patrulje  payment
+github.com/nathejk/shared-go/tables/product    section  senior   signup    spejder
+```
+
+Still local, and the only things under `go/nathejk/table/`:
+
+- `personnel/` — not yet shared (see task 001; it needs a shared-go message
+  field first).
+- the legacy root projectors (`confirm.go`, `patruljestatus.go`,
+  `spejderstatus.go`, `pincode.go`, `registrant.go`, `klan.go`, `patrulje.go`,
+  `signup.go`) still wired in `main.go` via `table.NewConfirm` and friends.
+- `errors.go`, which **aliases** the shared sentinels rather than redeclaring
+  them. This matters: `errors.New` copies would be distinct values and
+  `errors.Is` would silently stop matching errors returned by a shared entity.
+
+To change an entity, edit it in shared-go, not here. In dev, `go/go.work`
+resolves shared-go from the `../../shared-go` sibling checkout so edits are
+picked up live; CI/prod build with `GOWORK=off` against the version pinned in
+`go.mod`, so a shared-go change must be committed, pushed and the version
+bumped here before it reaches production.
+
 ## The cqrs seam
 
-Packages under `nathejk/table/` must not import anything from `nathejk.dk/`
-outside `nathejk/table/` itself. They are intended to move to `shared-go`, and
-a module-internal import blocks that.
-
-Everything they need from the infrastructure comes from three interfaces in
+The shared entities depend on nothing outside their own module: everything they
+need from the infrastructure comes from three interfaces in
 `github.com/jrgensen/cqrs`, which `cmd/api/main.go` supplies:
 
 | Interface | Role | Production implementation |
@@ -95,14 +121,16 @@ Everything they need from the infrastructure comes from three interfaces in
 An entity constructor therefore reads `New(p cqrs.Publisher, w cqrs.Writer, r
 cqrs.Reader, …)`. Never take a `*sql.DB` or a `stream.Publisher` directly.
 `cqrs.Message`, `cqrs.Subject`, `cqrs.Consumer` and `cqrs.SubjectFromStr` cover
-the projector side, so `jrgensen/stream` need not be imported either.
+the projector side, so `jrgensen/stream` need not be imported either. The same
+rules apply to the still-local `personnel` package, which is a migration
+candidate.
 
 When an entity needs something else from the application — a validator, a
 mailer, a payment provider — declare the interface it requires in an
 `interfaces.go` beside the entity files and let `cmd/api` satisfy it. Do not
-import `internal/`. Existing examples: `nathejk/table/interfaces.go`
-(`Validator`), `nathejk/table/signup/interfaces.go` (`Mailer`, `SmsSender`),
-`nathejk/table/payment/interfaces.go` (`Provider`, adapted in
+import `internal/`. Existing examples: `shared-go/tables/interfaces.go`
+(`Validator`), `shared-go/tables/signup/interfaces.go` (`Mailer`, `SmsSender`),
+`shared-go/tables/payment/interfaces.go` (`Provider`, adapted locally in
 `cmd/api/mobilepayprovider.go`).
 
 Schema drift is handled by `cqrs.EnsureColumn` / `cqrs.EnsureIndex`, called
@@ -155,17 +183,25 @@ This is event-sourced-ish: SQL tables are projections, JetStream is the log.
 
 ### Adding a domain aggregate
 
-1. Create `go/nathejk/table/<aggregate>/` with at minimum:
-   - A `New(p cqrs.Publisher, w cqrs.Writer, r cqrs.Reader, opts...)`
-     constructor. Take the interfaces, never `*sql.DB` or a concrete stream.
-   - One or more `Consume(...)` methods registered via `xstream.Mux`.
-   - A read API used by `internal/data` to expose to handlers.
-   - An `interfaces.go` if it needs anything else from the application, rather
-     than an `internal/` import. See "The cqrs seam" above.
-2. Wire it in `cmd/api/main.go`:
-   - Construct it.
-   - Add it to `mux.AddConsumer(...)`.
-   - Pass it into `data.NewModels(...)` and/or `commands.New(...)`.
+New aggregates belong in **shared-go** (`shared-go/tables/<aggregate>/`), not
+here — ten of the eleven already live there and the eleventh is a migration
+candidate. Create it with at minimum:
+
+1. A `New(p cqrs.Publisher, w cqrs.Writer, r cqrs.Reader, opts...)`
+   constructor. Take the interfaces, never `*sql.DB` or a concrete stream.
+2. One or more `Consume(...)` methods registered via `xstream.Mux`.
+3. A read API used by `internal/data` to expose to handlers.
+4. An `interfaces.go` if it needs anything else from the application, rather
+   than an `internal/` import. See "The cqrs seam" above.
+
+Then wire it here in `cmd/api/main.go`:
+
+- Construct it.
+- Add it to `mux.AddConsumer(...)`.
+- Pass it into `data.NewModels(...)` and/or `commands.New(...)`.
+
+Remember the two-repo loop: commit and push shared-go, then bump its version in
+`go.mod`, or the `GOWORK=off` build will not see the new package.
 
 ### Adding a command
 
@@ -272,8 +308,14 @@ need to restart the container manually.
 - Don't import from `cmd/api` into `internal/` or `nathejk/` — dependencies
   flow inward only.
 - Don't import `nathejk.dk/internal/...` from anywhere under
-  `nathejk/table/`. Those packages are destined for `shared-go`, and Go forbids
-  importing another module's `internal` tree, so such an import blocks the
-  move. Declare the interface you need in an `interfaces.go` instead.
+  `nathejk/table/`. What remains there (`personnel`, the legacy projectors) is
+  either a migration candidate or shared-adjacent, and Go forbids importing
+  another module's `internal` tree — such an import blocks the move. Declare
+  the interface you need in an `interfaces.go` instead.
+- Don't reimplement a shared entity locally, and don't edit one by copying it
+  back into `nathejk/table/`. Change it in shared-go and bump the version.
+- Don't redeclare the shared sentinel errors with `errors.New`. Alias
+  `tables.ErrRecordNotFound` (as `nathejk/table/errors.go` does) or `errors.Is`
+  will silently stop matching.
 - Don't recreate `pkg/`. Generic, non-domain code belongs in an external
   module (`jrgensen/cqrs`, `jrgensen/stream`).

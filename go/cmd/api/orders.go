@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/nathejk/shared-go/messages"
+	"github.com/nathejk/shared-go/tables"
+	"github.com/nathejk/shared-go/tables/order"
 	"github.com/nathejk/shared-go/types"
-	tables "nathejk.dk/nathejk/table"
-	"nathejk.dk/nathejk/table/order"
 )
 
 // loadOrders fetches the "current" (open) order plus the list of paid

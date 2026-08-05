@@ -6,16 +6,16 @@ import (
 	"errors"
 	"time"
 
+	"github.com/nathejk/shared-go/tables/crewmember"
+	"github.com/nathejk/shared-go/tables/klan"
+	"github.com/nathejk/shared-go/tables/order"
+	"github.com/nathejk/shared-go/tables/patrulje"
+	"github.com/nathejk/shared-go/tables/payment"
+	"github.com/nathejk/shared-go/tables/product"
+	"github.com/nathejk/shared-go/tables/section"
+	"github.com/nathejk/shared-go/tables/signup"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/nathejk/table/crewmember"
-	"nathejk.dk/nathejk/table/klan"
-	"nathejk.dk/nathejk/table/order"
-	"nathejk.dk/nathejk/table/patrulje"
-	"nathejk.dk/nathejk/table/payment"
 	"nathejk.dk/nathejk/table/personnel"
-	"nathejk.dk/nathejk/table/product"
-	"nathejk.dk/nathejk/table/section"
-	"nathejk.dk/nathejk/table/signup"
 )
 
 var (
