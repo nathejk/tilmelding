@@ -10,6 +10,19 @@ import (
 	"github.com/wneessen/go-mail"
 )
 
+// Templates are embedded, so every .tmpl this binary can send must be in
+// templates/ at build time. Two exist and both are live:
+//
+//   - payment_received.tmpl — requested by cmd/api/payment.go
+//   - verify_email.tmpl     — requested by shared-go's signup commander, which
+//     receives this mailer via signup.WithMailer. The filename is a string in
+//     the other module, so renaming or removing the file breaks signup
+//     verification with nothing failing at compile time.
+//
+// Deleted from here: user_welcome.tmpl, unreferenced scaffolding for an
+// activation-token flow (`PUT /v1/users/activated`) this service does not have,
+// and an empty file named `text`.
+//
 //go:embed "templates"
 var templateFS embed.FS
 
