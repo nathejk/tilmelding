@@ -16,8 +16,10 @@ package. shared-go therefore depends on state it does not own.
 | `spejderstatus` | `table.NewSpejderStatus` | `spejder` querier |
 | `confirm` | `table.NewConfirm` | `payment` queries (`GetTeamIDBySecret` etc.) |
 
-Also read locally by `internal/data` (`member.go`, `team.go`, `signup.go`,
-`payment.go`) and `nathejk/table/personnel`.
+Also read locally by `nathejk/table/personnel`. (`internal/data` used to read
+`patruljestatus` too, from `member.go` and `team.go`; both files are gone now
+that the entity queriers own those reads, so the local reader count is one
+lower — the shared-go side of the problem is unchanged.)
 
 **Why it matters:** a second service consuming these shared entities would
 compile and run, but every `JOIN patruljestatus` / `JOIN spejderstatus` /
@@ -47,8 +49,9 @@ Option 1 is preferred.
 
 ## Related finding: `patruljemerged` has no projector at all
 
-While mapping the above: `internal/data/team.go:62` references
-`patruljemerged` in **live** code:
+While mapping the above: `internal/data/team.go:62` referenced
+`patruljemerged` in what looked like **live** code (the file has since been
+deleted entirely):
 
 ```sql
 SELECT DISTINCT m.teamId FROM patruljemerged m
@@ -147,3 +150,7 @@ version bumped in `go.mod`. Sequencing therefore matters.
   projectors for one table across two repos, which is worse than the current
   documented gap. Nothing here is blocking tilmelding; the gap only bites a
   *second* service adopting these entities.
+- 2026-08-06 — Housekeeping only: `internal/data/{member,team}.go` were deleted
+  when the klan and patrulje read paths moved to the entity queriers, so this
+  task's list of local readers shrank. The shared-go ownership gap and the
+  ordered steps above are untouched and still the work to do.
