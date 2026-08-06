@@ -152,10 +152,17 @@ only. Removed together with `personnel/filter.go` and
    mentions `patruljestatus` only in comments. Nothing anywhere reads it.
 2. ~~Delete `nathejk/table/patruljestatus.{go,sql}` and its `main.go` wiring.~~
    **Done 2026-08-06.**
-3. Upstream, drop the `spejderstatus` join from `spejder.GetAll` (literal
-   `'paid'`) and delete `GetInactive`; push; bump. **← next, and the only thing
-   still blocking.**
-4. Delete `nathejk/table/spejderstatus.{go,sql}` and its `main.go` wiring.
+3. ~~Upstream, drop the `spejderstatus` join from `spejder.GetAll` (literal
+   `'paid'`) and delete `GetInactive`; push; bump.~~ **Half done 2026-08-06**
+   (shared-go `e7b46bb`, pinned as `v0.0.0-20260806204955-e7b46bb008f3`):
+   `GetInactive` is disabled, but the LEFT JOIN in `GetAll` is **still live**.
+   That join is the whole blocker. **← still to do.**
+4. ~~Delete `nathejk/table/spejderstatus.{go,sql}` and its `main.go` wiring.~~
+   **Done 2026-08-06, as far as it can be:** the fake projector is gone and the
+   root `table` package with it. What survives is the bare `CREATE TABLE` in
+   `main.go`, six lines labelled as a compatibility shim for the join above.
+   Deleting those lines is the last step, and it is a one-liner once step 3
+   lands.
 5. ~~`confirm` is already gone (`f60b5fa`), so after step 4 the root `table`
    package holds only `errors.go` — check whether that still has a consumer.~~
    **Done 2026-08-06** — it had none (nothing referenced
@@ -182,8 +189,8 @@ That is behaviour-preserving *because* the table is empty by construction, so
 `ss.status` is always NULL and the IFNULL always yields `'paid'`. Whether
 hard-coding `'paid'` is the right answer is a separate question — it is what the
 code already does today, and the member status this once modelled has no
-projector anywhere. Delete `GetInactive` in the same pass: it inner-joins the
-empty table, so it can only return zero rows.
+projector anywhere. ~~Delete `GetInactive` in the same pass~~ — done in
+`e7b46bb`; only the `GetAll` join is left.
 
 **Note on data:** neither table needs migrating. `spejderstatus` is empty by
 construction. `patruljestatus` holds only `(teamId, year, startedUts=1)`, all of
@@ -198,8 +205,11 @@ it once the joins are gone. Both can simply be dropped from the schema.
       deleting. See the audit above.
 - [x] `patruljestatus` deleted: no reader remains in either repo, and the
       projector wrote a constant
-- [ ] `spejderstatus` deleted — blocked on shared-go dropping the LEFT JOIN in
+- [ ] `spejderstatus` deleted — projector and package gone; the `CREATE TABLE`
+      remains in `main.go`, blocked on shared-go dropping the LEFT JOIN in
       `spejder.GetAll` (step 3 above)
+- [x] The root `nathejk/table` package is gone; only `nathejk/table/personnel/`
+      remains (blocked on task 001)
 - [ ] If moving: projectors live in shared-go, tilmelding wires them from
       `main.go`, and the local copies are removed
 - [ ] A service using the shared entities cannot silently get empty joins —
@@ -302,6 +312,15 @@ version bumped in `go.mod`. Sequencing therefore matters.
   tree) still LEFT JOIN it in `spejder.GetAll`, so dropping the `CREATE TABLE`
   would break the patrulje roster on a fresh database. The exact upstream diff
   is written out above.
+- 2026-08-06 — Bumped to shared-go `e7b46bb` (`v0.0.0-20260806204955-`). It
+  disables `GetInactive`, but **`spejder.GetAll` still LEFT JOINs
+  `spejderstatus`**, so the table must still exist and a clean delete is still
+  blocked. Went as far as is safe: deleted `spejderstatus.{go,sql}` — the
+  "projector" only ever created a table (empty `Consumes()` meant
+  `mux.Subscribe` created no consumer at all, so registering it was a genuine
+  no-op) — and replaced it with the bare `CREATE TABLE IF NOT EXISTS` in
+  `main.go`, commented as a shim for the upstream join. The root `nathejk/table`
+  package is now gone entirely; only `nathejk/table/personnel/` is left.
 
   Aside, noted while verifying: `payment.Query.ConfirmBySecret` in shared-go
   reads the `confirm` table in **live** code, and that projector was deleted in

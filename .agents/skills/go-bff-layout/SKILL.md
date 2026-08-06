@@ -46,11 +46,9 @@ go/
 ├── nathejk/              # domain layer — what is still local
 │   ├── commands/         # command bus + per-aggregate command structs
 │   ├── config/           # static domain config
-│   └── table/            # `personnel/`, the one entity still local, plus
-│                         #   `spejderstatus.go` — a no-op projector kept only
-│                         #   because shared-go still joins its (empty) table.
-│                         # The other ten entities now live in shared-go —
-│                         #   see "Where the entities live" below.
+│   └── table/            # `personnel/` — the one entity still local. The root
+│                         #   package itself is gone; the other ten entities
+│                         #   live in shared-go, see "Where the entities live".
 └── www/                  # placeholder static dir for dev (prod replaces it)
 ```
 
@@ -89,26 +87,26 @@ github.com/nathejk/shared-go/tables/crewmember klan     order    patrulje  payme
 github.com/nathejk/shared-go/tables/product    section  senior   signup    spejder
 ```
 
-Still local, and the only things under `go/nathejk/table/`:
+Still local, and the only thing under `go/nathejk/table/`:
 
 - `personnel/` — not yet shared (see task 001; it needs a shared-go message
   field first).
-- `spejderstatus.go` + `.sql` — the last legacy root projector, and a no-op:
-  its `Consumes()` is empty and `HandleMessage`'s body is commented out, so the
-  table is created and stays empty. It is still wired in `main.go` purely
-  because shared-go's `spejder.GetAll` LEFT JOINs the table; removing the
-  `CREATE TABLE` would break the patrulje roster on a fresh database. It goes as
-  soon as that join does, and the root `table` package goes with it — see task
-  028.
 
-The other root projectors (`confirm.go`, `patruljestatus.go`, `pincode.go`,
-`registrant.go`, `klan.go`, `patrulje.go`, `signup.go`) have all been deleted:
-the entity ones moved to shared-go, the rest were orphaned (tasks 027, 028).
-`errors.go` went too — it aliased the shared sentinels, but nothing referenced
-`table.ErrRecordNotFound` once the projectors left. Note *why* it aliased rather
-than redeclared, because the same rule applies to `internal/data`, which still
-does this: `errors.New` copies would be distinct values and `errors.Is` would
-silently stop matching errors returned by a shared entity.
+The root `table` package is gone. Its projectors (`confirm.go`,
+`patruljestatus.go`, `spejderstatus.go`, `pincode.go`, `registrant.go`,
+`klan.go`, `patrulje.go`, `signup.go`) either moved to shared-go as entities or
+were orphaned and deleted (tasks 027, 028). `errors.go` went too — it aliased
+the shared sentinels, but nothing referenced `table.ErrRecordNotFound` once the
+projectors left. Note *why* it aliased rather than redeclared, because the same
+rule applies to `internal/data`, which still does this: `errors.New` copies
+would be distinct values and `errors.Is` would silently stop matching errors
+returned by a shared entity.
+
+One remnant: `main.go` creates the `spejderstatus` table inline. It is a
+compatibility shim, not a projection — shared-go's `spejder.GetAll` still LEFT
+JOINs that table, so it has to exist even though nothing writes to it. Delete
+those six lines when the join goes (task 028); do not grow them into a projector
+again.
 
 To change an entity, edit it in shared-go, not here. In dev, `go/go.work`
 resolves shared-go from the `../../shared-go` sibling checkout so edits are

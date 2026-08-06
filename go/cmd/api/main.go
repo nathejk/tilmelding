@@ -38,7 +38,6 @@ import (
 	"nathejk.dk/internal/payment/mobilepay"
 	"nathejk.dk/internal/sms"
 	"nathejk.dk/internal/vcs"
-	"nathejk.dk/nathejk/table"
 	"nathejk.dk/nathejk/table/personnel"
 )
 
@@ -204,6 +203,17 @@ func main() {
 	tableStaff := personnel.New(publisher, writer, reader)
 	tablePatrulje := patrulje.New(publisher, writer, reader)
 	tableSpejder := spejder.New(writer, reader)
+	// Compatibility shim, not a projection. shared-go's spejder.GetAll still
+	// does `LEFT JOIN spejderstatus ... IFNULL(ss.status,'paid')`, so the table
+	// has to exist or the patrulje roster query fails with "table doesn't
+	// exist" on a fresh database. Nothing writes to it — the projector that
+	// nominally did subscribed to no subject and had an empty handler — so it is
+	// permanently empty and the IFNULL always yields 'paid'.
+	//
+	// Delete this the moment that join goes; see task 028 for the upstream diff.
+	if err := writer.Consume("CREATE TABLE IF NOT EXISTS spejderstatus (id VARCHAR(99) NOT NULL, year VARCHAR(99) NOT NULL, status VARCHAR(99) NOT NULL, updatedAt VARCHAR(99) NOT NULL, PRIMARY KEY (year, id));"); err != nil {
+		logger.PrintFatal(err, nil)
+	}
 	tableSignup := signup.New(publisher, writer, reader, signup.WithSms(smsclient), signup.WithMailer(mailclient))
 	// The 115-seat klan cap now lives on participation.klan.stock in the
 	// product catalogue (see product.Seeds2026). klan.WithProductQueries
@@ -257,13 +267,6 @@ func main() {
 	mux := xstream.NewMux(js)
 	mux.AddConsumer(
 		detector,
-		// The last projector owned by this repo, and it is a no-op: its
-		// Consumes() is empty and HandleMessage's body is commented out, so
-		// `spejderstatus` is created and stays empty forever. It survives only
-		// because shared-go's spejder.GetAll still LEFT JOINs the table —
-		// dropping the CREATE TABLE would break the patrulje roster query on a
-		// fresh database. Goes as soon as that join does; see task 028.
-		table.NewSpejderStatus(writer),
 		// Entities from github.com/nathejk/shared-go/tables.
 		tableKlan,
 		tableSenior,
