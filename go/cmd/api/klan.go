@@ -12,7 +12,6 @@ import (
 	"github.com/nathejk/shared-go/tables/order"
 	payments "github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/types"
-	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
 )
 
@@ -24,6 +23,181 @@ const (
 	klanMaxMembers = 4
 )
 
+// Response DTOs — the klan half of the frontend/backend contract. See the file
+// comment in response.go for why handlers must not marshal domain types.
+
+// klanTeamResponse is the team as the klan page needs it.
+//
+// Note the `id` tag (not `teamId`): the page echoes this object straight back
+// as the `team` field of PUT /api/klan/{id}, where it is read as a klan.Team —
+// which keys on `teamId` and so never sees the id. That is harmless (the path
+// parameter is authoritative for the team identity) and is kept as-is because
+// renaming the tag would silently start filling in klan.Team.TeamID.
+//
+// `reservedMemberCount` is deliberately NOT part of the contract even though
+// the previous envelope carried it: its only consumer — the loop padding the
+// roster up to the reserved seat count — is commented out in KlanView.vue, and
+// the klan entity's GetByID does not select the column. Re-add it here (and to
+// the query) if the padding ever comes back.
+type klanTeamResponse struct {
+	ID          string `json:"id"`
+	Status      string `json:"status"`
+	Name        string `json:"name"`
+	Group       string `json:"group"`
+	Korps       string `json:"korps"`
+	MemberCount int    `json:"memberCount"`
+}
+
+// klanRosterMemberResponse is a senior as read back from the projection for the
+// roster. Distinct from klanMemberResponse below: the roster carries
+// projection-only fields (id, teamId, city) that a write echo does not have.
+//
+// The projection's year, armNumber and timestamps are deliberately omitted —
+// the page has no use for them.
+type klanRosterMemberResponse struct {
+	ID         string `json:"id"`
+	MemberID   string `json:"memberId"`
+	TeamID     string `json:"teamId"`
+	Name       string `json:"name"`
+	Address    string `json:"address"`
+	PostalCode string `json:"postalCode"`
+	City       string `json:"city"`
+	Email      string `json:"email"`
+	Phone      string `json:"phone"`
+	Birthday   string `json:"birthday"`
+	Diet       string `json:"diet"`
+	TShirtSize string `json:"tshirtSize"`
+}
+
+// klanMemberResponse echoes a single senior back after a write. The add
+// endpoint is the only place the client learns the server-issued memberId.
+type klanMemberResponse struct {
+	MemberID   string `json:"memberId"`
+	Deleted    bool   `json:"deleted"`
+	Name       string `json:"name"`
+	Address    string `json:"address"`
+	PostalCode string `json:"postalCode"`
+	Email      string `json:"email"`
+	Phone      string `json:"phone"`
+	Birthday   string `json:"birthday"`
+	Diet       string `json:"diet"`
+	TShirtSize string `json:"tshirtSize"`
+}
+
+// showKlanResponse is the body of GET /api/klan/{id}.
+type showKlanResponse struct {
+	Config     teamConfigResponse         `json:"config"`
+	Team       *klanTeamResponse          `json:"team"`
+	Members    []klanRosterMemberResponse `json:"members"`
+	Order      *orderResponse             `json:"order"`
+	PaidOrders []orderResponse            `json:"paidOrders"`
+}
+
+// requestSeatResponse is the body of PUT /api/klan/{id}/request.
+//
+// Status is the signup status the request resulted in: PAY when seats were
+// reserved, HOLD when the klan went on the waiting list. PaymentLink is empty
+// unless there is something to pay right away.
+type requestSeatResponse struct {
+	Team        *klanTeamResponse `json:"team"`
+	Status      string            `json:"status"`
+	Order       *orderResponse    `json:"order"`
+	PaymentLink string            `json:"paymentLink"`
+}
+
+// updateKlanResponse is the body of PUT /api/klan/{id}.
+//
+// PaymentLink is empty when nothing is due; PaymentError carries the
+// human-readable reason payment was refused (e.g. team below the minimum size)
+// rather than failing the request, because the save itself succeeded.
+type updateKlanResponse struct {
+	Team         *klanTeamResponse `json:"team"`
+	Order        *orderResponse    `json:"order"`
+	PaymentLink  string            `json:"paymentLink"`
+	PaymentError string            `json:"paymentError"`
+}
+
+// klanMemberMutationResponse is the body of the member add and update
+// endpoints: the member as stored, plus the recomputed open order.
+type klanMemberMutationResponse struct {
+	Member klanMemberResponse `json:"member"`
+	Order  *orderResponse     `json:"order"`
+}
+
+// deleteKlanMemberResponse is the body of the member delete endpoint. Only the
+// recomputed order is returned; the member is gone.
+type deleteKlanMemberResponse struct {
+	Order *orderResponse `json:"order"`
+}
+
+func newKlanTeamResponse(k *data.Klan) *klanTeamResponse {
+	if k == nil {
+		return nil
+	}
+	return &klanTeamResponse{
+		ID:          string(k.ID),
+		Status:      string(k.Status),
+		Name:        k.Name,
+		Group:       k.Group,
+		Korps:       k.Korps,
+		MemberCount: k.MemberCount,
+	}
+}
+
+// newKlanRosterMemberResponses always returns a non-nil slice so `members`
+// stays `[]` rather than `null`. The show handler ignores the roster read error
+// and the page then does `data.members.map(...)` unguarded, so `null` would
+// break it; `[]` renders an empty roster.
+func newKlanRosterMemberResponses(in []*data.Senior) []klanRosterMemberResponse {
+	out := make([]klanRosterMemberResponse, 0, len(in))
+	for _, s := range in {
+		if s == nil {
+			continue
+		}
+		out = append(out, klanRosterMemberResponse{
+			ID:         string(s.ID),
+			MemberID:   string(s.MemberID),
+			TeamID:     string(s.TeamID),
+			Name:       s.Name,
+			Address:    s.Address,
+			PostalCode: s.PostalCode,
+			City:       s.City,
+			Email:      s.Email,
+			Phone:      s.Phone,
+			Birthday:   string(s.Birthday),
+			Diet:       s.Diet,
+			TShirtSize: s.TShirtSize,
+		})
+	}
+	return out
+}
+
+func newKlanMemberResponse(s klan.Senior) klanMemberResponse {
+	return klanMemberResponse{
+		MemberID:   string(s.MemberID),
+		Deleted:    s.Deleted,
+		Name:       s.Name,
+		Address:    s.Address,
+		PostalCode: s.PostalCode,
+		Email:      string(s.Email),
+		Phone:      string(s.Phone),
+		Birthday:   string(s.Birthday),
+		Diet:       s.Diet,
+		TShirtSize: s.TShirtSize,
+	}
+}
+
+// showKlanHandler returns everything the klan page needs in one call.
+//
+// @Summary      Show a klan team
+// @Description  Returns the server-side config (member bounds, prices, corps and t-shirt options), the team, its senior roster, the open order and any paid orders. Re-derives the open order from the senior projection on every call, so the page is self-healing against drift.
+// @Tags         klan
+// @Produce      json
+// @Param        id   path      string  true  "Team ID"
+// @Success      200  {object}  showKlanResponse
+// @Failure      404  {object}  object{error=string}
+// @Failure      500  {object}  object{error=string}
+// @Router       /api/klan/{id} [get]
 func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
 	if teamID == "" {
@@ -71,11 +245,31 @@ func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"config": config, "team": team, "members": members, "order": openOrder, "paidOrders": paidOrders}, nil)
+	err = app.WriteJSON(w, http.StatusOK, showKlanResponse{
+		Config:     newTeamConfigResponse(config),
+		Team:       newKlanTeamResponse(team),
+		Members:    newKlanRosterMemberResponses(members),
+		Order:      newOrderResponse(openOrder),
+		PaidOrders: newOrderResponses(paidOrders),
+	}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
 }
+
+// requestSeatHandler books the klan's seats, or puts it on the waiting list.
+//
+// @Summary      Request seats for a klan
+// @Description  Saves the team details, then asks for the requested number of seats. If seats are available the klan moves to PAY and an open order with one participation line per reserved seat is created (keyed on synthetic "pending-N" member ids until the seniors are known), together with a payment link. If the global senior cap is reached the klan goes on HOLD and no order is created.
+// @Tags         klan
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string  true  "Team ID"
+// @Param        body  body  object{teamName=string,teamGroup=string,teamCorps=string,requestedMemberCount=int}  true  "Team details and the number of seats wanted"
+// @Success      200   {object}  requestSeatResponse
+// @Failure      400   {object}  object{error=string}
+// @Failure      500   {object}  object{error=string}
+// @Router       /api/klan/{id}/request [put]
 func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
 	var input struct {
@@ -161,12 +355,30 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	team, _ := app.models.Teams.GetKlan(teamID)
-	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "status": status, "order": orderEnvelope, "paymentLink": paymentLink}, nil)
+	err = app.WriteJSON(w, http.StatusOK, requestSeatResponse{
+		Team:        newKlanTeamResponse(team),
+		Status:      string(status),
+		Order:       newOrderResponse(orderEnvelope),
+		PaymentLink: paymentLink,
+	}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
 }
 
+// updateKlanHandler saves the team details and re-prices the open order.
+//
+// @Summary      Update a klan team
+// @Description  Saves the team-level fields only — seniors are managed through the dedicated member endpoints, so this can never create or delete a senior. Re-derives the open order from the senior projection and returns a payment link when there is something due and the team meets the minimum size.
+// @Tags         klan
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string                    true  "Team ID"
+// @Param        body  body  object{team=klan.Team}    true  "Team fields"
+// @Success      200   {object}  updateKlanResponse
+// @Failure      400   {object}  object{error=string}
+// @Failure      500   {object}  object{error=string}
+// @Router       /api/klan/{id} [put]
 func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
 	var input struct {
@@ -244,7 +456,12 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", phone, email, teamUrl, orderID, "order")
 	}
 	team, _ := app.models.Teams.GetKlan(teamID)
-	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "order": openOrder, "paymentLink": paymentLink, "paymentError": paymentError}, nil)
+	err = app.WriteJSON(w, http.StatusOK, updateKlanResponse{
+		Team:         newKlanTeamResponse(team),
+		Order:        newOrderResponse(openOrder),
+		PaymentLink:  paymentLink,
+		PaymentError: paymentError,
+	}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
@@ -275,7 +492,7 @@ func (app *application) rederiveKlanOrder(ctx context.Context, teamID types.Team
 // @Produce      json
 // @Param        id     path  string                      true  "Team ID"
 // @Param        body   body  object{member=klan.Senior}    true  "New member"
-// @Success      200    {object}  object{member=klan.Senior,order=order.Order}
+// @Success      200    {object}  klanMemberMutationResponse
 // @Failure      400    {object}  object{error=string}
 // @Failure      404    {object}  object{error=string}
 // @Router       /api/klan/{id}/member [post]
@@ -320,7 +537,10 @@ func (app *application) addKlanMemberHandler(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		log.Printf("rederiveKlanOrder %q", err)
 	}
-	if err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"member": input.Member, "order": o}, nil); err != nil {
+	if err := app.WriteJSON(w, http.StatusOK, klanMemberMutationResponse{
+		Member: newKlanMemberResponse(input.Member),
+		Order:  newOrderResponse(o),
+	}, nil); err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
 }
@@ -335,7 +555,7 @@ func (app *application) addKlanMemberHandler(w http.ResponseWriter, r *http.Requ
 // @Param        id        path  string                      true  "Team ID"
 // @Param        memberId  path  string                      true  "Member ID"
 // @Param        body      body  object{member=klan.Senior}    true  "Member fields"
-// @Success      200       {object}  object{member=klan.Senior,order=order.Order}
+// @Success      200       {object}  klanMemberMutationResponse
 // @Failure      400       {object}  object{error=string}
 // @Failure      404       {object}  object{error=string}
 // @Router       /api/klan/{id}/member/{memberId} [put]
@@ -363,7 +583,10 @@ func (app *application) updateKlanMemberHandler(w http.ResponseWriter, r *http.R
 	if err != nil {
 		log.Printf("rederiveKlanOrder %q", err)
 	}
-	if err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"member": input.Member, "order": o}, nil); err != nil {
+	if err := app.WriteJSON(w, http.StatusOK, klanMemberMutationResponse{
+		Member: newKlanMemberResponse(input.Member),
+		Order:  newOrderResponse(o),
+	}, nil); err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
 }
@@ -376,7 +599,7 @@ func (app *application) updateKlanMemberHandler(w http.ResponseWriter, r *http.R
 // @Produce      json
 // @Param        id        path  string  true  "Team ID"
 // @Param        memberId  path  string  true  "Member ID"
-// @Success      200       {object}  object{order=order.Order}
+// @Success      200       {object}  deleteKlanMemberResponse
 // @Failure      404       {object}  object{error=string}
 // @Router       /api/klan/{id}/member/{memberId} [delete]
 func (app *application) deleteKlanMemberHandler(w http.ResponseWriter, r *http.Request) {
@@ -394,7 +617,7 @@ func (app *application) deleteKlanMemberHandler(w http.ResponseWriter, r *http.R
 	if err != nil {
 		log.Printf("rederiveKlanOrder %q", err)
 	}
-	if err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"order": o}, nil); err != nil {
+	if err := app.WriteJSON(w, http.StatusOK, deleteKlanMemberResponse{Order: newOrderResponse(o)}, nil); err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
 }
