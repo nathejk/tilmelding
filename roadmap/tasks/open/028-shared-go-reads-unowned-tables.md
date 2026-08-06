@@ -73,10 +73,103 @@ exist. Determine whether:
 
 Worth resolving as part of this task, or splitting out once diagnosed.
 
+## Audit (2026-08-06): can the two status projectors just be deleted?
+
+Asked directly, since the whole point of moving them upstream is that someone
+reads them. Answer: **yes for both, eventually, but neither today** — and for
+two different reasons.
+
+### `spejderstatus` — the projector is provably a no-op
+
+`nathejk/table/spejderstatus.go` cannot write a row:
+
+- `Consumes()` returns an empty slice — it subscribes to nothing.
+- `HandleMessage` is a bare `return nil`; its entire body is inside `/* */`.
+
+So the table is created and stays empty forever, and every reader of it is
+reading nothing. Deleting it therefore changes no data — but the `CREATE TABLE`
+is the only reason the reader's SQL is valid:
+
+```sql
+-- shared-go/tables/spejder/querier.go GetAll (live, and in the pinned version)
+IFNULL(ss.status, 'paid') AS status
+...
+left join spejderstatus ss on s.memberId = ss.id and s.year = ss.year
+```
+
+On an existing database the table is already there, so nothing breaks; on a
+**fresh** one, dropping the projector makes the patrulje roster query fail with
+"table doesn't exist". That is exactly the silent-environment-dependence this
+task is about, so it must not be traded for a louder version of itself.
+
+Unblocking is small and behaviour-free upstream: because the table is
+guaranteed empty, `IFNULL(ss.status,'paid')` is *always* `'paid'`. Replace it
+with the literal and drop the join. Same file also has `GetInactive`, which
+inner-joins the empty table and so can only ever return zero rows — it is dead
+and should go with it (as should the dead `TeamModel.GetSpejder` noted in step
+2 below).
+
+### `patruljestatus` — the projector is live but carries no information
+
+It does fire (`Consumes` `NATHEJK:*.*.*.signedup`, and `Match` lines up once
+`subject.FromStr` has turned the first `:` into a `.`), and it writes:
+
+```sql
+INSERT INTO patruljestatus SET teamId=%q, year=%q, startedUts=1
+  ON DUPLICATE KEY UPDATE startedUts=VALUES(startedUts)
+```
+
+`startedUts` is the literal `1` on every row, so `WHERE startedUts > 0` is true
+for every row and the column says nothing. The only real content of the table is
+"this team published a signedup event" — which is why `JOIN patruljestatus`
+behaved as an invisible filter, hiding teams without a row.
+
+Readers, as of today:
+
+| Reader | State |
+|---|---|
+| shared-go working tree | **none** — removed in shared-go `24cf73c` "stop joining read models on patruljestatus" |
+| shared-go **pinned** (`v0.0.0-20260805205843-d0d6fdf64ba1`) | still joins it in `klan.GetByID`, `klan.GetAll`, `patrulje.GetByID`, `spejder.GetAll`, and the senior queries |
+| tilmelding | **none**, as of this commit |
+
+That pinned row is the blocker: `24cf73c` and `9028f9f` are local to the
+shared-go checkout and **not pushed** (`origin/main` is at `d0d6fdf`), and
+`GOWORK=off` — the CI and production resolution path — builds the pinned
+version. Delete the projector now and production stops finding any patrulje or
+klan at all.
+
+The local reader has been removed: `personnel.querier.GetAll` joined
+`patruljestatus`, but it could never have run — it selected `t.staffId` FROM a
+table named `staff` while the entity projects `personnel` (primary key
+`userId`, no `teamId` column). Nothing called it; the handlers use `GetByID`
+only. Removed together with `personnel/filter.go` and
+`data.PersonnelInterface.GetAll`.
+
+### Order of operations
+
+1. Push shared-go (`24cf73c`, `9028f9f`) and bump `go.mod` in tilmelding. After
+   this, nothing anywhere reads `patruljestatus`.
+2. Delete `nathejk/table/patruljestatus.{go,sql}` and its `main.go` wiring.
+3. Upstream, drop the `spejderstatus` join from `spejder.GetAll` (literal
+   `'paid'`) and delete `GetInactive`; push; bump.
+4. Delete `nathejk/table/spejderstatus.{go,sql}` and its `main.go` wiring.
+5. `confirm` is already gone (`f60b5fa`), so after step 4 the root `table`
+   package holds only `errors.go` — check whether that still has a consumer.
+
+Steps 2 and 4 are then pure deletions with no behaviour change, which is the
+point of doing them in this order.
+
+**Note on data:** neither table needs migrating. `spejderstatus` is empty by
+construction. `patruljestatus` holds only `(teamId, year, startedUts=1)`, all of
+which is derivable from the `signedup` events, and no query reads a column from
+it once the joins are gone. Both can simply be dropped from the schema.
+
 ## Acceptance Criteria
 
 - [x] Decision recorded on ownership of `patruljestatus`, `spejderstatus`,
-      `confirm` (move to shared-go vs document + startup assertion)
+      `confirm` (move to shared-go vs document + startup assertion) — and then
+      superseded for two of the three: they are not worth moving, they are worth
+      deleting. See the audit above.
 - [ ] If moving: projectors live in shared-go, tilmelding wires them from
       `main.go`, and the local copies are removed
 - [ ] A service using the shared entities cannot silently get empty joins —
@@ -154,3 +247,16 @@ version bumped in `go.mod`. Sequencing therefore matters.
   when the klan and patrulje read paths moved to the entity queriers, so this
   task's list of local readers shrank. The shared-go ownership gap and the
   ordered steps above are untouched and still the work to do.
+- 2026-08-06 — Audited whether `patruljestatus` and `spejderstatus` can simply be
+  **deleted** rather than moved; see the audit section. Both can, and the
+  original "move them to shared-go" decision is superseded for these two:
+  `spejderstatus` has a projector that provably writes nothing, and
+  `patruljestatus` writes a constant. Neither is worth carrying into a shared
+  module.
+
+  Did the one piece that is this repo's to do: removed `personnel.querier.GetAll`
+  — the last local reader of `patruljestatus`, and dead code that referenced a
+  non-existent `staff` table — plus `personnel/filter.go` and
+  `PersonnelInterface.GetAll`. The deletions themselves are blocked on shared-go
+  `24cf73c`/`9028f9f` being pushed and pinned, because `GOWORK=off` still builds
+  a shared-go that joins `patruljestatus`. Ordered steps recorded above.

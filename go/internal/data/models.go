@@ -36,7 +36,6 @@ type PaymentInterface interface {
 	AmountPaidByTeamID(types.TeamID) int
 }
 type PersonnelInterface interface {
-	GetAll(context.Context, personnel.Filter) ([]personnel.Staff, error)
 	GetByID(context.Context, types.UserID) (*personnel.Staff, error)
 }
 type PatruljeInterface interface {

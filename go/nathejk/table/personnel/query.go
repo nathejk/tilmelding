@@ -16,35 +16,17 @@ type querier struct {
 	db cqrs.Reader
 }
 
-func (q *querier) GetAll(ctx context.Context, filter Filter) ([]Staff, error) {
-	query := `SELECT t.staffId, t.name, t.groupName, t.korps, t.klan, t.signupStatus
-		FROM staff t
-		JOIN patruljestatus ts ON t.teamId = ts.teamID
-		` //WHERE (LOWER(p.year) = LOWER(?) OR ? = '')`
-	args := []any{} //filter.YearSlug, filter.YearSlug}
-	rows, err := q.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	//totalRecords := 0
-	staffs := []Staff{}
-	for rows.Next() {
-		var k Staff
-		if err := rows.Scan(&k.ID, &k.Name, &k.Group, &k.Korps, &k.Klan, &k.Status); err != nil {
-			//if err := rows.Scan(&klan.TeamID); err != nil {
-			return nil, err
-		}
-		staffs = append(staffs, k)
-	}
-	// When the rows.Next() loop has finished, call rows.Err() to retrieve any error
-	// that was encountered during the iteration.
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return staffs, nil
-}
+// GetAll was removed. It could never have worked: it selected `t.staffId` and
+// joined on `t.teamId` FROM a table called `staff`, while this entity projects
+// `personnel` — with a `userId` primary key and no teamId column at all. Every
+// call would have failed with "table doesn't exist". Nothing called it: the
+// handlers only use GetByID.
+//
+// It was also the last reader of `patruljestatus` left in this repo, which is
+// why it is going now — see task 028.
+//
+// filter.go went with it (Filter, Metadata, calculateMetadata had no other
+// user), as did PersonnelInterface.GetAll in internal/data.
 
 func (q *querier) GetByID(ctx context.Context, staffID types.UserID) (*Staff, error) {
 	log.Printf("Inside GetByID( %q )", staffID)
