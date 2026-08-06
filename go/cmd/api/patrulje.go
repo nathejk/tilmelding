@@ -12,7 +12,6 @@ import (
 	"github.com/nathejk/shared-go/tables/patrulje"
 	payments "github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/types"
-	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
 )
 
@@ -31,6 +30,198 @@ type TeamConfig struct {
 	TShirtPrice    int               `json:"tshirtPrice"`
 	Korps          []types.SlugLabel `json:"korps"`
 	TShirtSizes    []types.SlugLabel `json:"tshirtSizes"`
+}
+
+// ----------------------------------------------------------------------------
+// Patrulje wire contract
+//
+// One response struct per handler, built only from primitives and nested
+// structs of primitives. See response.go for the shared pieces (orders, team
+// config) and for why handlers no longer marshal domain types directly.
+//
+// These are wire-identical to the jsonapi.Envelope maps they replaced, so the
+// frontend is unaffected; the difference is that the payload is now stated in
+// one place instead of being whatever the projection happened to hold.
+// ----------------------------------------------------------------------------
+
+// patruljeTeamResponse is the team as the patrulje page shows it.
+type patruljeTeamResponse struct {
+	ID          string `json:"id"`
+	Number      string `json:"number"`
+	Status      string `json:"status"`
+	Name        string `json:"name"`
+	Group       string `json:"group"`
+	Korps       string `json:"korps"`
+	Liga        string `json:"liga"`
+	MemberCount int    `json:"memberCount"`
+}
+
+// patruljeContactResponse is the team's contact person. Note the `postal` tag
+// (not `postalCode`) — kept as-is because the frontend binds to it.
+type patruljeContactResponse struct {
+	TeamID     string `json:"teamId"`
+	Name       string `json:"name"`
+	Address    string `json:"address"`
+	PostalCode string `json:"postal"`
+	Email      string `json:"email"`
+	Phone      string `json:"phone"`
+	Role       string `json:"role"`
+}
+
+// patruljeRosterMemberResponse is a member as read back from the projection for
+// the roster. It is deliberately distinct from patruljeMemberResponse below:
+// the roster carries projection-only fields (status, city, activeTeamId) that a
+// write echo does not have.
+type patruljeRosterMemberResponse struct {
+	ID            string `json:"id"`
+	MemberID      string `json:"memberId"`
+	InitialTeamID string `json:"teamId"`
+	CurrentTeamID string `json:"activeTeamId"`
+	Status        string `json:"status"`
+	Name          string `json:"name"`
+	Address       string `json:"address"`
+	PostalCode    string `json:"postalCode"`
+	City          string `json:"city"`
+	Email         string `json:"email"`
+	Phone         string `json:"phone"`
+	PhoneContact  string `json:"phoneContact"`
+	Birthday      string `json:"birthday"`
+	Returning     bool   `json:"returning"`
+	TShirtSize    string `json:"tshirtSize"`
+}
+
+// patruljeMemberResponse echoes a single member back after a write. The add
+// endpoint is the only place the client learns the server-issued memberId.
+type patruljeMemberResponse struct {
+	MemberID     string `json:"memberId"`
+	Deleted      bool   `json:"deleted"`
+	Name         string `json:"name"`
+	Address      string `json:"address"`
+	PostalCode   string `json:"postalCode"`
+	Email        string `json:"email"`
+	Phone        string `json:"phone"`
+	PhoneContact string `json:"phoneContact"`
+	Birthday     string `json:"birthday"`
+	TShirtSize   string `json:"tshirtSize"`
+}
+
+// showPatruljeResponse is the body of GET /api/patrulje/{id}.
+type showPatruljeResponse struct {
+	Config     teamConfigResponse             `json:"config"`
+	Team       *patruljeTeamResponse          `json:"team"`
+	Contact    *patruljeContactResponse       `json:"contact"`
+	Members    []patruljeRosterMemberResponse `json:"members"`
+	Order      *orderResponse                 `json:"order"`
+	PaidOrders []orderResponse                `json:"paidOrders"`
+}
+
+// updatePatruljeResponse is the body of PUT /api/patrulje/{id}.
+//
+// PaymentLink is empty when nothing is due; PaymentError carries the
+// human-readable reason payment was refused (e.g. team below the minimum size)
+// rather than failing the request, because the save itself succeeded.
+type updatePatruljeResponse struct {
+	Team         *patruljeTeamResponse `json:"team"`
+	Order        *orderResponse        `json:"order"`
+	PaymentLink  string                `json:"paymentLink"`
+	PaymentError string                `json:"paymentError"`
+}
+
+// patruljeMemberMutationResponse is the body of the member add and update
+// endpoints: the member as stored, plus the recomputed open order.
+type patruljeMemberMutationResponse struct {
+	Member patruljeMemberResponse `json:"member"`
+	Order  *orderResponse         `json:"order"`
+}
+
+// deletePatruljeMemberResponse is the body of the member delete endpoint. Only
+// the recomputed order is returned; the member is gone.
+type deletePatruljeMemberResponse struct {
+	Order *orderResponse `json:"order"`
+}
+
+// assignNumbersResponse is the body of GET /api/assignnumbers, an
+// admin/batch endpoint. It previously returned 200 with an empty body, which
+// told the caller nothing about what happened.
+type assignNumbersResponse struct {
+	Assigned      int `json:"assigned"`
+	AlreadyNumber int `json:"alreadyNumbered"`
+	Unpaid        int `json:"unpaid"`
+}
+
+func newPatruljeTeamResponse(p *data.Patrulje) *patruljeTeamResponse {
+	if p == nil {
+		return nil
+	}
+	return &patruljeTeamResponse{
+		ID:          string(p.ID),
+		Number:      p.Number,
+		Status:      p.Status,
+		Name:        p.Name,
+		Group:       p.Group,
+		Korps:       p.Korps,
+		Liga:        p.Liga,
+		MemberCount: p.MemberCount,
+	}
+}
+
+func newPatruljeContactResponse(c *data.Contact) *patruljeContactResponse {
+	if c == nil {
+		return nil
+	}
+	return &patruljeContactResponse{
+		TeamID:     string(c.TeamID),
+		Name:       c.Name,
+		Address:    c.Address,
+		PostalCode: c.PostalCode,
+		Email:      string(c.Email),
+		Phone:      string(c.Phone),
+		Role:       c.Role,
+	}
+}
+
+// newPatruljeRosterMemberResponses always returns a non-nil slice so `members`
+// stays `[]` rather than `null`, matching GetSpejdere and the UI's spread.
+func newPatruljeRosterMemberResponses(in []*data.Spejder) []patruljeRosterMemberResponse {
+	out := make([]patruljeRosterMemberResponse, 0, len(in))
+	for _, s := range in {
+		if s == nil {
+			continue
+		}
+		out = append(out, patruljeRosterMemberResponse{
+			ID:            string(s.ID),
+			MemberID:      string(s.MemberID),
+			InitialTeamID: string(s.InitialTeamID),
+			CurrentTeamID: string(s.CurrentTeamID),
+			Status:        string(s.Status),
+			Name:          s.Name,
+			Address:       s.Address,
+			PostalCode:    s.PostalCode,
+			City:          s.City,
+			Email:         s.Email,
+			Phone:         s.Phone,
+			PhoneContact:  s.PhoneParent,
+			Birthday:      string(s.Birthday),
+			Returning:     s.Returning,
+			TShirtSize:    s.TShirtSize,
+		})
+	}
+	return out
+}
+
+func newPatruljeMemberResponse(s patrulje.Spejder) patruljeMemberResponse {
+	return patruljeMemberResponse{
+		MemberID:     string(s.MemberID),
+		Deleted:      s.Deleted,
+		Name:         s.Name,
+		Address:      s.Address,
+		PostalCode:   s.PostalCode,
+		Email:        string(s.Email),
+		Phone:        string(s.Phone),
+		PhoneContact: string(s.PhoneContact),
+		Birthday:     string(s.Birthday),
+		TShirtSize:   s.TShirtSize,
+	}
 }
 
 // tshirtSizeLabels maps the slugs the catalogue carries on tshirt.adult
@@ -95,6 +286,17 @@ func (app *application) buildTeamConfig(ctx context.Context, participationSKU st
 	return cfg
 }
 
+// showPatruljeHandler returns everything the patrulje page needs in one call.
+//
+// @Summary      Show a patrulje team
+// @Description  Returns the server-side config (member bounds, prices, corps and t-shirt options), the team, its contact, the member roster, the open order and any paid orders. Re-derives the open order from the member projection on every call, so the page is self-healing against drift.
+// @Tags         patrulje
+// @Produce      json
+// @Param        id   path      string  true  "Team ID"
+// @Success      200  {object}  showPatruljeResponse
+// @Failure      404  {object}  object{error=string}
+// @Failure      500  {object}  object{error=string}
+// @Router       /api/patrulje/{id} [get]
 func (app *application) showPatruljeHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
 	if teamID == "" {
@@ -140,34 +342,71 @@ func (app *application) showPatruljeHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"config": config, "team": team, "contact": contact, "members": members, "order": openOrder, "paidOrders": paidOrders}, nil)
-	if err != nil {
+	resp := showPatruljeResponse{
+		Config:     newTeamConfigResponse(config),
+		Team:       newPatruljeTeamResponse(team),
+		Contact:    newPatruljeContactResponse(contact),
+		Members:    newPatruljeRosterMemberResponses(members),
+		Order:      newOrderResponse(openOrder),
+		PaidOrders: newOrderResponses(paidOrders),
+	}
+	if err := app.WriteJSON(w, http.StatusOK, resp, nil); err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
 }
 
+// assignNumberHandler assigns team numbers to paid patrulje teams that lack one.
+//
+// @Summary      Assign patrulje team numbers
+// @Description  Admin/batch endpoint. Walks this year's patrulje teams and assigns a team number to each that has a registered payment and no number yet. Returns per-team counts.
+// @Tags         patrulje
+// @Produce      json
+// @Success      200  {object}  assignNumbersResponse
+// @Router       /api/assignnumbers [get]
 func (app *application) assignNumberHandler(w http.ResponseWriter, r *http.Request) {
 	teams, _ := app.models.Patrulje.GetAll(r.Context(), patrulje.Filter{YearSlug: app.config.year})
 	log.Printf("Assigning numbers to %d teams", len(teams))
+	resp := assignNumbersResponse{}
 	for _, team := range teams {
 		if team.TeamNumber != "" {
 			log.Printf("%s already got number %q", team.TeamID, team.TeamNumber)
+			resp.AlreadyNumber++
 			continue
 		}
 
 		amountPaid := app.models.Payment.AmountPaidByTeamID(team.TeamID)
 		if amountPaid == 0 {
 			log.Printf("%s have no registered payments", team.TeamID)
+			resp.Unpaid++
 			continue
 		}
 		log.Printf("%s ASSIGNING NUMBER", team.TeamID)
 		_ = app.commands.Patrulje.AssignNumber(r.Context(), team.TeamID)
 		time.Sleep(time.Second)
 		p, _ := app.models.Teams.GetPatrulje(team.TeamID)
-		log.Printf("%s Got number %q", team.TeamID, p.Number)
+		if p != nil {
+			log.Printf("%s Got number %q", team.TeamID, p.Number)
+		}
+		resp.Assigned++
+	}
+	if err := app.WriteJSON(w, http.StatusOK, resp, nil); err != nil {
+		app.ServerErrorResponse(w, r, err)
 	}
 }
 
+// updatePatruljeHandler saves team and contact details, then re-derives the order.
+//
+// @Summary      Update a patrulje team
+// @Description  Saves team and contact fields only — members are managed through the dedicated member endpoints, so this can never create or delete a member. Recomputes the open order from the member projection and, when something is due and the team meets the minimum size, issues a payment link.
+// @Tags         patrulje
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string  true  "Team ID"
+// @Param        body  body  object{team=patrulje.Team,contact=patrulje.Contact}  true  "Team and contact fields"
+// @Success      200   {object}  updatePatruljeResponse
+// @Failure      400   {object}  object{error=string}
+// @Failure      500   {object}  object{error=string}
+// @Router       /api/patrulje/{id} [put]
 func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
 	var input struct {
@@ -246,8 +485,13 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", input.Contact.Phone, input.Contact.Email, teamUrl, orderID, "order")
 	}
 	team, _ := app.models.Teams.GetPatrulje(teamID)
-	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"team": team, "order": openOrder, "paymentLink": paymentLink, "paymentError": paymentError}, nil)
-	if err != nil {
+	resp := updatePatruljeResponse{
+		Team:         newPatruljeTeamResponse(team),
+		Order:        newOrderResponse(openOrder),
+		PaymentLink:  paymentLink,
+		PaymentError: paymentError,
+	}
+	if err := app.WriteJSON(w, http.StatusOK, resp, nil); err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
 }
@@ -297,9 +541,10 @@ func (app *application) rederivePatruljeOrder(ctx context.Context, teamID types.
 // @Produce      json
 // @Param        id     path  string                         true  "Team ID"
 // @Param        body   body  object{member=patrulje.Spejder}  true  "New member"
-// @Success      200    {object}  object{member=patrulje.Spejder,order=order.Order}
+// @Success      200    {object}  patruljeMemberMutationResponse
 // @Failure      400    {object}  object{error=string}
 // @Failure      404    {object}  object{error=string}
+// @Failure      422    {object}  object{error=object}
 // @Router       /api/patrulje/{id}/member [post]
 func (app *application) addPatruljeMemberHandler(w http.ResponseWriter, r *http.Request) {
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
@@ -343,7 +588,11 @@ func (app *application) addPatruljeMemberHandler(w http.ResponseWriter, r *http.
 	if err != nil {
 		log.Printf("rederivePatruljeOrder %q", err)
 	}
-	if err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"member": input.Member, "order": o}, nil); err != nil {
+	resp := patruljeMemberMutationResponse{
+		Member: newPatruljeMemberResponse(input.Member),
+		Order:  newOrderResponse(o),
+	}
+	if err := app.WriteJSON(w, http.StatusOK, resp, nil); err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
 }
@@ -358,7 +607,7 @@ func (app *application) addPatruljeMemberHandler(w http.ResponseWriter, r *http.
 // @Param        id        path  string                         true  "Team ID"
 // @Param        memberId  path  string                         true  "Member ID"
 // @Param        body      body  object{member=patrulje.Spejder}  true  "Member fields"
-// @Success      200       {object}  object{member=patrulje.Spejder,order=order.Order}
+// @Success      200       {object}  patruljeMemberMutationResponse
 // @Failure      400       {object}  object{error=string}
 // @Failure      404       {object}  object{error=string}
 // @Router       /api/patrulje/{id}/member/{memberId} [put]
@@ -386,7 +635,11 @@ func (app *application) updatePatruljeMemberHandler(w http.ResponseWriter, r *ht
 	if err != nil {
 		log.Printf("rederivePatruljeOrder %q", err)
 	}
-	if err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"member": input.Member, "order": o}, nil); err != nil {
+	resp := patruljeMemberMutationResponse{
+		Member: newPatruljeMemberResponse(input.Member),
+		Order:  newOrderResponse(o),
+	}
+	if err := app.WriteJSON(w, http.StatusOK, resp, nil); err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
 }
@@ -399,7 +652,7 @@ func (app *application) updatePatruljeMemberHandler(w http.ResponseWriter, r *ht
 // @Produce      json
 // @Param        id        path  string  true  "Team ID"
 // @Param        memberId  path  string  true  "Member ID"
-// @Success      200       {object}  object{order=order.Order}
+// @Success      200       {object}  deletePatruljeMemberResponse
 // @Failure      404       {object}  object{error=string}
 // @Router       /api/patrulje/{id}/member/{memberId} [delete]
 func (app *application) deletePatruljeMemberHandler(w http.ResponseWriter, r *http.Request) {
@@ -417,7 +670,7 @@ func (app *application) deletePatruljeMemberHandler(w http.ResponseWriter, r *ht
 	if err != nil {
 		log.Printf("rederivePatruljeOrder %q", err)
 	}
-	if err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"order": o}, nil); err != nil {
+	if err := app.WriteJSON(w, http.StatusOK, deletePatruljeMemberResponse{Order: newOrderResponse(o)}, nil); err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
 }

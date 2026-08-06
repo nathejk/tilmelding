@@ -28,11 +28,20 @@ func (app *JsonApi) ReadNamedParam(r *http.Request, param string) string {
 	return httprouter.ParamsFromContext(r.Context()).ByName(param)
 }
 
-// Define an envelope type.
+// Envelope is the loose `{"key": ...}` response shape used by handlers that do
+// not yet declare an explicit response struct.
+//
+// Prefer a typed response struct: it states the frontend/backend contract in
+// one place, keeps domain types from leaking onto the wire, and shows up in the
+// OpenAPI output. See cmd/api/response.go and the *Response types in
+// patrulje.go for the pattern.
 type Envelope map[string]any
 
-// Change the data parameter to have the type envelope instead of any.
-func (app *JsonApi) WriteJSON(w http.ResponseWriter, status int, data Envelope, headers http.Header) error {
+// WriteJSON marshals data and writes it with the given status and headers.
+//
+// data is `any` rather than Envelope so handlers can pass an explicit response
+// struct. Envelope is still accepted, since it is just a map.
+func (app *JsonApi) WriteJSON(w http.ResponseWriter, status int, data any, headers http.Header) error {
 	js, err := json.MarshalIndent(data, "", "\t")
 	if err != nil {
 		return err
