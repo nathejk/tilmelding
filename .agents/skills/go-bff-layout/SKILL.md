@@ -33,24 +33,30 @@ go/
 │                         #   server, healthcheck) — embed `app.JsonApi` on
 │                         #   the application struct to inherit them
 ├── internal/             # private packages — not importable from outside
-│   ├── data/             # SQL-backed read models exposed to handlers
-│   ├── commands/         # imperative actions (publish events, mutate state)
+│   ├── data/             # read-side facade handed to handlers: entity querier
+│   │                     #   interfaces + the shared error aliases. Holds no
+│   │                     #   SQL of its own any more; new reads go on an entity
+│   │                     #   querier, not here.
 │   ├── jsonlog/          # structured logger
-│   ├── mailer/           # SMTP via go-mail; template-driven
-│   ├── messages/         # template strings for sms/mail
+│   ├── mailer/           # SMTP via go-mail; template-driven (`templates/`)
 │   ├── payment/          # mobilepay client + payment abstractions
 │   ├── sms/              # SMS provider abstraction (cpsms today)
 │   ├── templates/        # text/html templates
 │   ├── validator/        # request validation helpers
 │   └── vcs/              # build-time version embedding
-├── nathejk/              # domain layer — what is still local
-│   ├── commands/         # command bus + per-aggregate command structs
-│   ├── config/           # static domain config
-│   └── table/            # `personnel/` — the one entity still local. The root
-│                         #   package itself is gone; the other ten entities
-│                         #   live in shared-go, see "Where the entities live".
+├── nathejk/table/personnel/
+│                         # the one entity still local. The root `table` and
+│                         #   `nathejk/config` packages are gone; the other ten
+│                         #   entities live in shared-go, see "Where the
+│                         #   entities live".
 └── www/                  # placeholder static dir for dev (prod replaces it)
 ```
+
+Empty `internal/commands/` and `internal/messages/` directories used to sit here
+and are gone. Write-side APIs are not a package: `cmd/api/main.go` declares a
+`commands` struct whose fields are each satisfied by the owning entity's
+`Commands` interface (in `commands.go` next to `table.go`). SMS and mail bodies
+live with their sender, in `internal/sms` and `internal/mailer/templates`.
 
 Streaming infra is **not** vendored in this repo. It comes from the external
 module `github.com/jrgensen/stream` (subpackages `jetstream`, `xstream`,
@@ -213,8 +219,11 @@ Remember the two-repo loop: commit and push shared-go, then bump its version in
 
 ### Adding a command
 
-1. Define the command struct in `internal/commands/` or `nathejk/commands/`
-   (domain-specific commands go under `nathejk/`).
+1. Define the command struct in the owning entity's `commands.go`, next to its
+   `table.go` — for the ten shared entities that means shared-go, for
+   `personnel` it is local. There is no `internal/commands` or
+   `nathejk/commands` package; `cmd/api/main.go`'s `commands` struct just
+   collects each entity's `Commands` interface for the handlers.
 2. Publish the resulting event(s) through the aggregate's `cqrs.Publisher`
    (subjects are built with `cqrs.SubjectFromStr`). Inside `nathejk/table/`,
    do not import `github.com/jrgensen/stream` directly — `cqrs` re-exports
