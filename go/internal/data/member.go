@@ -18,75 +18,10 @@ type MemberModel struct {
 	DB *sql.DB
 }
 
-type Spejder struct {
-	ID            types.MemberID     `json:"id"`
-	MemberID      types.MemberID     `json:"memberId"`
-	InitialTeamID types.TeamID       `json:"teamId"`
-	CurrentTeamID types.TeamID       `json:"activeTeamId"`
-	Status        types.MemberStatus `json:"status"`
-	Name          string             `json:"name"`
-	Address       string             `json:"address"`
-	PostalCode    string             `json:"postalCode"`
-	City          string             `json:"city"`
-	Email         string             `json:"email"`
-	Phone         string             `json:"phone"`
-	PhoneParent   string             `json:"phoneContact"`
-	Birthday      types.Date         `json:"birthday"`
-	Returning     bool               `json:"returning"`
-	TShirtSize    string             `json:"tshirtSize"`
-}
-
-func (m MemberModel) GetSpejdere(filters Filters) ([]*Spejder, Metadata, error) {
-	// Create a context with a 3-second timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	query := `Select
-  s.memberId,
-  s.teamId,
-  IF(ss.status IS NULL, IF(ps.startedUts > 0, 'started', 'paid'), ss.status) AS status,
-  name,
-  address,
-  postalCode,
-  city,
-  email,
-  phone,
-  phoneParent,
-  birthday,
-  ` + "`returning`" + `,
-  tshirtsize
-from spejder s
-join patruljestatus ps on s.teamId = ps.teamId
-left join spejderstatus ss on s.memberId = ss.id and s.year = ss.year
-WHERE  (LOWER(s.year) = LOWER(?) OR ? = '') AND  (s.teamId = ? OR ? = '')`
-	args := []any{filters.Year, filters.Year, filters.TeamID, filters.TeamID}
-	rows, err := m.DB.QueryContext(ctx, query, args...)
-	if err != nil {
-		log.Print(err)
-		return nil, Metadata{}, err
-	}
-	defer rows.Close()
-
-	totalRecords := 0
-	spejdere := []*Spejder{}
-	for rows.Next() {
-		var s Spejder
-		if err := rows.Scan(&s.ID, &s.InitialTeamID, &s.Status, &s.Name, &s.Address, &s.PostalCode, &s.City, &s.Email, &s.Phone, &s.PhoneParent, &s.Birthday, &s.Returning, &s.TShirtSize); err != nil {
-			log.Print(err)
-			return nil, Metadata{}, err
-		}
-		s.MemberID = s.ID
-		spejdere = append(spejdere, &s)
-	}
-	// When the rows.Next() loop has finished, call rows.Err() to retrieve any error
-	// that was encountered during the iteration.
-	if err = rows.Err(); err != nil {
-		return nil, Metadata{}, err
-	}
-	metadata := calculateMetadata(filters.Year, totalRecords, filters.Page, filters.PageSize)
-
-	return spejdere, metadata, nil
-}
+// Spejder and GetSpejdere were removed: the shared-go spejder entity owns the
+// same roster query (spejder.querier.GetAll) row-for-row, and the patrulje
+// handlers now read it through Models.Spejder. Only the senior roster below
+// remains here, until klan.go declares response structs of its own.
 
 type Senior struct {
 	ID         types.MemberID `json:"id"`

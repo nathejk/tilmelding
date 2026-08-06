@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/nathejk/shared-go/tables"
 	"github.com/nathejk/shared-go/tables/order"
 	"github.com/nathejk/shared-go/tables/patrulje"
 	payments "github.com/nathejk/shared-go/tables/payment"
+	"github.com/nathejk/shared-go/tables/spejder"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/internal/data"
 )
@@ -149,14 +151,14 @@ type assignNumbersResponse struct {
 	Unpaid        int `json:"unpaid"`
 }
 
-func newPatruljeTeamResponse(p *data.Patrulje) *patruljeTeamResponse {
+func newPatruljeTeamResponse(p *patrulje.Patrulje) *patruljeTeamResponse {
 	if p == nil {
 		return nil
 	}
 	return &patruljeTeamResponse{
-		ID:          string(p.ID),
-		Number:      p.Number,
-		Status:      p.Status,
+		ID:          string(p.TeamID),
+		Number:      p.TeamNumber,
+		Status:      string(p.SignupStatus),
 		Name:        p.Name,
 		Group:       p.Group,
 		Korps:       p.Korps,
@@ -182,7 +184,7 @@ func newPatruljeContactResponse(c *data.Contact) *patruljeContactResponse {
 
 // newPatruljeRosterMemberResponses always returns a non-nil slice so `members`
 // stays `[]` rather than `null`, matching GetSpejdere and the UI's spread.
-func newPatruljeRosterMemberResponses(in []*data.Spejder) []patruljeRosterMemberResponse {
+func newPatruljeRosterMemberResponses(in []*spejder.Spejder) []patruljeRosterMemberResponse {
 	out := make([]patruljeRosterMemberResponse, 0, len(in))
 	for _, s := range in {
 		if s == nil {
@@ -303,11 +305,11 @@ func (app *application) showPatruljeHandler(w http.ResponseWriter, r *http.Reque
 		app.NotFoundResponse(w, r)
 		return
 	}
-	team, err := app.models.Teams.GetPatrulje(teamID)
+	team, err := app.models.Patrulje.GetByID(r.Context(), teamID)
 	if err != nil {
 		log.Printf("GetPatrulje %q", err)
 		switch {
-		case errors.Is(err, data.ErrRecordNotFound):
+		case errors.Is(err, tables.ErrRecordNotFound):
 			app.NotFoundResponse(w, r)
 		default:
 			app.ServerErrorResponse(w, r, err)
@@ -315,7 +317,7 @@ func (app *application) showPatruljeHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	members, _, err := app.models.Members.GetSpejdere(data.Filters{TeamID: teamID})
+	members, _, err := app.models.Spejder.GetAll(r.Context(), spejder.Filter{TeamID: teamID})
 	if err != nil {
 		log.Printf("GetSpejdere %q", err)
 	}
@@ -383,9 +385,9 @@ func (app *application) assignNumberHandler(w http.ResponseWriter, r *http.Reque
 		log.Printf("%s ASSIGNING NUMBER", team.TeamID)
 		_ = app.commands.Patrulje.AssignNumber(r.Context(), team.TeamID)
 		time.Sleep(time.Second)
-		p, _ := app.models.Teams.GetPatrulje(team.TeamID)
+		p, _ := app.models.Patrulje.GetByID(r.Context(), team.TeamID)
 		if p != nil {
-			log.Printf("%s Got number %q", team.TeamID, p.Number)
+			log.Printf("%s Got number %q", team.TeamID, p.TeamNumber)
 		}
 		resp.Assigned++
 	}
@@ -418,7 +420,7 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 		app.BadRequestResponse(w, r, err)
 		return
 	}
-	_, err := app.models.Teams.GetPatrulje(teamID)
+	_, err := app.models.Patrulje.GetByID(r.Context(), teamID)
 	if err != nil {
 		log.Printf("Signup.GetByID  %q", err)
 		app.BadRequestResponse(w, r, err)
@@ -435,7 +437,7 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 
 	// Re-derive the open order from the current member projection (self-heal),
 	// same as the show handler. Members aren't in the request any more.
-	members, _, err := app.models.Members.GetSpejdere(data.Filters{TeamID: teamID})
+	members, _, err := app.models.Spejder.GetAll(r.Context(), spejder.Filter{TeamID: teamID})
 	if err != nil {
 		log.Printf("GetSpejdere %q", err)
 	}
@@ -484,7 +486,7 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 
 		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", input.Contact.Phone, input.Contact.Email, teamUrl, orderID, "order")
 	}
-	team, _ := app.models.Teams.GetPatrulje(teamID)
+	team, _ := app.models.Patrulje.GetByID(r.Context(), teamID)
 	resp := updatePatruljeResponse{
 		Team:         newPatruljeTeamResponse(team),
 		Order:        newOrderResponse(openOrder),
@@ -520,7 +522,7 @@ func replaceMemberLines(base []order.DesiredLine, memberID string, replacement [
 // current member projection, with the given member's lines replaced (add/update)
 // or removed (delete via a nil replacement). Ensures an open order exists first.
 func (app *application) rederivePatruljeOrder(ctx context.Context, teamID types.TeamID, changedMemberID string, replacement []order.DesiredLine) (*order.Order, error) {
-	members, _, err := app.models.Members.GetSpejdere(data.Filters{TeamID: teamID})
+	members, _, err := app.models.Spejder.GetAll(ctx, spejder.Filter{TeamID: teamID})
 	if err != nil {
 		log.Printf("GetSpejdere %q", err)
 	}
@@ -552,8 +554,8 @@ func (app *application) addPatruljeMemberHandler(w http.ResponseWriter, r *http.
 		app.NotFoundResponse(w, r)
 		return
 	}
-	if _, err := app.models.Teams.GetPatrulje(teamID); err != nil {
-		if errors.Is(err, data.ErrRecordNotFound) {
+	if _, err := app.models.Patrulje.GetByID(r.Context(), teamID); err != nil {
+		if errors.Is(err, tables.ErrRecordNotFound) {
 			app.NotFoundResponse(w, r)
 		} else {
 			app.ServerErrorResponse(w, r, err)
@@ -570,7 +572,7 @@ func (app *application) addPatruljeMemberHandler(w http.ResponseWriter, r *http.
 
 	// Enforce the team maximum server-side. Count the current active members
 	// from the projection; reject the add if the team is already full.
-	if members, _, err := app.models.Members.GetSpejdere(data.Filters{TeamID: teamID}); err == nil && len(members) >= patruljeMaxMembers {
+	if members, _, err := app.models.Spejder.GetAll(r.Context(), spejder.Filter{TeamID: teamID}); err == nil && len(members) >= patruljeMaxMembers {
 		app.FailedValidationResponse(w, r, map[string]string{
 			"members": fmt.Sprintf("en patrulje kan højst have %d spejdere", patruljeMaxMembers),
 		})
@@ -710,10 +712,10 @@ func derivedLinesForPatrulje(members []patrulje.Spejder) []order.DesiredLine {
 }
 
 // derivedLinesForPatruljeSpejdere is the read-path variant of
-// derivedLinesForPatrulje. It works with the []*data.Spejder slice returned
-// by GetSpejdere (the show handler) rather than the []patrulje.Spejder used
-// by the update handler.
-func derivedLinesForPatruljeSpejdere(members []*data.Spejder) []order.DesiredLine {
+// derivedLinesForPatrulje. It works with the []*spejder.Spejder roster returned
+// by the shared-go spejder entity (the show handler) rather than the
+// []patrulje.Spejder used by the update handler.
+func derivedLinesForPatruljeSpejdere(members []*spejder.Spejder) []order.DesiredLine {
 	lines := make([]order.DesiredLine, 0, len(members)*2)
 	for _, m := range members {
 		lines = append(lines, order.DesiredLine{

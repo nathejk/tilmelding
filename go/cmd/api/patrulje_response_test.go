@@ -7,6 +7,7 @@ import (
 
 	"github.com/nathejk/shared-go/tables/order"
 	"github.com/nathejk/shared-go/tables/patrulje"
+	"github.com/nathejk/shared-go/tables/spejder"
 	"github.com/nathejk/shared-go/types"
 
 	"nathejk.dk/internal/data"
@@ -28,15 +29,18 @@ func TestShowPatruljeResponseWireShape(t *testing.T) {
 		Korps:          []types.SlugLabel{{Slug: "dds", Label: "DDS"}},
 		TShirtSizes:    []types.SlugLabel{{Slug: "", Label: "Ingen"}, {Slug: "l", Label: "Large"}},
 	}
-	team := &data.Patrulje{
-		ID: "t-1", Number: "42", Status: "started", Name: "Ulvene",
+	// Note: built from the shared-go entity type now, not internal/data. The
+	// expected JSON below is unchanged, which is what makes the migration
+	// provably wire-safe despite spejder/patrulje carrying different json tags.
+	team := &patrulje.Patrulje{
+		TeamID: "t-1", TeamNumber: "42", SignupStatus: "started", Name: "Ulvene",
 		Group: "1. Aarhus", Korps: "dds", Liga: "a", MemberCount: 4,
 	}
 	contact := &data.Contact{
 		TeamID: "t-1", Name: "Anna", Address: "Vej 1", PostalCode: "8000",
 		Email: "a@b.dk", Phone: "40733886", Role: "leder",
 	}
-	members := []*data.Spejder{{
+	members := []*spejder.Spejder{{
 		ID: "m-1", MemberID: "m-1", InitialTeamID: "t-1", CurrentTeamID: "t-1",
 		Status: "paid", Name: "Bo", Address: "Vej 2", PostalCode: "8000", City: "Aarhus",
 		Email: "bo@b.dk", Phone: "11111111", PhoneParent: "22222222",
@@ -104,7 +108,7 @@ func TestShowPatruljeResponseNilAndEmptySemantics(t *testing.T) {
 
 func TestUpdatePatruljeResponseWireShape(t *testing.T) {
 	resp := updatePatruljeResponse{
-		Team:         newPatruljeTeamResponse(&data.Patrulje{ID: "t-1", Name: "Ulvene"}),
+		Team:         newPatruljeTeamResponse(&patrulje.Patrulje{TeamID: "t-1", Name: "Ulvene"}),
 		Order:        nil,
 		PaymentLink:  "",
 		PaymentError: "en patrulje skal have mindst 3 spejdere for at kunne betale",
