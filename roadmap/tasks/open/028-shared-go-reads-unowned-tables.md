@@ -1,10 +1,114 @@
-# 028 — shared-go reads three tables it does not project
+# 028 — shared-go reads tables it does not project
 
 **Status:** open
-**Priority:** medium
+**Priority:** low
 **Created:** 2026-08-04
 
-## Description
+> **Mostly resolved.** Two of the three tables are gone, and the ownership
+> question turned out to be the wrong question — the answer for both status
+> tables was "delete, don't move". What is left is one two-line upstream diff
+> and one upstream decision, neither of which affects tilmelding today. Priority
+> dropped from medium to low accordingly. The original framing, options and
+> decision are preserved at the bottom, marked superseded, because the reasoning
+> is worth keeping.
+
+## What is still relevant
+
+### 1. `spejderstatus` — one upstream diff away from gone
+
+The local projector and the root `table` package are deleted. All that survives
+is a `CREATE TABLE IF NOT EXISTS spejderstatus (...)` in `cmd/api/main.go`,
+labelled as a compatibility shim, because `shared-go/tables/spejder`'s `GetAll`
+still does:
+
+```sql
+IFNULL(ss.status, 'paid') AS status
+...
+left join spejderstatus ss on s.memberId = ss.id and s.year = ss.year
+```
+
+Nothing has ever written to that table (the projector subscribed to no subject
+and had an empty handler), so `ss.status` is always NULL and the `IFNULL` always
+yields `'paid'`. The upstream change is therefore behaviour-preserving:
+
+```diff
+-  IFNULL(ss.status, 'paid') AS status,
++  'paid' AS status,
+ ...
+ from spejder s
+-left join spejderstatus ss on s.memberId = ss.id and s.year = ss.year
+```
+
+Push that, bump `go.mod`, delete the six shim lines. Done.
+
+Separate question it exposes, **not** part of this task: hard-coding `'paid'`
+means the patrulje roster reports every scout as paid regardless of reality.
+That is what the code already does, but if member status should mean something,
+it needs a `status` column on `spejder` and a projector that maintains it — a
+feature, not a cleanup.
+
+### 2. `confirm` — read upstream, projected nowhere at all
+
+This one got *worse* than originally described, and is now purely shared-go's
+problem. `payment.Query.ConfirmBySecret` reads the table in live code:
+
+```sql
+UPDATE signup s JOIN confirm c ON s.teamId = c.teamId SET s.email = c.emailPending WHERE secret = ?
+SELECT teamId FROM confirm WHERE secret = ?
+```
+
+The projector that built `confirm` was deleted here as orphaned (`f60b5fa`), so
+**no repo projects it now** — the table is not merely unowned, it is absent.
+
+Why tilmelding is unaffected, verified rather than assumed:
+
+- `ConfirmBySecret` is not on `data.PaymentInterface` (`GetAll`,
+  `GetByReference`, `AmountPaidByTeamID`) and has no caller here.
+- The live email-verification path does not touch it: `signup.VerifyEmail` reads
+  `signup.EmailPending` through its own querier and publishes
+  `NathejkSignupEmailVerified`.
+
+So the fix is upstream and is a choice between two: delete `ConfirmBySecret` as
+dead, or reinstate a `confirm` projection in shared-go if some consumer still
+needs secret-based email confirmation. Nothing to do in this repo either way.
+
+## Resolved
+
+| Item | Outcome |
+|---|---|
+| `patruljestatus` | **Deleted.** No reader left in either repo; the projector wrote `startedUts=1` unconditionally, so the column carried no information and the JOINs it fed acted as an invisible filter. |
+| `spejderstatus` projector | **Deleted.** Never a projector: an empty `Consumes()` meant `xstream`'s `Subscribe` built no consumer at all, and `HandleMessage`'s body was commented out. Only the `CREATE TABLE` remains, see above. |
+| `confirm` projector | Deleted under task 027 as orphaned. The upstream reader outliving it is item 2 above. |
+| `patruljemerged` | Diagnosed: nothing projects it, and **both** references were unreachable, so the broken joins could never fail in production. Both removed. |
+| Local readers | All gone: `internal/data/{member,team}.go` moved to entity queriers; `personnel.querier.GetAll` deleted (dead code against a non-existent `staff` table). |
+| Root `nathejk/table` package | Gone, including the orphaned `errors.go`. Only `nathejk/table/personnel/` remains (blocked on task 001). |
+
+## Acceptance Criteria
+
+- [x] Ownership decision recorded — and then superseded: two of the three tables
+      were not worth moving, they were worth deleting
+- [x] `patruljestatus` deleted
+- [x] Root `nathejk/table` package gone; only `personnel/` remains
+- [x] `patruljemerged` diagnosed and its dead queries removed
+- [x] No tilmelding code reads a table it does not project
+- [ ] `spejderstatus` fully gone — blocked on the upstream `spejder.GetAll` diff
+      (item 1)
+- [ ] `confirm` resolved upstream: `ConfirmBySecret` deleted, or a projection
+      added (item 2)
+- [x] `go build ./...` / `go test ./...` pass in the workspace and with
+      `GOWORK=off`
+
+---
+
+# Superseded (kept for the reasoning)
+
+The sections below are the task as originally written. They are **out of date**:
+the premise was that three load-bearing projectors sat in the wrong repo and
+should move to shared-go. Two turned out to be writing nothing of value and were
+deleted instead; the third's projector was already dead. Nothing here is work to
+do.
+
+## Original description
 
 After the entity move (`ed16c31`), `shared-go/tables/*` queriers **read** three
 tables that are still projected only by tilmelding's local `nathejk/table` root
@@ -16,11 +120,6 @@ package. shared-go therefore depends on state it does not own.
 | `spejderstatus` | `table.NewSpejderStatus` | `spejder` querier |
 | `confirm` | `table.NewConfirm` | `payment` queries (`GetTeamIDBySecret` etc.) |
 
-Also read locally by `nathejk/table/personnel`. (`internal/data` used to read
-`patruljestatus` too, from `member.go` and `team.go`; both files are gone now
-that the entity queriers own those reads, so the local reader count is one
-lower — the shared-go side of the problem is unchanged.)
-
 **Why it matters:** a second service consuming these shared entities would
 compile and run, but every `JOIN patruljestatus` / `JOIN spejderstatus` /
 `FROM confirm` would return nothing, because no projector in that service
@@ -29,9 +128,10 @@ only works because tilmelding happens to run the projectors in the same
 process.
 
 This is the mirror image of task 027: those five projectors are dead and should
-go; these three are load-bearing and in the wrong repo.
+go; these three are load-bearing and in the wrong repo. *(That last clause is
+what proved wrong.)*
 
-## Options
+## Original options
 
 1. **Move the three projectors into shared-go** as their own entities
    (`tables/patruljestatus`, `tables/spejderstatus`, `tables/confirm`), wired
@@ -45,181 +145,25 @@ go; these three are load-bearing and in the wrong repo.
    cheapest, but leaves the silent-empty-join trap in place. If chosen, at least
    assert the tables exist at startup so it fails loudly.
 
-Option 1 is preferred.
+Option 1 was preferred and became the decision below. It was abandoned once the
+projectors were actually read: there was nothing worth moving. Option 3's "fail
+loudly" instinct was right, though — the labelled shim in `main.go` is the
+honest version of it.
 
 ## Related finding: `patruljemerged` has no projector at all
 
-While mapping the above: `internal/data/team.go:62` referenced
-`patruljemerged` in what looked like **live** code (the file has since been
-deleted entirely):
+While mapping the above: `internal/data/team.go:62` referenced `patruljemerged`
+in what looked like **live** code (the file has since been deleted entirely):
 
 ```sql
 SELECT DISTINCT m.teamId FROM patruljemerged m
 JOIN patruljestatus s ON m.teamId = s.teamId WHERE s.startedUts > 0 ...
 ```
 
-Nothing in tilmelding or shared-go creates or writes `patruljemerged` — the
-`table.NewPatruljeMerged` constructor that presumably did no longer exists (it
-survives only as a stale comment in `main.go:258`, see task 027). The same query
-appears in `shared-go/tables/{klan,senior}/query.go` but there it is inside
-`/* */` blocks, i.e. dead.
+Nothing in tilmelding or shared-go creates or writes `patruljemerged`. Resolved
+on 2026-08-04: both references were unreachable. See the Resolved table.
 
-So the live call path in `internal/data/team.go` queries a table that may not
-exist. Determine whether:
-- the table still exists as legacy/monolith-era data (then it is unprojected
-  and will drift), or
-- it does not exist (then that query errors at runtime and the code path is
-  presumably unreachable — confirm and delete it).
-
-Worth resolving as part of this task, or splitting out once diagnosed.
-
-## Audit (2026-08-06): can the two status projectors just be deleted?
-
-Asked directly, since the whole point of moving them upstream is that someone
-reads them. Answer: **yes for both, eventually, but neither today** — and for
-two different reasons.
-
-### `spejderstatus` — the projector is provably a no-op
-
-`nathejk/table/spejderstatus.go` cannot write a row:
-
-- `Consumes()` returns an empty slice — it subscribes to nothing.
-- `HandleMessage` is a bare `return nil`; its entire body is inside `/* */`.
-
-So the table is created and stays empty forever, and every reader of it is
-reading nothing. Deleting it therefore changes no data — but the `CREATE TABLE`
-is the only reason the reader's SQL is valid:
-
-```sql
--- shared-go/tables/spejder/querier.go GetAll (live, and in the pinned version)
-IFNULL(ss.status, 'paid') AS status
-...
-left join spejderstatus ss on s.memberId = ss.id and s.year = ss.year
-```
-
-On an existing database the table is already there, so nothing breaks; on a
-**fresh** one, dropping the projector makes the patrulje roster query fail with
-"table doesn't exist". That is exactly the silent-environment-dependence this
-task is about, so it must not be traded for a louder version of itself.
-
-Unblocking is small and behaviour-free upstream: because the table is
-guaranteed empty, `IFNULL(ss.status,'paid')` is *always* `'paid'`. Replace it
-with the literal and drop the join. Same file also has `GetInactive`, which
-inner-joins the empty table and so can only ever return zero rows — it is dead
-and should go with it (as should the dead `TeamModel.GetSpejder` noted in step
-2 below).
-
-### `patruljestatus` — the projector is live but carries no information
-
-It does fire (`Consumes` `NATHEJK:*.*.*.signedup`, and `Match` lines up once
-`subject.FromStr` has turned the first `:` into a `.`), and it writes:
-
-```sql
-INSERT INTO patruljestatus SET teamId=%q, year=%q, startedUts=1
-  ON DUPLICATE KEY UPDATE startedUts=VALUES(startedUts)
-```
-
-`startedUts` is the literal `1` on every row, so `WHERE startedUts > 0` is true
-for every row and the column says nothing. The only real content of the table is
-"this team published a signedup event" — which is why `JOIN patruljestatus`
-behaved as an invisible filter, hiding teams without a row.
-
-Readers, as of today:
-
-| Reader | State |
-|---|---|
-| shared-go working tree | **none** — removed in shared-go `24cf73c` "stop joining read models on patruljestatus" |
-| shared-go **pinned** (`v0.0.0-20260805205843-d0d6fdf64ba1`) | still joins it in `klan.GetByID`, `klan.GetAll`, `patrulje.GetByID`, `spejder.GetAll`, and the senior queries |
-| tilmelding | **none**, as of this commit |
-
-That pinned row is the blocker: `24cf73c` and `9028f9f` are local to the
-shared-go checkout and **not pushed** (`origin/main` is at `d0d6fdf`), and
-`GOWORK=off` — the CI and production resolution path — builds the pinned
-version. Delete the projector now and production stops finding any patrulje or
-klan at all.
-
-The local reader has been removed: `personnel.querier.GetAll` joined
-`patruljestatus`, but it could never have run — it selected `t.staffId` FROM a
-table named `staff` while the entity projects `personnel` (primary key
-`userId`, no `teamId` column). Nothing called it; the handlers use `GetByID`
-only. Removed together with `personnel/filter.go` and
-`data.PersonnelInterface.GetAll`.
-
-### Order of operations
-
-1. ~~Push shared-go (`24cf73c`, `9028f9f`) and bump `go.mod` in tilmelding.~~
-   **Done 2026-08-06** — pinned at `v0.0.0-20260806122607-9028f9ff641c`, which
-   mentions `patruljestatus` only in comments. Nothing anywhere reads it.
-2. ~~Delete `nathejk/table/patruljestatus.{go,sql}` and its `main.go` wiring.~~
-   **Done 2026-08-06.**
-3. ~~Upstream, drop the `spejderstatus` join from `spejder.GetAll` (literal
-   `'paid'`) and delete `GetInactive`; push; bump.~~ **Half done 2026-08-06**
-   (shared-go `e7b46bb`, pinned as `v0.0.0-20260806204955-e7b46bb008f3`):
-   `GetInactive` is disabled, but the LEFT JOIN in `GetAll` is **still live**.
-   That join is the whole blocker. **← still to do.**
-4. ~~Delete `nathejk/table/spejderstatus.{go,sql}` and its `main.go` wiring.~~
-   **Done 2026-08-06, as far as it can be:** the fake projector is gone and the
-   root `table` package with it. What survives is the bare `CREATE TABLE` in
-   `main.go`, six lines labelled as a compatibility shim for the join above.
-   Deleting those lines is the last step, and it is a one-liner once step 3
-   lands.
-5. ~~`confirm` is already gone (`f60b5fa`), so after step 4 the root `table`
-   package holds only `errors.go` — check whether that still has a consumer.~~
-   **Done 2026-08-06** — it had none (nothing referenced
-   `table.ErrRecordNotFound` / `ErrEditConflict` / `ErrVerificationFailed`), so
-   `errors.go` is deleted already. After step 4 the root `table` package
-   disappears entirely and only `nathejk/table/personnel/` remains.
-
-Steps 2 and 4 are then pure deletions with no behaviour change, which is the
-point of doing them in this order.
-
-### Exact upstream change still needed (step 3)
-
-In `shared-go/tables/spejder/querier.go`, `GetAll`:
-
-```diff
--  IFNULL(ss.status, 'paid') AS status,
-+  'paid' AS status,
- ...
- from spejder s
--left join spejderstatus ss on s.memberId = ss.id and s.year = ss.year
-```
-
-That is behaviour-preserving *because* the table is empty by construction, so
-`ss.status` is always NULL and the IFNULL always yields `'paid'`. Whether
-hard-coding `'paid'` is the right answer is a separate question — it is what the
-code already does today, and the member status this once modelled has no
-projector anywhere. ~~Delete `GetInactive` in the same pass~~ — done in
-`e7b46bb`; only the `GetAll` join is left.
-
-**Note on data:** neither table needs migrating. `spejderstatus` is empty by
-construction. `patruljestatus` holds only `(teamId, year, startedUts=1)`, all of
-which is derivable from the `signedup` events, and no query reads a column from
-it once the joins are gone. Both can simply be dropped from the schema.
-
-## Acceptance Criteria
-
-- [x] Decision recorded on ownership of `patruljestatus`, `spejderstatus`,
-      `confirm` (move to shared-go vs document + startup assertion) — and then
-      superseded for two of the three: they are not worth moving, they are worth
-      deleting. See the audit above.
-- [x] `patruljestatus` deleted: no reader remains in either repo, and the
-      projector wrote a constant
-- [ ] `spejderstatus` deleted — projector and package gone; the `CREATE TABLE`
-      remains in `main.go`, blocked on shared-go dropping the LEFT JOIN in
-      `spejder.GetAll` (step 3 above)
-- [x] The root `nathejk/table` package is gone; only `nathejk/table/personnel/`
-      remains (blocked on task 001)
-- [ ] If moving: projectors live in shared-go, tilmelding wires them from
-      `main.go`, and the local copies are removed
-- [ ] A service using the shared entities cannot silently get empty joins —
-      either it projects the tables, or startup fails loudly if they are absent
-- [x] `patruljemerged` diagnosed: table exists (and needs a projector) or the
-      live query in `internal/data/team.go` is dead and removed
-- [x] `go build ./...` / `go test ./...` pass in the workspace and with
-      `GOWORK=off`
-
-## Decision (2026-08-04)
+## Decision (2026-08-04) — superseded 2026-08-06
 
 **Option 1 — move the three projectors into shared-go**, each as its own entity
 package (`tables/confirm`, `tables/patruljestatus`, `tables/spejderstatus`).
@@ -235,7 +179,11 @@ switching `main.go` to shared projectors would break `GOWORK=off` (the CI and
 production resolution path) until shared-go is committed, pushed, and its
 version bumped in `go.mod`. Sequencing therefore matters.
 
-### Steps, in order
+### Steps, in order — not the plan any more
+
+Recorded for the record; steps 1–4 were never executed and should not be. Only
+step 5's outcome survives (the root `table` package did disappear, just by
+deletion rather than migration).
 
 1. **In shared-go**, add three entity packages, ported verbatim from
    tilmelding's `nathejk/table/`:
@@ -326,3 +274,19 @@ version bumped in `go.mod`. Sequencing therefore matters.
   reads the `confirm` table in **live** code, and that projector was deleted in
   `f60b5fa`. It has no caller in tilmelding, so nothing here breaks, but a
   consumer that calls it gets a missing-table error. Upstream's to fix.
+- 2026-08-06 — Reviewed how much of this task is still relevant, and rewrote the
+  top of the file to say so. Answer: two items, both upstream, neither affecting
+  tilmelding. Everything about local projectors, ownership and migration is done
+  or moot, so the original description, options, decision and ordered steps moved
+  below a "Superseded" banner rather than being deleted — the reasoning explains
+  why the answer changed. Priority medium → low, since nothing here blocks work
+  in this repo.
+
+  Also promoted `confirm` from an aside to a numbered item, having verified
+  properly this time that tilmelding cannot reach it: `ConfirmBySecret` is absent
+  from `data.PaymentInterface` and uncalled, and the live email-verification path
+  (`signup.VerifyEmail`) reads `signup.EmailPending`, not `confirm`. Dropped two
+  stale acceptance criteria ("if moving: projectors live in shared-go", "a
+  service using the shared entities cannot silently get empty joins") — the first
+  is not happening, and the second is satisfied for tilmelding and is a shared-go
+  criterion, not one this repo can tick.
