@@ -8,11 +8,12 @@ import (
 	"net/http"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/nathejk/shared-go/tables"
 	"github.com/nathejk/shared-go/tables/klan"
 	"github.com/nathejk/shared-go/tables/order"
 	payments "github.com/nathejk/shared-go/tables/payment"
+	"github.com/nathejk/shared-go/tables/senior"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/internal/data"
 )
 
 // Klan team-size bounds. min is the number of members required before a team
@@ -130,7 +131,7 @@ type deleteKlanMemberResponse struct {
 	Order *orderResponse `json:"order"`
 }
 
-func newKlanTeamResponse(k *data.Klan) *klanTeamResponse {
+func newKlanTeamResponse(k *klan.Klan) *klanTeamResponse {
 	if k == nil {
 		return nil
 	}
@@ -148,25 +149,28 @@ func newKlanTeamResponse(k *data.Klan) *klanTeamResponse {
 // stays `[]` rather than `null`. The show handler ignores the roster read error
 // and the page then does `data.members.map(...)` unguarded, so `null` would
 // break it; `[]` renders an empty roster.
-func newKlanRosterMemberResponses(in []*data.Senior) []klanRosterMemberResponse {
+func newKlanRosterMemberResponses(in []*senior.Senior) []klanRosterMemberResponse {
 	out := make([]klanRosterMemberResponse, 0, len(in))
 	for _, s := range in {
 		if s == nil {
 			continue
 		}
 		out = append(out, klanRosterMemberResponse{
-			ID:         string(s.ID),
+			// The projection has one member key, `memberId`; the previous
+			// query copied it into both `id` and `memberId` and the page
+			// reads `memberId`, so both keep coming from the same column.
+			ID:         string(s.MemberID),
 			MemberID:   string(s.MemberID),
 			TeamID:     string(s.TeamID),
 			Name:       s.Name,
 			Address:    s.Address,
 			PostalCode: s.PostalCode,
 			City:       s.City,
-			Email:      s.Email,
-			Phone:      s.Phone,
-			Birthday:   string(s.Birthday),
+			Email:      string(s.Email),
+			Phone:      string(s.Phone),
+			Birthday:   s.Birthday,
 			Diet:       s.Diet,
-			TShirtSize: s.TShirtSize,
+			TShirtSize: s.TshirtSize,
 		})
 	}
 	return out
@@ -204,11 +208,11 @@ func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) 
 		app.NotFoundResponse(w, r)
 		return
 	}
-	team, err := app.models.Teams.GetKlan(teamID)
+	team, err := app.models.Klan.GetByID(r.Context(), teamID)
 	if err != nil {
 		log.Printf("GetKlan %q", err)
 		switch {
-		case errors.Is(err, data.ErrRecordNotFound):
+		case errors.Is(err, tables.ErrRecordNotFound):
 			app.NotFoundResponse(w, r)
 		default:
 			app.ServerErrorResponse(w, r, err)
@@ -216,7 +220,7 @@ func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	members, _, err := app.models.Members.GetSeniore(data.Filters{TeamID: teamID})
+	members, err := app.models.Senior.GetAll(r.Context(), senior.Filter{TeamIDs: []types.TeamID{teamID}})
 	if err != nil {
 		log.Printf("GetSenior %q", err)
 	}
@@ -354,7 +358,7 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 			paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", *signup.Phone, *signup.Email, teamUrl, o.OrderID, "order")
 		}
 	}
-	team, _ := app.models.Teams.GetKlan(teamID)
+	team, _ := app.models.Klan.GetByID(r.Context(), teamID)
 	err = app.WriteJSON(w, http.StatusOK, requestSeatResponse{
 		Team:        newKlanTeamResponse(team),
 		Status:      string(status),
@@ -389,7 +393,7 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		app.BadRequestResponse(w, r, err)
 		return
 	}
-	_, err := app.models.Teams.GetKlan(teamID)
+	_, err := app.models.Klan.GetByID(r.Context(), teamID)
 	if err != nil {
 		log.Printf("Signup.GetByID  %q", err)
 		app.BadRequestResponse(w, r, err)
@@ -405,7 +409,7 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	// Re-derive the open order from the current senior projection (self-heal).
-	members, _, err := app.models.Members.GetSeniore(data.Filters{TeamID: teamID})
+	members, err := app.models.Senior.GetAll(r.Context(), senior.Filter{TeamIDs: []types.TeamID{teamID}})
 	if err != nil {
 		log.Printf("GetSeniore %q", err)
 	}
@@ -455,7 +459,7 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 
 		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", phone, email, teamUrl, orderID, "order")
 	}
-	team, _ := app.models.Teams.GetKlan(teamID)
+	team, _ := app.models.Klan.GetByID(r.Context(), teamID)
 	err = app.WriteJSON(w, http.StatusOK, updateKlanResponse{
 		Team:         newKlanTeamResponse(team),
 		Order:        newOrderResponse(openOrder),
@@ -471,7 +475,7 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 // senior projection, with the given member's lines replaced (add/update) or
 // removed (delete via a nil replacement). Mirrors rederivePatruljeOrder.
 func (app *application) rederiveKlanOrder(ctx context.Context, teamID types.TeamID, changedMemberID string, replacement []order.DesiredLine) (*order.Order, error) {
-	members, _, err := app.models.Members.GetSeniore(data.Filters{TeamID: teamID})
+	members, err := app.models.Senior.GetAll(ctx, senior.Filter{TeamIDs: []types.TeamID{teamID}})
 	if err != nil {
 		log.Printf("GetSeniore %q", err)
 	}
@@ -502,8 +506,8 @@ func (app *application) addKlanMemberHandler(w http.ResponseWriter, r *http.Requ
 		app.NotFoundResponse(w, r)
 		return
 	}
-	if _, err := app.models.Teams.GetKlan(teamID); err != nil {
-		if errors.Is(err, data.ErrRecordNotFound) {
+	if _, err := app.models.Klan.GetByID(r.Context(), teamID); err != nil {
+		if errors.Is(err, tables.ErrRecordNotFound) {
 			app.NotFoundResponse(w, r)
 		} else {
 			app.ServerErrorResponse(w, r, err)
@@ -519,7 +523,7 @@ func (app *application) addKlanMemberHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Enforce the team maximum server-side.
-	if members, _, err := app.models.Members.GetSeniore(data.Filters{TeamID: teamID}); err == nil && len(members) >= klanMaxMembers {
+	if members, err := app.models.Senior.GetAll(r.Context(), senior.Filter{TeamIDs: []types.TeamID{teamID}}); err == nil && len(members) >= klanMaxMembers {
 		app.FailedValidationResponse(w, r, map[string]string{
 			"members": fmt.Sprintf("en klan kan højst have %d seniorer", klanMaxMembers),
 		})
@@ -649,9 +653,9 @@ func derivedLinesForKlan(seniors []klan.Senior) []order.DesiredLine {
 }
 
 // derivedLinesForKlanSeniore is the read-path variant of derivedLinesForKlan.
-// It works with the []*data.Senior slice returned by GetSeniore (the show
-// handler) rather than the []klan.Senior used by the update handler.
-func derivedLinesForKlanSeniore(members []*data.Senior) []order.DesiredLine {
+// It works with the []*senior.Senior slice returned by the senior querier (the
+// show handler) rather than the []klan.Senior used by the update handler.
+func derivedLinesForKlanSeniore(members []*senior.Senior) []order.DesiredLine {
 	lines := make([]order.DesiredLine, 0, len(members)*2)
 	for _, s := range members {
 		lines = append(lines, order.DesiredLine{
@@ -659,12 +663,12 @@ func derivedLinesForKlanSeniore(members []*data.Senior) []order.DesiredLine {
 			MemberID:   string(s.MemberID),
 			Quantity:   1,
 		})
-		if s.TShirtSize != "" {
+		if s.TshirtSize != "" {
 			lines = append(lines, order.DesiredLine{
 				ProductSKU: "tshirt.adult",
 				MemberID:   string(s.MemberID),
 				Quantity:   1,
-				Attributes: map[string]any{"size": s.TShirtSize},
+				Attributes: map[string]any{"size": s.TshirtSize},
 			})
 		}
 	}

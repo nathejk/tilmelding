@@ -11,14 +11,14 @@ type TeamModel struct {
 	DB *sql.DB
 }
 
-// Deprecated: only GetKlan and GetContact remain here. GetPatrulje was removed
-// in favour of the shared-go patrulje entity's own querier (patrulje.GetByID),
-// which reads the same rows.
+// Deprecated: only GetContact remains here, and it is blocked upstream —
+// patrulje.querier.GetContact exists in shared-go but is commented out, so
+// there is nothing to migrate to. Once that is uncommented this whole package
+// goes away.
 //
-// GetKlan follows once klan.go declares response structs — swapping it now would
-// put klan.Klan's differently-tagged fields straight onto the wire. GetContact
-// is blocked upstream: patrulje.querier.GetContact exists in shared-go but is
-// commented out, so there is nothing to migrate to.
+// GetPatrulje was removed in favour of the shared-go patrulje entity's own
+// querier (patrulje.GetByID), and GetKlan in favour of klan.GetByID; both read
+// the same rows.
 //
 // Removed earlier as orphaned: the Team type and its no-op Validate, the shared
 // query() helper, and GetStartedTeamIDs / GetPatruljer / RequestedSeniorCount /
@@ -62,45 +62,7 @@ func (m TeamModel) GetContact(teamID types.TeamID) (*Contact, error) {
 	return &c, nil
 }
 
-type Klan struct {
-	ID                  types.TeamID       `json:"id"`
-	Status              types.SignupStatus `json:"status"`
-	Name                string             `json:"name"`
-	Group               string             `json:"group"`
-	Korps               string             `json:"korps"`
-	MemberCount         int                `json:"memberCount"`
-	ReservedMemberCount int                `json:"reservedMemberCount"`
-}
-
-func (m TeamModel) GetKlan(teamID types.TeamID) (*Klan, error) {
-	if len(teamID) == 0 {
-		return nil, ErrRecordNotFound
-	}
-
-	query := `SELECT t.teamId, t.name, t.groupName, t.korps, t.memberCount, t.reservedMemberCount, t.signupStatus
-		FROM klan t
-		JOIN patruljestatus ts ON t.teamId = ts.teamID
-		WHERE t.teamId = ?`
-	var t Klan
-	err := m.DB.QueryRow(query, teamID).Scan(
-		&t.ID,
-		&t.Name,
-		&t.Group,
-		&t.Korps,
-		&t.MemberCount,
-		&t.ReservedMemberCount,
-		&t.Status,
-	)
-	if err != nil {
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return nil, ErrRecordNotFound
-		default:
-			return nil, err
-		}
-	}
-	return &t, nil
-}
-
-// GetContact was removed: the shared-go patrulje entity owns the same query
-// (patrulje.querier.GetContact) and returns an identical Contact struct.
+// The Klan type and GetKlan were removed: the shared-go klan entity owns the
+// same rows and its querier's GetByID replaces them. The one column this query
+// selected that klan.GetByID does not is `reservedMemberCount`, which is no
+// longer on the wire either — see klanTeamResponse in cmd/api/klan.go.

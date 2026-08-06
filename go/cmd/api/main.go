@@ -284,7 +284,7 @@ func main() {
 		detector.FireNow()
 	}
 
-	models := data.NewModels(reader, tablePayment, tableStaff, tablePatrulje, tableSpejder, tableSignup, tableKlan, tableOrder, tableProduct, tableSection, tableCrewmember)
+	models := data.NewModels(reader, tablePayment, tableStaff, tablePatrulje, tableSpejder, tableSenior, tableSignup, tableKlan, tableOrder, tableProduct, tableSection, tableCrewmember)
 
 	expvar.NewString("version").Set(version)
 	expvar.NewInt("timestamp").Set(time.Now().Unix())

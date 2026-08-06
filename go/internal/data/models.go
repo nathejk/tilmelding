@@ -12,6 +12,7 @@ import (
 	"github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/tables/product"
 	"github.com/nathejk/shared-go/tables/section"
+	"github.com/nathejk/shared-go/tables/senior"
 	"github.com/nathejk/shared-go/tables/signup"
 	"github.com/nathejk/shared-go/tables/spejder"
 	"github.com/nathejk/shared-go/types"
@@ -50,33 +51,34 @@ type SpejderInterface interface {
 	GetAll(context.Context, spejder.Filter) ([]*spejder.Spejder, spejder.Metadata, error)
 }
 
+// SeniorInterface is the senior roster read API, satisfied by the shared-go
+// senior entity. It replaces the deprecated MemberModel.GetSeniore.
+//
+// Declared here rather than imported because the senior package, unlike its
+// siblings, does not export a Queries interface of its own.
+type SeniorInterface interface {
+	GetAll(context.Context, senior.Filter) ([]*senior.Senior, error)
+}
+
 // Models is the read-side facade handed to the HTTP handlers.
 //
-// Deprecated, and shrinking: Teams and Members are the last two members backed
-// by this package's own SQL. Everything else is a querier from the entity that
-// owns the data — shared-go/tables/* (or nathejk/table/personnel, not yet
-// shared). New reads belong on an entity querier, not here.
+// Deprecated, and nearly gone: Teams is the last member backed by this
+// package's own SQL. Everything else is a querier from the entity that owns the
+// data — shared-go/tables/* (or nathejk/table/personnel, not yet shared). New
+// reads belong on an entity querier, not here.
 //
-// What is left and why:
-//
-//   - Teams.GetKlan / Members.GetSeniore — go once klan.go declares response
-//     structs; swapping them now would put klan.Klan's and senior.Senior's
-//     differently-tagged fields straight onto the wire.
-//   - Teams.GetContact — blocked upstream: the equivalent
-//     patrulje.querier.GetContact is commented out in shared-go, so there is
-//     nothing to migrate to yet.
+// What is left and why: Teams.GetContact is blocked upstream — the equivalent
+// patrulje.querier.GetContact is commented out in shared-go, so there is
+// nothing to migrate to yet.
 type Models struct {
 	Teams interface {
-		GetKlan(types.TeamID) (*Klan, error)
 		GetContact(types.TeamID) (*Contact, error)
-	}
-	Members interface {
-		GetSeniore(Filters) ([]*Senior, Metadata, error)
 	}
 	Payment    PaymentInterface
 	Personnel  PersonnelInterface
 	Patrulje   PatruljeInterface
 	Spejder    SpejderInterface
+	Senior     SeniorInterface
 	Signup     signup.Queries
 	Klan       klan.Queries
 	Order      order.Queries
@@ -85,14 +87,14 @@ type Models struct {
 	Crewmember crewmember.Queries
 }
 
-func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterface, patrulje PatruljeInterface, sp SpejderInterface, s signup.Queries, k klan.Queries, o order.Queries, pr product.Queries, sec section.Queries, cm crewmember.Queries) Models {
+func NewModels(db *sql.DB, payment PaymentInterface, personnel PersonnelInterface, patrulje PatruljeInterface, sp SpejderInterface, sn SeniorInterface, s signup.Queries, k klan.Queries, o order.Queries, pr product.Queries, sec section.Queries, cm crewmember.Queries) Models {
 	return Models{
 		Teams:      TeamModel{DB: db},
-		Members:    MemberModel{DB: db},
 		Payment:    payment,
 		Personnel:  personnel,
 		Patrulje:   patrulje,
 		Spejder:    sp,
+		Senior:     sn,
 		Signup:     s,
 		Klan:       k,
 		Order:      o,

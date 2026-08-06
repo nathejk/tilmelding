@@ -5,9 +5,8 @@ import (
 
 	"github.com/nathejk/shared-go/tables/klan"
 	"github.com/nathejk/shared-go/tables/order"
+	"github.com/nathejk/shared-go/tables/senior"
 	"github.com/nathejk/shared-go/types"
-
-	"nathejk.dk/internal/data"
 )
 
 // These tests pin the klan wire contract, for the same reason as the patrulje
@@ -27,14 +26,18 @@ func TestShowKlanResponseWireShape(t *testing.T) {
 		Korps:          []types.SlugLabel{{Slug: "dds", Label: "DDS"}},
 		TShirtSizes:    []types.SlugLabel{{Slug: "", Label: "Ingen"}, {Slug: "l", Label: "Large"}},
 	}
-	team := &data.Klan{
+	// Note: built from the shared-go entity types, not internal/data. The
+	// expected JSON below is unchanged from when it was, which is what makes
+	// the migration provably wire-safe despite klan.Klan and senior.Senior
+	// carrying different field names and json tags.
+	team := &klan.Klan{
 		ID: "t-1", Status: "PAY", Name: "Banditterne", Group: "1. Aarhus",
 		Korps: "dds", MemberCount: 2,
 	}
-	members := []*data.Senior{{
-		ID: "m-1", MemberID: "m-1", TeamID: "t-1", Name: "Bo", Address: "Vej 2",
+	members := []*senior.Senior{{
+		MemberID: "m-1", TeamID: "t-1", Name: "Bo", Address: "Vej 2",
 		PostalCode: "8000", City: "Aarhus", Email: "bo@b.dk", Phone: "11111111",
-		Birthday: types.Date("1990-05-04"), Diet: "vegetar", TShirtSize: "l",
+		Birthday: "1990-05-04", Diet: "vegetar", TshirtSize: "l",
 	}}
 	openOrder := &order.Order{
 		OrderID: "o-1", Year: "2026", OwnerType: types.TeamTypeKlan, OwnerID: "t-1",
@@ -99,7 +102,7 @@ func TestShowKlanResponseNilAndEmptySemantics(t *testing.T) {
 // string.
 func TestRequestSeatResponseWireShape(t *testing.T) {
 	resp := requestSeatResponse{
-		Team:        newKlanTeamResponse(&data.Klan{ID: "t-1", Status: types.SignupStatusOnHold, Name: "Banditterne"}),
+		Team:        newKlanTeamResponse(&klan.Klan{ID: "t-1", Status: types.SignupStatusOnHold, Name: "Banditterne"}),
 		Status:      string(types.SignupStatusOnHold),
 		Order:       nil,
 		PaymentLink: "",
@@ -112,7 +115,7 @@ func TestRequestSeatResponseWireShape(t *testing.T) {
 
 func TestUpdateKlanResponseWireShape(t *testing.T) {
 	resp := updateKlanResponse{
-		Team:         newKlanTeamResponse(&data.Klan{ID: "t-1", Name: "Banditterne"}),
+		Team:         newKlanTeamResponse(&klan.Klan{ID: "t-1", Name: "Banditterne"}),
 		Order:        nil,
 		PaymentLink:  "",
 		PaymentError: "en klan skal have mindst 1 seniorer for at kunne betale",
