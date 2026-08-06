@@ -32,7 +32,6 @@ func (app *application) showPersonnelHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	config := app.buildTeamConfig(r.Context(), participationSKUForPerson(person), 1, 1)
-	//contact, _ := app.models.Teams.GetContact(teamId)
 
 	// Re-derive the open order's lines from the current person record on
 	// every GET so the page is self-healing against any drift between the

@@ -14,7 +14,6 @@ import (
 	payments "github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/tables/spejder"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/internal/data"
 )
 
 // Patrulje team-size bounds. min is the number of members required before a
@@ -60,6 +59,12 @@ type patruljeTeamResponse struct {
 
 // patruljeContactResponse is the team's contact person. Note the `postal` tag
 // (not `postalCode`) — kept as-is because the frontend binds to it.
+//
+// Address and PostalCode are always empty: the patrulje projection has no
+// contactAddress / contactPostalCode columns, so although the form collects
+// them and the update command publishes them on the event, nothing can read
+// them back. The keys stay on the wire because the form binds to them; see the
+// task board for closing the gap upstream.
 type patruljeContactResponse struct {
 	TeamID     string `json:"teamId"`
 	Name       string `json:"name"`
@@ -167,18 +172,19 @@ func newPatruljeTeamResponse(p *patrulje.Patrulje) *patruljeTeamResponse {
 	}
 }
 
-func newPatruljeContactResponse(c *data.Contact) *patruljeContactResponse {
-	if c == nil {
+// newPatruljeContactResponse pulls the contact out of the team row. The contact
+// is four columns on `patrulje`, not a table of its own, so it comes from the
+// same read as the team rather than a second query.
+func newPatruljeContactResponse(p *patrulje.Patrulje) *patruljeContactResponse {
+	if p == nil {
 		return nil
 	}
 	return &patruljeContactResponse{
-		TeamID:     string(c.TeamID),
-		Name:       c.Name,
-		Address:    c.Address,
-		PostalCode: c.PostalCode,
-		Email:      string(c.Email),
-		Phone:      string(c.Phone),
-		Role:       c.Role,
+		TeamID: string(p.TeamID),
+		Name:   p.ContactName,
+		Email:  string(p.ContactEmail),
+		Phone:  string(p.ContactPhone),
+		Role:   p.ContactRole,
 	}
 }
 
@@ -323,7 +329,6 @@ func (app *application) showPatruljeHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	config := app.buildTeamConfig(r.Context(), "participation.patrulje", patruljeMinMembers, patruljeMaxMembers)
-	contact, _ := app.models.Teams.GetContact(teamID)
 
 	// Re-derive the open order's lines from the current member projection
 	// on every GET so the page is self-healing against any drift between
@@ -347,7 +352,7 @@ func (app *application) showPatruljeHandler(w http.ResponseWriter, r *http.Reque
 	resp := showPatruljeResponse{
 		Config:     newTeamConfigResponse(config),
 		Team:       newPatruljeTeamResponse(team),
-		Contact:    newPatruljeContactResponse(contact),
+		Contact:    newPatruljeContactResponse(team),
 		Members:    newPatruljeRosterMemberResponses(members),
 		Order:      newOrderResponse(openOrder),
 		PaidOrders: newOrderResponses(paidOrders),

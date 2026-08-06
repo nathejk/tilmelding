@@ -9,8 +9,6 @@ import (
 	"github.com/nathejk/shared-go/tables/patrulje"
 	"github.com/nathejk/shared-go/tables/spejder"
 	"github.com/nathejk/shared-go/types"
-
-	"nathejk.dk/internal/data"
 )
 
 // These tests pin the patrulje wire contract. They exist because the handlers
@@ -36,9 +34,14 @@ func TestShowPatruljeResponseWireShape(t *testing.T) {
 		TeamID: "t-1", TeamNumber: "42", SignupStatus: "started", Name: "Ulvene",
 		Group: "1. Aarhus", Korps: "dds", Liga: "a", MemberCount: 4,
 	}
-	contact := &data.Contact{
-		TeamID: "t-1", Name: "Anna", Address: "Vej 1", PostalCode: "8000",
-		Email: "a@b.dk", Phone: "40733886", Role: "leder",
+	// The contact now comes from the team row (patrulje.GetByID selects the
+	// four contactXxx columns), not a second query. `address` and `postal`
+	// are empty because the projection has no columns for them — the previous
+	// query did not select them either, so this is what the page has always
+	// received; only the fixture could pretend otherwise.
+	contact := &patrulje.Patrulje{
+		TeamID: "t-1", ContactName: "Anna",
+		ContactEmail: "a@b.dk", ContactPhone: "40733886", ContactRole: "leder",
 	}
 	members := []*spejder.Spejder{{
 		ID: "m-1", MemberID: "m-1", InitialTeamID: "t-1", CurrentTeamID: "t-1",
@@ -72,7 +75,7 @@ func TestShowPatruljeResponseWireShape(t *testing.T) {
 		`"korps":[{"slug":"dds","label":"DDS"}],` +
 		`"tshirtSizes":[{"slug":"","label":"Ingen"},{"slug":"l","label":"Large"}]},` +
 		`"team":{"id":"t-1","number":"42","status":"started","name":"Ulvene","group":"1. Aarhus","korps":"dds","liga":"a","memberCount":4},` +
-		`"contact":{"teamId":"t-1","name":"Anna","address":"Vej 1","postal":"8000","email":"a@b.dk","phone":"40733886","role":"leder"},` +
+		`"contact":{"teamId":"t-1","name":"Anna","address":"","postal":"","email":"a@b.dk","phone":"40733886","role":"leder"},` +
 		`"members":[{"id":"m-1","memberId":"m-1","teamId":"t-1","activeTeamId":"t-1","status":"paid","name":"Bo",` +
 		`"address":"Vej 2","postalCode":"8000","city":"Aarhus","email":"bo@b.dk","phone":"11111111",` +
 		`"phoneContact":"22222222","birthday":"2010-05-04","returning":true,"tshirtSize":"l"}],` +

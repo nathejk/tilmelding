@@ -226,7 +226,6 @@ func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	config := app.buildTeamConfig(r.Context(), "participation.klan", klanMinMembers, klanMaxMembers)
-	//contact, _ := app.models.Teams.GetContact(teamId)
 
 	// Re-derive the open order's lines from the current member projection
 	// on every GET. This makes the page self-healing against any drift
