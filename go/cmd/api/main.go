@@ -257,10 +257,12 @@ func main() {
 	mux := xstream.NewMux(js)
 	mux.AddConsumer(
 		detector,
-		// Projectors still owned by this repo. The tables they build are read
-		// by the shared-go entities below, which do not project them — see
-		// task 028.
-		table.NewPatruljeStatus(writer),
+		// The last projector owned by this repo, and it is a no-op: its
+		// Consumes() is empty and HandleMessage's body is commented out, so
+		// `spejderstatus` is created and stays empty forever. It survives only
+		// because shared-go's spejder.GetAll still LEFT JOINs the table —
+		// dropping the CREATE TABLE would break the patrulje roster query on a
+		// fresh database. Goes as soon as that join does; see task 028.
 		table.NewSpejderStatus(writer),
 		// Entities from github.com/nathejk/shared-go/tables.
 		tableKlan,

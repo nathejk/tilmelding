@@ -147,17 +147,43 @@ only. Removed together with `personnel/filter.go` and
 
 ### Order of operations
 
-1. Push shared-go (`24cf73c`, `9028f9f`) and bump `go.mod` in tilmelding. After
-   this, nothing anywhere reads `patruljestatus`.
-2. Delete `nathejk/table/patruljestatus.{go,sql}` and its `main.go` wiring.
+1. ~~Push shared-go (`24cf73c`, `9028f9f`) and bump `go.mod` in tilmelding.~~
+   **Done 2026-08-06** — pinned at `v0.0.0-20260806122607-9028f9ff641c`, which
+   mentions `patruljestatus` only in comments. Nothing anywhere reads it.
+2. ~~Delete `nathejk/table/patruljestatus.{go,sql}` and its `main.go` wiring.~~
+   **Done 2026-08-06.**
 3. Upstream, drop the `spejderstatus` join from `spejder.GetAll` (literal
-   `'paid'`) and delete `GetInactive`; push; bump.
+   `'paid'`) and delete `GetInactive`; push; bump. **← next, and the only thing
+   still blocking.**
 4. Delete `nathejk/table/spejderstatus.{go,sql}` and its `main.go` wiring.
-5. `confirm` is already gone (`f60b5fa`), so after step 4 the root `table`
-   package holds only `errors.go` — check whether that still has a consumer.
+5. ~~`confirm` is already gone (`f60b5fa`), so after step 4 the root `table`
+   package holds only `errors.go` — check whether that still has a consumer.~~
+   **Done 2026-08-06** — it had none (nothing referenced
+   `table.ErrRecordNotFound` / `ErrEditConflict` / `ErrVerificationFailed`), so
+   `errors.go` is deleted already. After step 4 the root `table` package
+   disappears entirely and only `nathejk/table/personnel/` remains.
 
 Steps 2 and 4 are then pure deletions with no behaviour change, which is the
 point of doing them in this order.
+
+### Exact upstream change still needed (step 3)
+
+In `shared-go/tables/spejder/querier.go`, `GetAll`:
+
+```diff
+-  IFNULL(ss.status, 'paid') AS status,
++  'paid' AS status,
+ ...
+ from spejder s
+-left join spejderstatus ss on s.memberId = ss.id and s.year = ss.year
+```
+
+That is behaviour-preserving *because* the table is empty by construction, so
+`ss.status` is always NULL and the IFNULL always yields `'paid'`. Whether
+hard-coding `'paid'` is the right answer is a separate question — it is what the
+code already does today, and the member status this once modelled has no
+projector anywhere. Delete `GetInactive` in the same pass: it inner-joins the
+empty table, so it can only return zero rows.
 
 **Note on data:** neither table needs migrating. `spejderstatus` is empty by
 construction. `patruljestatus` holds only `(teamId, year, startedUts=1)`, all of
@@ -170,6 +196,10 @@ it once the joins are gone. Both can simply be dropped from the schema.
       `confirm` (move to shared-go vs document + startup assertion) — and then
       superseded for two of the three: they are not worth moving, they are worth
       deleting. See the audit above.
+- [x] `patruljestatus` deleted: no reader remains in either repo, and the
+      projector wrote a constant
+- [ ] `spejderstatus` deleted — blocked on shared-go dropping the LEFT JOIN in
+      `spejder.GetAll` (step 3 above)
 - [ ] If moving: projectors live in shared-go, tilmelding wires them from
       `main.go`, and the local copies are removed
 - [ ] A service using the shared entities cannot silently get empty joins —
@@ -260,3 +290,20 @@ version bumped in `go.mod`. Sequencing therefore matters.
   `PersonnelInterface.GetAll`. The deletions themselves are blocked on shared-go
   `24cf73c`/`9028f9f` being pushed and pinned, because `GOWORK=off` still builds
   a shared-go that joins `patruljestatus`. Ordered steps recorded above.
+- 2026-08-06 — shared-go pushed and pinned at `9028f9ff641c`; verified the
+  pinned module mentions `patruljestatus` only in comments. **Deleted
+  `patruljestatus.{go,sql}`** and its `main.go` wiring — a pure deletion, no
+  behaviour change, both build paths green. Also deleted the now-orphaned
+  `nathejk/table/errors.go` (step 5): nothing referenced its three aliases once
+  the entity projectors had left. Updated the `go-bff-layout` skill, which still
+  listed seven root projectors that no longer exist.
+
+  `spejderstatus` stays for now: the pinned module (and the shared-go working
+  tree) still LEFT JOIN it in `spejder.GetAll`, so dropping the `CREATE TABLE`
+  would break the patrulje roster on a fresh database. The exact upstream diff
+  is written out above.
+
+  Aside, noted while verifying: `payment.Query.ConfirmBySecret` in shared-go
+  reads the `confirm` table in **live** code, and that projector was deleted in
+  `f60b5fa`. It has no caller in tilmelding, so nothing here breaks, but a
+  consumer that calls it gets a missing-table error. Upstream's to fix.
