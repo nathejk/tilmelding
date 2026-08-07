@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/nathejk/shared-go/tables/order"
-	payments "nathejk.dk/nathejk/table/payment"
+	payments "github.com/nathejk/shared-go/tables/payment"
 )
 
 // paymentLinesFromOrder projects an order's lines onto the receipt the payer

@@ -8,13 +8,13 @@ import (
 	"github.com/nathejk/shared-go/tables/klan"
 	"github.com/nathejk/shared-go/tables/order"
 	"github.com/nathejk/shared-go/tables/patrulje"
+	"github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/tables/product"
 	"github.com/nathejk/shared-go/tables/section"
 	"github.com/nathejk/shared-go/tables/senior"
 	"github.com/nathejk/shared-go/tables/signup"
 	"github.com/nathejk/shared-go/tables/spejder"
 	"github.com/nathejk/shared-go/types"
-	"nathejk.dk/nathejk/table/payment"
 	"nathejk.dk/nathejk/table/personnel"
 )
 

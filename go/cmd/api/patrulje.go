@@ -11,9 +11,9 @@ import (
 	"github.com/nathejk/shared-go/tables"
 	"github.com/nathejk/shared-go/tables/order"
 	"github.com/nathejk/shared-go/tables/patrulje"
+	payments "github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/tables/spejder"
 	"github.com/nathejk/shared-go/types"
-	payments "nathejk.dk/nathejk/table/payment"
 )
 
 // Patrulje team-size bounds. min is the number of members required before a

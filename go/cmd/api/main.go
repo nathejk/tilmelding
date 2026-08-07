@@ -24,6 +24,7 @@ import (
 	"github.com/nathejk/shared-go/tables/klan"
 	"github.com/nathejk/shared-go/tables/order"
 	"github.com/nathejk/shared-go/tables/patrulje"
+	payments "github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/tables/product"
 	"github.com/nathejk/shared-go/tables/section"
 	"github.com/nathejk/shared-go/tables/senior"
@@ -37,7 +38,6 @@ import (
 	"nathejk.dk/internal/payment/mobilepay"
 	"nathejk.dk/internal/sms"
 	"nathejk.dk/internal/vcs"
-	payments "nathejk.dk/nathejk/table/payment"
 	"nathejk.dk/nathejk/table/personnel"
 )
 
@@ -242,9 +242,7 @@ func main() {
 
 	// Saga that bridges payment events into NathejkOrderPaid, which the
 	// order projector then projects into status=paid on the orders table.
-	// The payment reader is adapted because shared-go's order package still
-	// names its own payment.Payment; see sagapaymentreader.go.
-	orderSaga := order.NewSaga(publisher, tableOrder, sagaPaymentReader{q: tablePayment}, 0)
+	orderSaga := order.NewSaga(publisher, tableOrder, tablePayment, 0)
 
 	// Startup DDL and seeding are done: from here on a failing statement is
 	// dead-lettered and the consumer loop keeps running instead of exiting.

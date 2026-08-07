@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/nathejk/shared-go/tables/order"
-	payments "nathejk.dk/nathejk/table/payment"
+	payments "github.com/nathejk/shared-go/tables/payment"
 )
 
 // The receipt is the only place the payer sees what they are buying, so the
