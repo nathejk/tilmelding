@@ -11,9 +11,9 @@ import (
 	"github.com/nathejk/shared-go/tables"
 	"github.com/nathejk/shared-go/tables/klan"
 	"github.com/nathejk/shared-go/tables/order"
-	payments "github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/tables/senior"
 	"github.com/nathejk/shared-go/types"
+	payments "nathejk.dk/nathejk/table/payment"
 )
 
 // Klan team-size bounds. min is the number of members required before a team

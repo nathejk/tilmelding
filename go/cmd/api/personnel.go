@@ -7,10 +7,10 @@ import (
 	"net/http"
 
 	"github.com/nathejk/shared-go/tables/order"
-	payments "github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
+	payments "nathejk.dk/nathejk/table/payment"
 	"nathejk.dk/nathejk/table/personnel"
 )
 

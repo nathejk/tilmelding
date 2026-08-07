@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	payments "github.com/nathejk/shared-go/tables/payment"
 	"nathejk.dk/internal/payment/mobilepay"
+	payments "nathejk.dk/nathejk/table/payment"
 )
 
 // fakeMobilepayClient captures the Payment passed to CreatePayment so the test

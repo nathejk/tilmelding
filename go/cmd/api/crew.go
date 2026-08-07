@@ -9,11 +9,11 @@ import (
 
 	"github.com/nathejk/shared-go/tables/crewmember"
 	"github.com/nathejk/shared-go/tables/order"
-	payments "github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/tables/section"
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
+	payments "nathejk.dk/nathejk/table/payment"
 )
 
 // crewMemberView is the wire shape for a crew member on the /api/crew

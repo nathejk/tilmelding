@@ -11,9 +11,9 @@ import (
 	"github.com/nathejk/shared-go/tables"
 	"github.com/nathejk/shared-go/tables/order"
 	"github.com/nathejk/shared-go/tables/patrulje"
-	payments "github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/tables/spejder"
 	"github.com/nathejk/shared-go/types"
+	payments "nathejk.dk/nathejk/table/payment"
 )
 
 // Patrulje team-size bounds. min is the number of members required before a
@@ -381,7 +381,14 @@ func (app *application) assignNumberHandler(w http.ResponseWriter, r *http.Reque
 			continue
 		}
 
-		amountPaid := app.models.Payment.AmountPaidByTeamID(team.TeamID)
+		amountPaid, err := app.models.Payment.AmountPaidByTeamID(r.Context(), team.TeamID)
+		if err != nil {
+			// Do not treat a failed read as "unpaid": that would hand out no
+			// number to a team that has in fact paid, and the loop would look
+			// like it had simply found nothing. Stop and report instead.
+			app.ServerErrorResponse(w, r, err)
+			return
+		}
 		if amountPaid == 0 {
 			log.Printf("%s have no registered payments", team.TeamID)
 			resp.Unpaid++

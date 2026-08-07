@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -22,7 +23,9 @@ func (app *application) mobilepayCallbackHandler(w http.ResponseWriter, r *http.
 
 	app.Background(func() {
 		time.Sleep(2 * time.Second)
-		payment, err := app.models.Payment.GetByReference(reference)
+		// Background work outlives the request, so it cannot borrow the
+		// request's context.
+		payment, err := app.models.Payment.GetByReference(context.Background(), reference)
 		if err != nil {
 			app.logger.PrintError(err, nil)
 			return
@@ -82,7 +85,7 @@ func (app *application) mobilepayCallbackHandler(w http.ResponseWriter, r *http.
 
 func (app *application) showPaymentHandler(w http.ResponseWriter, r *http.Request) {
 	reference := app.ReadNamedParam(r, "ref")
-	payment, err := app.models.Payment.GetByReference(reference)
+	payment, err := app.models.Payment.GetByReference(r.Context(), reference)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):

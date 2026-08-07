@@ -8,13 +8,13 @@ import (
 	"github.com/nathejk/shared-go/tables/klan"
 	"github.com/nathejk/shared-go/tables/order"
 	"github.com/nathejk/shared-go/tables/patrulje"
-	"github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/tables/product"
 	"github.com/nathejk/shared-go/tables/section"
 	"github.com/nathejk/shared-go/tables/senior"
 	"github.com/nathejk/shared-go/tables/signup"
 	"github.com/nathejk/shared-go/tables/spejder"
 	"github.com/nathejk/shared-go/types"
+	"nathejk.dk/nathejk/table/payment"
 	"nathejk.dk/nathejk/table/personnel"
 )
 
@@ -30,11 +30,8 @@ var (
 	ErrEditConflict   = tables.ErrEditConflict
 )
 
-type PaymentInterface interface {
-	GetAll(types.TeamID) ([]payment.Payment, payment.Metadata, error)
-	GetByReference(string) (*payment.Payment, error)
-	AmountPaidByTeamID(types.TeamID) int
-}
+// PersonnelInterface is the staff read API. Declared here because the personnel
+// entity is still local and exports no Queries interface of its own.
 type PersonnelInterface interface {
 	GetByID(context.Context, types.UserID) (*personnel.Staff, error)
 }
@@ -69,7 +66,7 @@ type SeniorInterface interface {
 // started selecting the four contactXxx columns: the contact is part of the
 // patrulje row, not a table of its own.
 type Models struct {
-	Payment    PaymentInterface
+	Payment    payment.Queries
 	Personnel  PersonnelInterface
 	Patrulje   PatruljeInterface
 	Spejder    SpejderInterface
@@ -82,7 +79,7 @@ type Models struct {
 	Crewmember crewmember.Queries
 }
 
-func NewModels(payment PaymentInterface, personnel PersonnelInterface, patrulje PatruljeInterface, sp SpejderInterface, sn SeniorInterface, s signup.Queries, k klan.Queries, o order.Queries, pr product.Queries, sec section.Queries, cm crewmember.Queries) Models {
+func NewModels(payment payment.Queries, personnel PersonnelInterface, patrulje PatruljeInterface, sp SpejderInterface, sn SeniorInterface, s signup.Queries, k klan.Queries, o order.Queries, pr product.Queries, sec section.Queries, cm crewmember.Queries) Models {
 	return Models{
 		Payment:    payment,
 		Personnel:  personnel,

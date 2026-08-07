@@ -3,9 +3,9 @@ package main
 import (
 	"strings"
 
-	payments "github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/types"
 	"nathejk.dk/internal/payment/mobilepay"
+	payments "nathejk.dk/nathejk/table/payment"
 )
 
 // mobilepayProvider adapts the MobilePay client to the payments.Provider port.
