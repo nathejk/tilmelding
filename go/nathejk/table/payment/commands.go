@@ -1,6 +1,8 @@
 package payment
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -88,10 +90,20 @@ type Commands interface {
 }
 
 type commander struct {
-	p    cqrs.Publisher
-	r    repository
+	p cqrs.Publisher
+	r repository
+	// q is used only to check that a freshly minted reference is unused. Nil
+	// disables the check, which is what a unit test constructing a commander
+	// directly gets.
+	q    Queries
 	year types.YearSlug
 }
+
+// referenceAttempts is how many times Request will mint a reference before
+// giving up on finding an unused one. A collision needs ~1e12 draws to be
+// likely, so reaching the second attempt at all means something is wrong with
+// the randomness rather than that we were unlucky — three is generous.
+const referenceAttempts = 3
 
 // Request authorises a payment with the provider and announces it on the
 // stream, returning the URL the payer must be sent to.
@@ -112,7 +124,10 @@ func (c *commander) Request(ch Charge) (string, error) {
 		lines = nil
 	}
 
-	reference := uuid.New().String()
+	reference, err := c.newUnusedReference()
+	if err != nil {
+		return "", err
+	}
 	resp, err := c.r.provider.CreatePayment(PaymentRequest{
 		IdempotencyKey: uuid.New().String(),
 		Reference:      reference,
@@ -144,6 +159,44 @@ func (c *commander) Request(ch Charge) (string, error) {
 		return "", err
 	}
 	return resp.RedirectURL, nil
+}
+
+// newUnusedReference mints a reference and checks it is not already taken.
+//
+// The check exists because a duplicate would not fail: the projector upserts on
+// the reference, so a second payment carrying one that is already in use
+// silently overwrites the first. At 40 bits that is vanishingly unlikely, but
+// "vanishingly unlikely silent data loss" is worth one indexed read to rule out.
+//
+// It is not a hard guarantee — the projection is eventually consistent, so a
+// reference minted moments ago may not be visible yet. It is a cheap backstop on
+// top of the entropy, not a substitute for it.
+func (c *commander) newUnusedReference() (string, error) {
+	var lastErr error
+	for range referenceAttempts {
+		ref, err := newReference(c.year)
+		if err != nil {
+			return "", err
+		}
+		if c.q == nil {
+			return ref, nil
+		}
+		_, err = c.q.GetByReference(context.Background(), ref)
+		switch {
+		case errors.Is(err, ErrRecordNotFound):
+			return ref, nil
+		case err != nil:
+			// The lookup itself failed. Do not treat that as "taken" and spin;
+			// the reference is almost certainly free, and refusing to take a
+			// payment because a read failed is the worse outcome.
+			log.Printf("payment: could not verify reference %q is unused: %v", ref, err)
+			return ref, nil
+		default:
+			lastErr = fmt.Errorf("payment: reference %q is already in use", ref)
+			log.Print(lastErr)
+		}
+	}
+	return "", lastErr
 }
 
 // messageLines projects receipt lines onto the wire type. Kept separate so the

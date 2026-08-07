@@ -1,6 +1,7 @@
 package payment
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -370,5 +371,144 @@ func TestChargeLinesReconcile(t *testing.T) {
 		if got := tc.ch.linesReconcile(); got != tc.want {
 			t.Errorf("%s: linesReconcile() = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+// fakeQuerier answers the reference-uniqueness lookup. taken lists references it
+// should report as already in use; anything else is free.
+type fakeQuerier struct {
+	taken   map[string]bool
+	err     error
+	lookups []string
+}
+
+func (f *fakeQuerier) GetByReference(_ context.Context, ref string) (*Payment, error) {
+	f.lookups = append(f.lookups, ref)
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.taken[ref] {
+		return &Payment{Reference: ref}, nil
+	}
+	return nil, ErrRecordNotFound
+}
+func (f *fakeQuerier) GetAll(context.Context, Filter) ([]Payment, error) { return nil, nil }
+func (f *fakeQuerier) AmountPaid(context.Context, Filter) (int, error)   { return 0, nil }
+
+var _ Queries = (*fakeQuerier)(nil)
+
+// The reference is customer-visible, so it is short and readable rather than a
+// UUID — but it still has to be the identity the provider and the event agree on.
+func TestRequestIssuesAReadableReference(t *testing.T) {
+	prov := &fakeProvider{}
+	// Echo back whatever reference it is handed, as MobilePay does.
+	prov.createResp = PaymentCreated{RedirectURL: "https://mp/r"}
+	c, pub := newTestCommander(prov)
+	c.q = &fakeQuerier{}
+
+	if _, err := c.Request(Charge{Amount: Amount{Currency: types.CurrencyDKK, Value: 100}, OrderType: "order"}); err != nil {
+		t.Fatalf("Request: %v", err)
+	}
+
+	ref := prov.created[0].Reference
+	if !strings.HasPrefix(ref, "NH26-") {
+		t.Errorf("provider got reference %q, want the NH<season>- form", ref)
+	}
+	if len(ref) != len("NH26-")+referenceRandomChars {
+		t.Errorf("reference %q is not the expected length", ref)
+	}
+	// The uniqueness check must have looked up the reference actually used.
+	if got := c.q.(*fakeQuerier).lookups; len(got) != 1 || got[0] != ref {
+		t.Errorf("lookups = %v, want exactly [%s]", got, ref)
+	}
+	if len(pub.Messages) != 1 {
+		t.Fatalf("want 1 event, got %d", len(pub.Messages))
+	}
+}
+
+// A duplicate would be overwritten silently by the projector's upsert, so a
+// reference already in use must be discarded and another minted.
+//
+// A real collision cannot be provoked — that is the point of 40 bits — so the
+// lookup reports the first attempt as taken instead, which drives the same path.
+func TestRequestRetriesWhenTheReferenceIsTaken(t *testing.T) {
+	prov := &fakeProvider{createResp: PaymentCreated{RedirectURL: "https://mp/r"}}
+	c, _ := newTestCommander(prov)
+	fq := &firstTakenQuerier{}
+	c.q = fq
+
+	if _, err := c.Request(Charge{Amount: Amount{Value: 100}}); err != nil {
+		t.Fatalf("Request: %v", err)
+	}
+
+	if len(fq.lookups) != 2 {
+		t.Fatalf("want 2 lookups (one rejected, one accepted), got %v", fq.lookups)
+	}
+	used := prov.created[0].Reference
+	if used == fq.lookups[0] {
+		t.Errorf("used the reference reported as taken: %q", used)
+	}
+	if used != fq.lookups[1] {
+		t.Errorf("used %q but verified %q", used, fq.lookups[1])
+	}
+	// The second draw must be a different reference, not a retry of the same one.
+	if fq.lookups[0] == fq.lookups[1] {
+		t.Errorf("both attempts drew %q; the generator is not being re-run", fq.lookups[0])
+	}
+}
+
+// firstTakenQuerier reports the first reference it is asked about as in use and
+// every later one as free.
+type firstTakenQuerier struct {
+	fakeQuerier
+	asked int
+}
+
+func (q *firstTakenQuerier) GetByReference(_ context.Context, ref string) (*Payment, error) {
+	q.lookups = append(q.lookups, ref)
+	q.asked++
+	if q.asked == 1 {
+		return &Payment{Reference: ref}, nil
+	}
+	return nil, ErrRecordNotFound
+}
+
+// Every attempt colliding must fail the payment rather than proceed with a
+// reference known to be in use.
+func TestRequestFailsWhenEveryReferenceIsTaken(t *testing.T) {
+	prov := &fakeProvider{createResp: PaymentCreated{RedirectURL: "https://mp/r"}}
+	c, pub := newTestCommander(prov)
+	c.q = &alwaysTakenQuerier{}
+
+	if _, err := c.Request(Charge{Amount: Amount{Value: 100}}); err == nil {
+		t.Fatal("expected Request to fail rather than reuse a reference")
+	}
+	if len(prov.created) != 0 {
+		t.Errorf("no payment should be created, got %+v", prov.created)
+	}
+	if len(pub.Messages) != 0 {
+		t.Errorf("nothing should be published, got %v", pub.Subjects())
+	}
+}
+
+type alwaysTakenQuerier struct{ fakeQuerier }
+
+func (a *alwaysTakenQuerier) GetByReference(_ context.Context, ref string) (*Payment, error) {
+	a.lookups = append(a.lookups, ref)
+	return &Payment{Reference: ref}, nil
+}
+
+// A failing lookup must not block a payment: the reference is almost certainly
+// free, and refusing money because a read failed is the worse outcome.
+func TestRequestProceedsWhenTheUniquenessCheckErrors(t *testing.T) {
+	prov := &fakeProvider{createResp: PaymentCreated{RedirectURL: "https://mp/r"}}
+	c, _ := newTestCommander(prov)
+	c.q = &fakeQuerier{err: errors.New("database down")}
+
+	if _, err := c.Request(Charge{Amount: Amount{Value: 100}}); err != nil {
+		t.Fatalf("Request should proceed, got %v", err)
+	}
+	if len(prov.created) != 1 {
+		t.Errorf("the payment should still have been created")
 	}
 }

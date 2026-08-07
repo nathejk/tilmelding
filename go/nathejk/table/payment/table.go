@@ -130,7 +130,9 @@ type table struct {
 // can be built straight from it.
 func New(p cqrs.Publisher, w cqrs.Writer, r cqrs.Reader, year types.YearSlug, es ...external) *table {
 	q := querier{db: goqu.New("mysql", r)}
-	c := commander{p: p, r: NewRepository(es...), year: year}
+	// The commander is given the querier so it can verify a new reference is
+	// unused; signup wires its commander the same way.
+	c := commander{p: p, r: NewRepository(es...), q: &q, year: year}
 	table := &table{commander: c, consumer: consumer{w: w}, querier: q}
 	if err := w.Consume(table.CreateTableSql()); err != nil {
 		log.Fatalf("Error creating table %q", err)
