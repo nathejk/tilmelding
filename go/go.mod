@@ -12,11 +12,11 @@ require (
 	github.com/jrgensen/stream v0.1.2
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/lib/pq v1.12.3
+	github.com/matoous/go-nanoid/v2 v2.1.0
 	github.com/moul/http2curl v1.0.0
 	github.com/nathejk/shared-go v0.0.0-20260806204955-e7b46bb008f3
 	github.com/tdewolff/minify/v2 v2.23.3
 	github.com/wneessen/go-mail v0.6.2
-	golang.org/x/crypto v0.54.0
 )
 
 require (
@@ -65,6 +65,7 @@ require (
 	go.uber.org/atomic v1.7.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
+	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20231108232855-2478ac86f678 // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/net v0.57.0 // indirect

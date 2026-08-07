@@ -411,11 +411,11 @@ func TestRequestIssuesAReadableReference(t *testing.T) {
 	}
 
 	ref := prov.created[0].Reference
-	if !strings.HasPrefix(ref, "NH26-") {
-		t.Errorf("provider got reference %q, want the NH<season>- form", ref)
-	}
-	if len(ref) != len("NH26-")+referenceRandomChars {
+	if len(ref) != referenceLength {
 		t.Errorf("reference %q is not the expected length", ref)
+	}
+	if strings.ContainsAny(ref, "-_") {
+		t.Errorf("reference %q should be a bare id with no separators", ref)
 	}
 	// The uniqueness check must have looked up the reference actually used.
 	if got := c.q.(*fakeQuerier).lookups; len(got) != 1 || got[0] != ref {

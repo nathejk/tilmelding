@@ -174,7 +174,7 @@ func (c *commander) Request(ch Charge) (string, error) {
 func (c *commander) newUnusedReference() (string, error) {
 	var lastErr error
 	for range referenceAttempts {
-		ref, err := newReference(c.year)
+		ref, err := newReference()
 		if err != nil {
 			return "", err
 		}

@@ -3,41 +3,34 @@ package payment
 import (
 	"strings"
 	"testing"
-
-	"github.com/nathejk/shared-go/types"
 )
 
 func TestNewReferenceFormat(t *testing.T) {
-	ref, err := newReference("2026")
+	ref, err := newReference()
 	if err != nil {
 		t.Fatalf("newReference: %v", err)
 	}
-
-	if !strings.HasPrefix(ref, "NH26-") {
-		t.Errorf("reference %q should name the system and season", ref)
+	if len(ref) != referenceLength {
+		t.Errorf("length = %d, want %d (%q)", len(ref), referenceLength, ref)
 	}
-	if want := len("NH26-") + referenceRandomChars; len(ref) != want {
-		t.Errorf("length = %d, want %d (%q)", len(ref), want, ref)
-	}
-	// MobilePay requires at least 8 characters. The existing UUID references
-	// prove hyphens are accepted.
-	if len(ref) < 8 {
-		t.Errorf("reference %q is shorter than the provider's 8-character minimum", ref)
+	// MobilePay requires at least 8 characters; keep margin above it rather
+	// than sitting exactly on the limit.
+	if len(ref) <= 8 {
+		t.Errorf("reference %q leaves no margin over the provider's 8-character minimum", ref)
 	}
 }
 
 // The alphabet is Crockford base32 precisely so a reference read off the portal,
 // pasted into a ticket or spelled out over the phone cannot come back wrong.
 func TestNewReferenceAvoidsAmbiguousCharacters(t *testing.T) {
-	// 2000 draws is ~16000 characters; every alphabet slot is hit many times
+	// 2000 draws is 24000 characters; every alphabet slot is hit many times
 	// over, so a stray character would show up reliably.
 	for range 2000 {
-		ref, err := newReference("2026")
+		ref, err := newReference()
 		if err != nil {
 			t.Fatalf("newReference: %v", err)
 		}
-		tail := strings.TrimPrefix(ref, "NH26-")
-		for _, c := range tail {
+		for _, c := range ref {
 			if strings.ContainsRune("ILOU", c) {
 				t.Fatalf("%q contains %q, which is confusable with 1/0 or spells badly", ref, c)
 			}
@@ -45,21 +38,21 @@ func TestNewReferenceAvoidsAmbiguousCharacters(t *testing.T) {
 				t.Fatalf("%q contains %q, outside the alphabet", ref, c)
 			}
 		}
-		if tail != strings.ToUpper(tail) {
+		if ref != strings.ToUpper(ref) {
 			t.Fatalf("%q should be uppercase so it survives being typed by hand", ref)
 		}
 	}
 }
 
-// Not a proof of uniformity, but it does catch the obvious ways a bit-packing
-// loop goes wrong: a stuck index, an unreachable half of the alphabet, or a
-// character that appears far too often.
+// Not a proof of uniformity, but it catches the obvious ways a generator goes
+// wrong: an unreachable part of the alphabet, or a character appearing far too
+// often.
 func TestNewReferenceUsesTheWholeAlphabet(t *testing.T) {
 	seen := map[rune]int{}
-	const draws = 4000
+	const draws = 3000
 	for range draws {
-		ref, _ := newReference("2026")
-		for _, c := range strings.TrimPrefix(ref, "NH26-") {
+		ref, _ := newReference()
+		for _, c := range ref {
 			seen[c]++
 		}
 	}
@@ -73,9 +66,7 @@ func TestNewReferenceUsesTheWholeAlphabet(t *testing.T) {
 		t.Errorf("only %d of %d characters ever appeared; missing %v",
 			len(seen), len(referenceAlphabet), missing)
 	}
-	// Expected count per character is draws*8/32 = 1000; a wildly skewed
-	// distribution means the bit extraction is biased.
-	expected := draws * referenceRandomChars / len(referenceAlphabet)
+	expected := draws * referenceLength / len(referenceAlphabet)
 	for c, n := range seen {
 		if n < expected/2 || n > expected*2 {
 			t.Errorf("character %q appeared %d times, expected around %d", string(c), n, expected)
@@ -85,30 +76,11 @@ func TestNewReferenceUsesTheWholeAlphabet(t *testing.T) {
 
 func TestNewReferenceIsUnpredictable(t *testing.T) {
 	seen := map[string]bool{}
-	for range 1000 {
-		ref, _ := newReference("2026")
+	for range 2000 {
+		ref, _ := newReference()
 		if seen[ref] {
-			t.Fatalf("repeated reference %q in 1000 draws", ref)
+			t.Fatalf("repeated reference %q in 2000 draws", ref)
 		}
 		seen[ref] = true
-	}
-}
-
-func TestSeasonPart(t *testing.T) {
-	for _, tc := range []struct {
-		year types.YearSlug
-		want string
-	}{
-		{"2026", "26"},
-		{"2100", "00"},
-		// A malformed year is passed through rather than truncated, so it is
-		// visible in the reference instead of silently becoming another season.
-		{"26", "26"},
-		{"", ""},
-		{"20267", "20267"},
-	} {
-		if got := seasonPart(tc.year); got != tc.want {
-			t.Errorf("seasonPart(%q) = %q, want %q", tc.year, got, tc.want)
-		}
 	}
 }
