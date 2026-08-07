@@ -55,7 +55,7 @@ func TestCommandsWithoutAProviderFailLoudly(t *testing.T) {
 	pub := &cqrstest.Publisher{}
 	c := &commander{p: pub, r: NewRepository(), year: "2026"}
 
-	if _, err := c.Request(Amount{}, "d", "40733886", "a@b.dk", "u", "o", "order"); !errors.Is(err, ErrNoProvider) {
+	if _, err := c.Request(Charge{Amount: Amount{}, Description: "d", Phone: "40733886", Email: "a@b.dk", ReturnUrl: "u", OrderForeignKey: "o", OrderType: "order"}); !errors.Is(err, ErrNoProvider) {
 		t.Errorf("Request err = %v, want ErrNoProvider", err)
 	}
 	if err := c.Capture("ref-1"); !errors.Is(err, ErrNoProvider) {
@@ -71,8 +71,15 @@ func TestRequestAuthorisesAndPublishes(t *testing.T) {
 	c, pub := newTestCommander(prov)
 
 	amount := Amount{Currency: types.CurrencyDKK, Value: 45000}
-	url, err := c.Request(amount, "Nathejk tilmelding", types.PhoneNumber("40733886"), types.EmailAddress("a@b.dk"),
-		"https://tilmelding.nathejk.dk/klan/t-1", "order-1", "order")
+	url, err := c.Request(Charge{
+		Amount:          amount,
+		Description:     "Nathejk tilmelding",
+		Phone:           types.PhoneNumber("40733886"),
+		Email:           types.EmailAddress("a@b.dk"),
+		ReturnUrl:       "https://tilmelding.nathejk.dk/klan/t-1",
+		OrderForeignKey: "order-1",
+		OrderType:       "order",
+	})
 	if err != nil {
 		t.Fatalf("Request: %v", err)
 	}
@@ -133,8 +140,11 @@ func TestRequestPublishesNothingWhenProviderFails(t *testing.T) {
 	prov := &fakeProvider{createErr: errors.New("mobilepay down")}
 	c, pub := newTestCommander(prov)
 
-	if _, err := c.Request(Amount{Currency: types.CurrencyDKK, Value: 100}, "d",
-		types.PhoneNumber("40733886"), types.EmailAddress("a@b.dk"), "u", "o", "order"); err == nil {
+	if _, err := c.Request(Charge{
+		Amount: Amount{Currency: types.CurrencyDKK, Value: 100}, Description: "d",
+		Phone: "40733886", Email: "a@b.dk", ReturnUrl: "u",
+		OrderForeignKey: "o", OrderType: "order",
+	}); err == nil {
 		t.Fatal("expected the provider error to surface")
 	}
 	// No authorisation exists, so claiming one on the stream would corrupt the
@@ -275,3 +285,90 @@ func TestCaptureStopsAfterFailedCapture(t *testing.T) {
 }
 
 var _ Provider = (*fakeProvider)(nil)
+
+// The receipt reaches both the provider and the event, so the payer sees it in
+// the wallet and it stays on the record afterwards.
+func TestRequestCarriesReceiptLinesToProviderAndEvent(t *testing.T) {
+	prov := &fakeProvider{createResp: PaymentCreated{Reference: "ref-1", RedirectURL: "https://mp/r"}}
+	c, pub := newTestCommander(prov)
+
+	lines := []Line{
+		{Label: "Patrulje-deltagelse", UnitCount: 1, UnitPrice: 25000, Amount: 25000},
+		{Label: "T-shirt (Large)", UnitCount: 1, UnitPrice: 17500, Amount: 17500},
+	}
+	if _, err := c.Request(Charge{
+		Amount: Amount{Currency: types.CurrencyDKK, Value: 42500},
+		Phone:  "40733886", Email: "a@b.dk", OrderForeignKey: "order-1", OrderType: "order",
+		Lines: lines,
+	}); err != nil {
+		t.Fatalf("Request: %v", err)
+	}
+
+	if got := prov.created[0].Lines; len(got) != 2 || got[1].Label != "T-shirt (Large)" {
+		t.Errorf("provider should receive the receipt, got %+v", got)
+	}
+
+	var body messages.NathejkPaymentRequested
+	if err := pub.Messages[0].Body(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.OrderLines) != 2 {
+		t.Fatalf("event should carry the lines, got %+v", body.OrderLines)
+	}
+	want := messages.NathejkPayment_OrderLine{Label: "T-shirt (Large)", UnitCount: 1, UnitPrice: 17500, Amount: 17500}
+	if body.OrderLines[1] != want {
+		t.Errorf("event line = %+v, want %+v", body.OrderLines[1], want)
+	}
+}
+
+// A receipt that does not sum to the charge is dropped, not forwarded and not
+// fatal: the payment is still worth taking, and a provider may reject a receipt
+// that does not add up. This is reachable whenever an order is partly paid,
+// since its lines sum to the total while the charge is the outstanding amount.
+func TestRequestDropsReceiptThatDoesNotSumToTheCharge(t *testing.T) {
+	prov := &fakeProvider{createResp: PaymentCreated{Reference: "ref-1", RedirectURL: "https://mp/r"}}
+	c, pub := newTestCommander(prov)
+
+	if _, err := c.Request(Charge{
+		// Charging 25000 but describing 42500 worth of goods.
+		Amount: Amount{Currency: types.CurrencyDKK, Value: 25000},
+		Phone:  "40733886", Email: "a@b.dk", OrderForeignKey: "order-1", OrderType: "order",
+		Lines: []Line{
+			{Label: "Patrulje-deltagelse", UnitCount: 1, UnitPrice: 25000, Amount: 25000},
+			{Label: "T-shirt (Large)", UnitCount: 1, UnitPrice: 17500, Amount: 17500},
+		},
+	}); err != nil {
+		t.Fatalf("Request should still succeed, got %v", err)
+	}
+
+	if got := prov.created[0].Lines; got != nil {
+		t.Errorf("no receipt should reach the provider, got %+v", got)
+	}
+	if prov.created[0].Amount.Value != 25000 {
+		t.Errorf("the charged amount must be untouched, got %d", prov.created[0].Amount.Value)
+	}
+	var body messages.NathejkPaymentRequested
+	if err := pub.Messages[0].Body(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.OrderLines) != 0 {
+		t.Errorf("event should carry no lines, got %+v", body.OrderLines)
+	}
+}
+
+func TestChargeLinesReconcile(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		ch   Charge
+		want bool
+	}{
+		{"no lines is fine", Charge{Amount: Amount{Value: 100}}, true},
+		{"exact", Charge{Amount: Amount{Value: 100}, Lines: []Line{{Amount: 60}, {Amount: 40}}}, true},
+		{"under", Charge{Amount: Amount{Value: 100}, Lines: []Line{{Amount: 60}}}, false},
+		{"over", Charge{Amount: Amount{Value: 100}, Lines: []Line{{Amount: 60}, {Amount: 60}}}, false},
+	} {
+		if got := tc.ch.linesReconcile(); got != tc.want {
+			t.Errorf("%s: linesReconcile() = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

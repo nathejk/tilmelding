@@ -502,7 +502,16 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 		amount := payments.Amount{Value: int64(due), Currency: types.CurrencyDKK}
 		teamUrl := app.config.baseurl + "/patrulje/" + string(teamID)
 
-		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", input.Contact.Phone, input.Contact.Email, teamUrl, orderID, "order")
+		paymentLink, _ = app.commands.Payment.Request(payments.Charge{
+			Amount:          amount,
+			Description:     "Nathejk tilmelding",
+			Phone:           input.Contact.Phone,
+			Email:           input.Contact.Email,
+			ReturnUrl:       teamUrl,
+			OrderForeignKey: orderID,
+			OrderType:       "order",
+			Lines:           paymentLinesFromOrder(openOrder),
+		})
 	}
 	team, _ := app.models.Patrulje.GetByID(r.Context(), teamID)
 	resp := updatePatruljeResponse{

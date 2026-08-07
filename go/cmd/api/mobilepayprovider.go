@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/nathejk/shared-go/types"
@@ -41,6 +42,7 @@ func (p mobilepayProvider) CreatePayment(req payments.PaymentRequest) (payments.
 		ReturnUrl:          p.baseURL + "/callback/mobilepay/" + req.Reference,
 		UserFlow:           mobilepay.UserFlowWeb,
 		PaymentDescription: req.Description,
+		Receipt:            receiptFor(req),
 	})
 	if err != nil {
 		return payments.PaymentCreated{}, err
@@ -49,6 +51,43 @@ func (p mobilepayProvider) CreatePayment(req payments.PaymentRequest) (payments.
 		Reference:   string(resp.Reference),
 		RedirectURL: resp.RedirectUrl,
 	}, nil
+}
+
+// receiptFor renders the payer-visible receipt, which MobilePay shows in the
+// wallet alongside the amount. Previously never populated, so a payer saw only
+// "Nathejk tilmelding" and a total.
+//
+// The bottom line always carries the currency; order lines are added only when
+// the entity supplied a reconciled set (Request drops one that does not sum to
+// the charge). Amounts pass through unchanged — both sides are in minor units.
+//
+// Tax is reported as zero throughout: Nathejk charges participation fees, not
+// VAT-bearing sales, so there is no tax component to split out. TotalAmount and
+// TotalAmountExcludingTax are therefore the same number, which is what a
+// zero-rated line looks like.
+func receiptFor(req payments.PaymentRequest) mobilepay.Receipt {
+	receipt := mobilepay.Receipt{
+		BottomLine: mobilepay.BottomLine{Currency: mobilepay.Currency(req.Amount.Currency)},
+	}
+	if len(req.Lines) == 0 {
+		return receipt
+	}
+	receipt.OrderLines = make([]mobilepay.OrderLine, 0, len(req.Lines))
+	for i, l := range req.Lines {
+		line := mobilepay.OrderLine{
+			// MobilePay requires an id per line; the payer never sees it, so
+			// position is enough and keeps it stable for a given receipt.
+			ID:                      strconv.Itoa(i + 1),
+			Name:                    l.Label,
+			TotalAmount:             int64(l.Amount),
+			TotalAmountExcludingTax: int64(l.Amount),
+		}
+		line.UnitInfo.UnitPrice = int64(l.UnitPrice)
+		line.UnitInfo.Quantity = strconv.Itoa(l.UnitCount)
+		line.UnitInfo.QuantityUnit = "PCS"
+		receipt.OrderLines = append(receipt.OrderLines, line)
+	}
+	return receipt
 }
 
 func (p mobilepayProvider) GetAuthorization(reference string) (payments.Authorization, error) {

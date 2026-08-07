@@ -118,7 +118,16 @@ func (app *application) updatePersonnelHandler(w http.ResponseWriter, r *http.Re
 		amount := payments.Amount{Value: int64(o.DueAmount), Currency: types.CurrencyDKK}
 		teamUrl := app.config.baseurl + "/badut/" + string(userID)
 
-		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk gøglertilmelding", phone, email, teamUrl, o.OrderID, "order")
+		paymentLink, _ = app.commands.Payment.Request(payments.Charge{
+			Amount:          amount,
+			Description:     "Nathejk gøglertilmelding",
+			Phone:           phone,
+			Email:           email,
+			ReturnUrl:       teamUrl,
+			OrderForeignKey: o.OrderID,
+			OrderType:       "order",
+			Lines:           paymentLinesFromOrder(o),
+		})
 	}
 	updated, _ := app.models.Personnel.GetByID(ctx, userID)
 	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"person": updated, "order": o, "paymentLink": paymentLink}, nil)

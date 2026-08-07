@@ -2,6 +2,7 @@ package payment
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,6 +11,71 @@ import (
 	"github.com/nathejk/shared-go/types"
 )
 
+// Line is one item on the payer's receipt, in the payment entity's own
+// vocabulary.
+//
+// Deliberately not order.Line: shared-go's order package imports payment (for
+// the saga's PaymentReader), so payment importing order would close an import
+// cycle. The composition root maps between them, exactly as it adapts a provider
+// client to Provider — see paymentLinesFromOrder in cmd/api.
+//
+// Amounts are in the currency's minor unit, like everything else here. Amount is
+// the line's total (UnitCount × UnitPrice) rather than something to be recomputed
+// downstream, because that is the number a provider's receipt has to reconcile
+// against.
+type Line struct {
+	// Label is what the payer reads on their receipt, e.g. "T-shirt (Large)".
+	Label     string
+	UnitCount int
+	UnitPrice int
+	Amount    int
+}
+
+// Charge is a request to take money.
+//
+// A struct rather than a positional list because the previous signature took
+// seven arguments of which three — returnUrl, orderForeignKey, orderType — were
+// adjacent strings, so a transposition would have compiled and silently
+// mis-linked the payment to its order.
+//
+// Lines are optional and descriptive: they become the receipt the payer sees and
+// are recorded on the requested event. They must sum to Amount — see
+// linesReconcile — because a receipt that disagrees with the sum charged is
+// worse than no receipt.
+type Charge struct {
+	Amount      Amount
+	Description string
+	Phone       types.PhoneNumber
+	Email       types.EmailAddress
+	ReturnUrl   string
+
+	// OrderForeignKey is what is being paid for and OrderType says which kind
+	// of thing that is: "order" for an order id, or a team type for the legacy
+	// flow that pointed straight at a team. The order saga keys on this.
+	OrderForeignKey string
+	OrderType       string
+
+	Lines []Line
+}
+
+// linesReconcile reports whether the lines account for exactly the amount being
+// charged. Zero lines reconcile trivially: no receipt is sent.
+//
+// This is not pedantry. An open order's lines sum to its total while the charge
+// is its outstanding amount, so the two diverge the moment an order is partly
+// paid — and a payment provider may reject, or worse silently accept, a receipt
+// that does not add up.
+func (c Charge) linesReconcile() bool {
+	if len(c.Lines) == 0 {
+		return true
+	}
+	sum := 0
+	for _, l := range c.Lines {
+		sum += l.Amount
+	}
+	return int64(sum) == c.Amount.Value
+}
+
 // Commands is the payment write-side API. Methods publish payment events onto
 // the stream and drive the payment provider.
 //
@@ -17,7 +83,7 @@ import (
 // so a caller cannot end up with a commander and a projector that disagree
 // about which year they are working in.
 type Commands interface {
-	Request(amount Amount, desc string, phone types.PhoneNumber, email types.EmailAddress, returnUrl, orderForeignKey, orderType string) (string, error)
+	Request(Charge) (string, error)
 	Capture(reference string) error
 }
 
@@ -34,14 +100,26 @@ type commander struct {
 // one: that is the identity every later payment event and the projection join
 // on. The idempotency key is separate and deliberately distinct, so a retried
 // request cannot look like the same payment being renamed.
-func (c *commander) Request(amount Amount, desc string, phone types.PhoneNumber, email types.EmailAddress, returnUrl string, orderForeignKey string, orderType string) (string, error) {
+//
+// Receipt lines that do not sum to the charged amount are dropped rather than
+// forwarded, and the payment proceeds without a receipt. Failing the payment
+// over a cosmetic mismatch would be worse; sending a wrong one worse still.
+func (c *commander) Request(ch Charge) (string, error) {
+	lines := ch.Lines
+	if !ch.linesReconcile() {
+		log.Printf("payment: receipt lines do not sum to %d for %s/%s; requesting without a receipt",
+			ch.Amount.Value, ch.OrderType, ch.OrderForeignKey)
+		lines = nil
+	}
+
 	reference := uuid.New().String()
 	resp, err := c.r.provider.CreatePayment(PaymentRequest{
 		IdempotencyKey: uuid.New().String(),
 		Reference:      reference,
-		Amount:         amount,
-		Description:    desc,
-		PhoneNumber:    phone.InternationalNumber(),
+		Amount:         ch.Amount,
+		Description:    ch.Description,
+		PhoneNumber:    ch.Phone.InternationalNumber(),
+		Lines:          lines,
 	})
 	if err != nil {
 		return "", err
@@ -49,15 +127,15 @@ func (c *commander) Request(amount Amount, desc string, phone types.PhoneNumber,
 
 	body := messages.NathejkPaymentRequested{
 		Reference:       resp.Reference,
-		ReceiptEmail:    email,
-		ReturnUrl:       returnUrl,
-		Amount:          int(amount.Value),
-		Currency:        string(amount.Currency),
+		ReceiptEmail:    ch.Email,
+		ReturnUrl:       ch.ReturnUrl,
+		Amount:          int(ch.Amount.Value),
+		Currency:        string(ch.Amount.Currency),
 		Timestamp:       time.Now(),
 		Method:          "mobilepay",
-		OrderLines:      []messages.NathejkPayment_OrderLine{},
-		OrderForeignKey: orderForeignKey,
-		OrderType:       orderType,
+		OrderLines:      messageLines(lines),
+		OrderForeignKey: ch.OrderForeignKey,
+		OrderType:       ch.OrderType,
 	}
 	msg := c.p.MessageFunc()(c.subject(resp.Reference, "requested"))
 	msg.SetBody(body)
@@ -66,6 +144,22 @@ func (c *commander) Request(amount Amount, desc string, phone types.PhoneNumber,
 		return "", err
 	}
 	return resp.RedirectURL, nil
+}
+
+// messageLines projects receipt lines onto the wire type. Kept separate so the
+// command API does not expose the message struct, which would make every caller
+// depend on the event contract.
+func messageLines(lines []Line) []messages.NathejkPayment_OrderLine {
+	out := make([]messages.NathejkPayment_OrderLine, 0, len(lines))
+	for _, l := range lines {
+		out = append(out, messages.NathejkPayment_OrderLine{
+			Label:     l.Label,
+			UnitCount: l.UnitCount,
+			UnitPrice: l.UnitPrice,
+			Amount:    l.Amount,
+		})
+	}
+	return out
 }
 
 // Capture claims the authorised-but-not-yet-taken funds of a payment.

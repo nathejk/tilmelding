@@ -354,7 +354,18 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 		if o.DueAmount > 0 {
 			amount := payments.Amount{Value: int64(o.DueAmount), Currency: types.CurrencyDKK}
 			teamUrl := app.config.baseurl + "/klan/" + string(teamID)
-			paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", *signup.Phone, *signup.Email, teamUrl, o.OrderID, "order")
+			paymentLink, _ = app.commands.Payment.Request(payments.Charge{
+				Amount:          amount,
+				Description:     "Nathejk tilmelding",
+				Phone:           *signup.Phone,
+				Email:           *signup.Email,
+				ReturnUrl:       teamUrl,
+				OrderForeignKey: o.OrderID,
+				OrderType:       "order",
+				// The reserved seats, so the wallet receipt reads
+				// "Senior-deltagelse ×N" rather than a bare total.
+				Lines: paymentLinesFromOrder(o),
+			})
 		}
 	}
 	team, _ := app.models.Klan.GetByID(r.Context(), teamID)
@@ -456,7 +467,16 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		amount := payments.Amount{Value: int64(due), Currency: types.CurrencyDKK}
 		teamUrl := app.config.baseurl + "/klan/" + string(teamID)
 
-		paymentLink, _ = app.commands.Payment.Request(amount, "Nathejk tilmelding", phone, email, teamUrl, orderID, "order")
+		paymentLink, _ = app.commands.Payment.Request(payments.Charge{
+			Amount:          amount,
+			Description:     "Nathejk tilmelding",
+			Phone:           phone,
+			Email:           email,
+			ReturnUrl:       teamUrl,
+			OrderForeignKey: orderID,
+			OrderType:       "order",
+			Lines:           paymentLinesFromOrder(openOrder),
+		})
 	}
 	team, _ := app.models.Klan.GetByID(r.Context(), teamID)
 	err = app.WriteJSON(w, http.StatusOK, updateKlanResponse{
