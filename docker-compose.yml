@@ -70,6 +70,11 @@ services:
         https://nathejk-countdown.s3.eu-central-1.amazonaws.com/videos/sanne.mov
         https://nathejk-countdown.s3.eu-central-1.amazonaws.com/videos/signe.mov
       SENIOR_COUNT: 115
+      # Enables the /api/migrate/* endpoints, which refuse every request unless
+      # this matches the X-Migrate-Token header. A fixed value is fine here
+      # because this file only describes the local dev stack; production sets a
+      # real secret, and leaving it unset there keeps the endpoints 404.
+      MIGRATE_TOKEN: dev-only-migrate-token
       #GO_BUILD_FLAGS: -race
       SMTP_HOST: mail
       SMTP_PORT: 1025

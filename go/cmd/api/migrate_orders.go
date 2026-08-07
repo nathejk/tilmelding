@@ -42,12 +42,18 @@ const (
 // handler refuses every request — this avoids exposing the endpoint by
 // accident in environments where the env var hasn't been set.
 //
-// Query params:
-//
-//	year=2026   (optional; defaults to the API's configured year)
-//	dry=1       (optional; report what would be published without publishing)
-//
-// Response: JSON envelope with "found", "migrated", and "results" keys.
+// @Summary      Backfill orders for legacy payments
+// @Description  Admin/batch endpoint. Finds teams that paid before the order entity existed (payment.orderForeignKey names the team, not an order) and have no paid order yet, then publishes a synthetic created/lines.changed/paid order for each so order-based reads and the paid-unit offset are correct. Idempotent — a team with a paid order is skipped. Requires the X-Migrate-Token header to match MIGRATE_TOKEN; returns 404 when that variable is unset.
+// @Tags         migrate
+// @Produce      json
+// @Param        X-Migrate-Token  header  string  true   "Must equal MIGRATE_TOKEN"
+// @Param        year             query   string  false  "Year slug (defaults to the API's configured year)"
+// @Param        dry              query   string  false  "Set to 1 to report what would be published without publishing"
+// @Success      200  {object}  object{year=string,dryRun=bool,found=int,migrated=int,results=[]migrationResult}
+// @Failure      403  {object}  object{error=string}
+// @Failure      404  {object}  object{error=string}
+// @Failure      500  {object}  object{error=string}
+// @Router       /api/migrate/legacy-orders [post]
 func (app *application) migrateLegacyOrdersHandler(w http.ResponseWriter, r *http.Request) {
 	expected := os.Getenv("MIGRATE_TOKEN")
 	if expected == "" {
@@ -101,6 +107,10 @@ type migrationResult struct {
 	Reason      string `json:"reason,omitempty"`
 }
 
+// klanSeatFallbackReason explains a klan order built from reserved seats rather
+// than from members, so an operator reading the report can tell the two apart.
+const klanSeatFallbackReason = "synthesised from reserved seats; no seniors registered yet"
+
 // legacyTeam carries one row from findLegacyTeams — a team with legacy
 // payments that needs a synthetic paid order.
 type legacyTeam struct {
@@ -135,10 +145,13 @@ func runLegacyOrderMigration(ctx context.Context, db *sql.DB, publisher stream.P
 			PaidAmount: team.paidOre,
 		}
 
-		lines, totalAmount := buildLinesForTeam(ctx, db, team, year)
+		lines, totalAmount, note := buildLinesForTeam(ctx, db, team, year)
 		if len(lines) == 0 {
 			res.Status = "skipped"
-			res.Reason = "no members found"
+			res.Reason = note
+			if res.Reason == "" {
+				res.Reason = "no members found"
+			}
 			report.Results = append(report.Results, res)
 			continue
 		}
@@ -161,7 +174,7 @@ func runLegacyOrderMigration(ctx context.Context, db *sql.DB, publisher stream.P
 
 		if dryRun {
 			res.Status = "ok"
-			res.Reason = "dry-run"
+			res.Reason = joinReasons(note, "dry-run")
 			report.Results = append(report.Results, res)
 			report.Migrated++
 			continue
@@ -175,11 +188,23 @@ func runLegacyOrderMigration(ctx context.Context, db *sql.DB, publisher stream.P
 		}
 
 		res.Status = "ok"
+		res.Reason = note
 		report.Results = append(report.Results, res)
 		report.Migrated++
 	}
 
 	return report, nil
+}
+
+func joinReasons(a, b string) string {
+	switch {
+	case a == "":
+		return b
+	case b == "":
+		return a
+	default:
+		return a + "; " + b
+	}
 }
 
 // findLegacyTeams returns teams that paid via the legacy flow
@@ -228,7 +253,10 @@ func findLegacyTeams(ctx context.Context, db *sql.DB, year string) ([]legacyTeam
 // userId == ownerId. Legacy orderType values ("staff", "friend") are
 // honoured here because the rename's DB migration may not have run
 // against existing payment rows yet — they all map onto crew.
-func buildLinesForTeam(ctx context.Context, db *sql.DB, team legacyTeam, year string) ([]messages.NathejkOrder_Line, int) {
+//
+// The third return value is a note for the report, empty when there is
+// nothing unusual to say.
+func buildLinesForTeam(ctx context.Context, db *sql.DB, team legacyTeam, year string) ([]messages.NathejkOrder_Line, int, string) {
 	var members []memberLine
 
 	switch team.ownerType {
@@ -236,10 +264,26 @@ func buildLinesForTeam(ctx context.Context, db *sql.DB, team legacyTeam, year st
 		members = queryMigrateSpejdere(ctx, db, team.teamID, year)
 	case types.TeamTypeKlan:
 		members = queryMigrateSeniore(ctx, db, team.teamID)
+		// A klan pays for seats at reservation time, before any senior
+		// identity exists (see requestSeatHandler and the pending-N
+		// convention in klan.go). A klan that paid and never filled in its
+		// roster therefore has money and no members, and building lines from
+		// members alone skips it — leaving it with no order at all, which is
+		// what happened to every team this migration still could not place.
+		// Fall back to the reserved seat count, which is the thing that was
+		// actually paid for.
+		if len(members) == 0 {
+			seats := queryMigrateKlanReservedSeats(ctx, db, team.teamID)
+			if seats == 0 {
+				return nil, 0, "no seniors and no reserved seats"
+			}
+			lines, total := klanReservationLines(seats)
+			return lines, total, klanSeatFallbackReason
+		}
 	case types.TeamTypeBadut, types.TeamTypeCrew, "staff", "friend":
 		members = queryMigratePersonnel(ctx, db, team.teamID)
 	default:
-		return nil, 0
+		return nil, 0, fmt.Sprintf("unhandled owner type %q", team.ownerType)
 	}
 
 	sku, name, price := migrateProductForType(team.ownerType)
@@ -274,7 +318,48 @@ func buildLinesForTeam(ctx context.Context, db *sql.DB, team legacyTeam, year st
 			total += migratePriceTShirt
 		}
 	}
-	return lines, total
+	return lines, total, ""
+}
+
+// klanReservationLines builds one participation line per paid-for seat, keyed on
+// the same synthetic "pending-N" member ids and "reservation-N" line ids that
+// requestSeatHandler uses at reservation time. Matching that convention matters:
+// when the klan later registers real seniors, the snapshot DELETE+INSERT in the
+// order projector replaces these cleanly instead of accumulating orphans.
+//
+// Double billing is not a concern. ApplyPaidOffset drops already-paid units per
+// SKU by *count*, explicitly not by member identity, so N paid seats offset the
+// first N real members whatever they end up being called.
+//
+// Pure, so it can be tested without a database.
+func klanReservationLines(seats int) ([]messages.NathejkOrder_Line, int) {
+	_, name, price := migrateProductForType(types.TeamTypeKlan)
+	lines := make([]messages.NathejkOrder_Line, 0, seats)
+	for i := 0; i < seats; i++ {
+		lines = append(lines, messages.NathejkOrder_Line{
+			LineID:      reservationLineID(uint32(i)),
+			ProductSKU:  "participation.klan",
+			ProductName: name,
+			MemberID:    pendingMemberID(uint32(i + 1)),
+			UnitPrice:   price,
+			Quantity:    1,
+			LineTotal:   price,
+			Origin:      messages.LineOriginDerived,
+		})
+	}
+	return lines, seats * price
+}
+
+// queryMigrateKlanReservedSeats reads the seat count the klan actually reserved.
+// Returns 0 when there is no klan row or nothing was reserved, which the caller
+// treats as "nothing to build an order from".
+func queryMigrateKlanReservedSeats(ctx context.Context, db *sql.DB, teamID string) int {
+	var seats sql.NullInt64
+	if err := db.QueryRowContext(ctx,
+		`SELECT reservedMemberCount FROM klan WHERE teamId = ?`, teamID).Scan(&seats); err != nil {
+		return 0
+	}
+	return int(seats.Int64)
 }
 
 // truncateLinesToBudget keeps as many lines as the paid amount covers
