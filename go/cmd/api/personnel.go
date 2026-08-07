@@ -119,14 +119,13 @@ func (app *application) updatePersonnelHandler(w http.ResponseWriter, r *http.Re
 		teamUrl := app.config.baseurl + "/badut/" + string(userID)
 
 		paymentLink, _ = app.commands.Payment.Request(payments.Charge{
-			Amount:          amount,
-			Description:     "Nathejk gøglertilmelding",
-			Phone:           phone,
-			Email:           email,
-			ReturnUrl:       teamUrl,
-			OrderForeignKey: o.OrderID,
-			OrderType:       "order",
-			Lines:           paymentLinesFromOrder(o),
+			Amount:      amount,
+			Description: "Nathejk gøglertilmelding",
+			Phone:       phone,
+			Email:       email,
+			ReturnUrl:   teamUrl,
+			OrderID:     o.OrderID,
+			Lines:       paymentLinesFromOrder(o),
 		})
 	}
 	updated, _ := app.models.Personnel.GetByID(ctx, userID)

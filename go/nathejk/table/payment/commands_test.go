@@ -56,7 +56,7 @@ func TestCommandsWithoutAProviderFailLoudly(t *testing.T) {
 	pub := &cqrstest.Publisher{}
 	c := &commander{p: pub, r: NewRepository(), year: "2026"}
 
-	if _, err := c.Request(Charge{Amount: Amount{}, Description: "d", Phone: "40733886", Email: "a@b.dk", ReturnUrl: "u", OrderForeignKey: "o", OrderType: "order"}); !errors.Is(err, ErrNoProvider) {
+	if _, err := c.Request(Charge{Amount: Amount{}, Description: "d", Phone: "40733886", Email: "a@b.dk", ReturnUrl: "u", OrderID: "order-1"}); !errors.Is(err, ErrNoProvider) {
 		t.Errorf("Request err = %v, want ErrNoProvider", err)
 	}
 	if err := c.Capture("ref-1"); !errors.Is(err, ErrNoProvider) {
@@ -73,13 +73,12 @@ func TestRequestAuthorisesAndPublishes(t *testing.T) {
 
 	amount := Amount{Currency: types.CurrencyDKK, Value: 45000}
 	url, err := c.Request(Charge{
-		Amount:          amount,
-		Description:     "Nathejk tilmelding",
-		Phone:           types.PhoneNumber("40733886"),
-		Email:           types.EmailAddress("a@b.dk"),
-		ReturnUrl:       "https://tilmelding.nathejk.dk/klan/t-1",
-		OrderForeignKey: "order-1",
-		OrderType:       "order",
+		Amount:      amount,
+		Description: "Nathejk tilmelding",
+		Phone:       types.PhoneNumber("40733886"),
+		Email:       types.EmailAddress("a@b.dk"),
+		ReturnUrl:   "https://tilmelding.nathejk.dk/klan/t-1",
+		OrderID:     "order-1",
 	})
 	if err != nil {
 		t.Fatalf("Request: %v", err)
@@ -129,7 +128,10 @@ func TestRequestAuthorisesAndPublishes(t *testing.T) {
 	if body.Amount != 45000 || body.Currency != "DKK" {
 		t.Errorf("event amount = %d %s, want 45000 DKK", body.Amount, body.Currency)
 	}
-	if body.OrderForeignKey != "order-1" || body.OrderType != "order" {
+	// The event keeps the projection's polymorphic field names, and the caller
+	// no longer supplies the type: every payment this entity creates is for an
+	// order, so the commander stamps it.
+	if body.OrderForeignKey != "order-1" || body.OrderType != orderTypeOrder {
 		t.Errorf("event should carry the order linkage, got %q/%q", body.OrderForeignKey, body.OrderType)
 	}
 	if body.ReturnUrl != "https://tilmelding.nathejk.dk/klan/t-1" {
@@ -144,7 +146,7 @@ func TestRequestPublishesNothingWhenProviderFails(t *testing.T) {
 	if _, err := c.Request(Charge{
 		Amount: Amount{Currency: types.CurrencyDKK, Value: 100}, Description: "d",
 		Phone: "40733886", Email: "a@b.dk", ReturnUrl: "u",
-		OrderForeignKey: "o", OrderType: "order",
+		OrderID: "o",
 	}); err == nil {
 		t.Fatal("expected the provider error to surface")
 	}
@@ -299,7 +301,7 @@ func TestRequestCarriesReceiptLinesToProviderAndEvent(t *testing.T) {
 	}
 	if _, err := c.Request(Charge{
 		Amount: Amount{Currency: types.CurrencyDKK, Value: 42500},
-		Phone:  "40733886", Email: "a@b.dk", OrderForeignKey: "order-1", OrderType: "order",
+		Phone:  "40733886", Email: "a@b.dk", OrderID: "order-1",
 		Lines: lines,
 	}); err != nil {
 		t.Fatalf("Request: %v", err)
@@ -333,7 +335,7 @@ func TestRequestDropsReceiptThatDoesNotSumToTheCharge(t *testing.T) {
 	if _, err := c.Request(Charge{
 		// Charging 25000 but describing 42500 worth of goods.
 		Amount: Amount{Currency: types.CurrencyDKK, Value: 25000},
-		Phone:  "40733886", Email: "a@b.dk", OrderForeignKey: "order-1", OrderType: "order",
+		Phone:  "40733886", Email: "a@b.dk", OrderID: "order-1",
 		Lines: []Line{
 			{Label: "Patrulje-deltagelse", UnitCount: 1, UnitPrice: 25000, Amount: 25000},
 			{Label: "T-shirt (Large)", UnitCount: 1, UnitPrice: 17500, Amount: 17500},
@@ -406,7 +408,7 @@ func TestRequestIssuesAReadableReference(t *testing.T) {
 	c, pub := newTestCommander(prov)
 	c.q = &fakeQuerier{}
 
-	if _, err := c.Request(Charge{Amount: Amount{Currency: types.CurrencyDKK, Value: 100}, OrderType: "order"}); err != nil {
+	if _, err := c.Request(Charge{Amount: Amount{Currency: types.CurrencyDKK, Value: 100}, OrderID: "order-1"}); err != nil {
 		t.Fatalf("Request: %v", err)
 	}
 

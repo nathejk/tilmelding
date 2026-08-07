@@ -93,9 +93,14 @@ func (o OperationList) Value() (driver.Value, error) {
 // Amount is in the currency's minor unit (øre for DKK), matching the events,
 // the column and the order entity.
 //
-// OrderForeignKey is what the payment is for, and OrderType says which kind of
-// thing that is: "order" for an order id, or a team type for the legacy flow
-// that pointed straight at a team. The order saga relies on this distinction.
+// OrderForeignKey and OrderType keep their polymorphic names deliberately, even
+// though Charge — the write side — now takes a plain OrderID. Across the
+// projection they are not one thing: since the order entity landed
+// OrderForeignKey is an order id and OrderType is "order", but the 769 rows that
+// predate it hold a team or user id with OrderType naming the kind
+// ("patrulje", "klan", "g\u00f8gler"). mobilepayCallbackHandler branches on exactly
+// that to recover who paid. Renaming these to OrderID would make the field lie
+// about most of the table.
 type Payment struct {
 	Reference       string              `json:"reference" db:"reference"`
 	Year            string              `json:"year" db:"year"`

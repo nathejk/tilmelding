@@ -33,12 +33,21 @@ type Line struct {
 	Amount    int
 }
 
+// orderTypeOrder is the OrderType stamped on every payment this entity creates.
+//
+// The field is not redundant on the projection, only on the way in. Historically
+// a payment pointed straight at a team and OrderType said which kind
+// ("patrulje", "klan", "g\u00f8gler"); 769 of the 1189 rows still look like that, and
+// mobilepayCallbackHandler branches on it to recover the payer's identity. Since
+// the order entity landed, every new payment is for an order — so the value is a
+// constant here and Charge does not ask a caller to repeat it.
+const orderTypeOrder = "order"
+
 // Charge is a request to take money.
 //
 // A struct rather than a positional list because the previous signature took
-// seven arguments of which three — returnUrl, orderForeignKey, orderType — were
-// adjacent strings, so a transposition would have compiled and silently
-// mis-linked the payment to its order.
+// seven arguments of which three were adjacent strings, so a transposition would
+// have compiled and silently mis-linked the payment to its order.
 //
 // Lines are optional and descriptive: they become the receipt the payer sees and
 // are recorded on the requested event. They must sum to Amount — see
@@ -51,11 +60,10 @@ type Charge struct {
 	Email       types.EmailAddress
 	ReturnUrl   string
 
-	// OrderForeignKey is what is being paid for and OrderType says which kind
-	// of thing that is: "order" for an order id, or a team type for the legacy
-	// flow that pointed straight at a team. The order saga keys on this.
-	OrderForeignKey string
-	OrderType       string
+	// OrderID is the order being paid for. Named for what it is: on the way in
+	// this is always an order id, unlike the projection's OrderForeignKey, which
+	// still holds a team id for the legacy rows.
+	OrderID string
 
 	Lines []Line
 }
@@ -119,8 +127,8 @@ const referenceAttempts = 3
 func (c *commander) Request(ch Charge) (string, error) {
 	lines := ch.Lines
 	if !ch.linesReconcile() {
-		log.Printf("payment: receipt lines do not sum to %d for %s/%s; requesting without a receipt",
-			ch.Amount.Value, ch.OrderType, ch.OrderForeignKey)
+		log.Printf("payment: receipt lines do not sum to %d for order %s; requesting without a receipt",
+			ch.Amount.Value, ch.OrderID)
 		lines = nil
 	}
 
@@ -149,8 +157,8 @@ func (c *commander) Request(ch Charge) (string, error) {
 		Timestamp:       time.Now(),
 		Method:          "mobilepay",
 		OrderLines:      messageLines(lines),
-		OrderForeignKey: ch.OrderForeignKey,
-		OrderType:       ch.OrderType,
+		OrderForeignKey: ch.OrderID,
+		OrderType:       orderTypeOrder,
 	}
 	msg := c.p.MessageFunc()(c.subject(resp.Reference, "requested"))
 	msg.SetBody(body)

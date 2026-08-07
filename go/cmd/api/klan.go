@@ -355,13 +355,12 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 			amount := payments.Amount{Value: int64(o.DueAmount), Currency: types.CurrencyDKK}
 			teamUrl := app.config.baseurl + "/klan/" + string(teamID)
 			paymentLink, _ = app.commands.Payment.Request(payments.Charge{
-				Amount:          amount,
-				Description:     "Nathejk tilmelding",
-				Phone:           *signup.Phone,
-				Email:           *signup.Email,
-				ReturnUrl:       teamUrl,
-				OrderForeignKey: o.OrderID,
-				OrderType:       "order",
+				Amount:      amount,
+				Description: "Nathejk tilmelding",
+				Phone:       *signup.Phone,
+				Email:       *signup.Email,
+				ReturnUrl:   teamUrl,
+				OrderID:     o.OrderID,
 				// The reserved seats, so the wallet receipt reads
 				// "Senior-deltagelse ×N" rather than a bare total.
 				Lines: paymentLinesFromOrder(o),
@@ -468,14 +467,13 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		teamUrl := app.config.baseurl + "/klan/" + string(teamID)
 
 		paymentLink, _ = app.commands.Payment.Request(payments.Charge{
-			Amount:          amount,
-			Description:     "Nathejk tilmelding",
-			Phone:           phone,
-			Email:           email,
-			ReturnUrl:       teamUrl,
-			OrderForeignKey: orderID,
-			OrderType:       "order",
-			Lines:           paymentLinesFromOrder(openOrder),
+			Amount:      amount,
+			Description: "Nathejk tilmelding",
+			Phone:       phone,
+			Email:       email,
+			ReturnUrl:   teamUrl,
+			OrderID:     orderID,
+			Lines:       paymentLinesFromOrder(openOrder),
 		})
 	}
 	team, _ := app.models.Klan.GetByID(r.Context(), teamID)

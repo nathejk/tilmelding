@@ -169,14 +169,13 @@ func (app *application) updateCrewHandler(w http.ResponseWriter, r *http.Request
 		amount := payments.Amount{Value: int64(o.DueAmount), Currency: types.CurrencyDKK}
 		teamURL := app.config.baseurl + "/crew/" + string(userID)
 		paymentLink, _ = app.commands.Payment.Request(payments.Charge{
-			Amount:          amount,
-			Description:     "Nathejk crewtilmelding",
-			Phone:           input.Member.Phone,
-			Email:           input.Member.Email,
-			ReturnUrl:       teamURL,
-			OrderForeignKey: o.OrderID,
-			OrderType:       "order",
-			Lines:           paymentLinesFromOrder(o),
+			Amount:      amount,
+			Description: "Nathejk crewtilmelding",
+			Phone:       input.Member.Phone,
+			Email:       input.Member.Email,
+			ReturnUrl:   teamURL,
+			OrderID:     o.OrderID,
+			Lines:       paymentLinesFromOrder(o),
 		})
 	}
 
