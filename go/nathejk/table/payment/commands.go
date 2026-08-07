@@ -12,6 +12,10 @@ import (
 
 // Commands is the payment write-side API. Methods publish payment events onto
 // the stream and drive the payment provider.
+//
+// Satisfied by the *table returned by New — there is no separate constructor,
+// so a caller cannot end up with a commander and a projector that disagree
+// about which year they are working in.
 type Commands interface {
 	Request(amount Amount, desc string, phone types.PhoneNumber, email types.EmailAddress, returnUrl, orderForeignKey, orderType string) (string, error)
 	Capture(reference string) error
@@ -19,22 +23,8 @@ type Commands interface {
 
 type commander struct {
 	p    cqrs.Publisher
-	pp   Provider
+	r    repository
 	year types.YearSlug
-}
-
-// NewCommands wires a payment commander. The publisher emits the
-// NathejkPayment* events that drive the projections; the provider creates and
-// captures authorisations.
-//
-// year is the season the published events belong to and appears in their
-// subjects. Both copies of this entity hard-coded "2026" here, which the
-// projector then stored as the payment's year — so a new season needed a code
-// change in two places, and the consumer's matching pattern was pinned to the
-// same literal. It is a parameter for the same reason the order entity takes
-// one.
-func NewCommands(p cqrs.Publisher, pp Provider, year types.YearSlug) Commands {
-	return &commander{p: p, pp: pp, year: year}
 }
 
 // Request authorises a payment with the provider and announces it on the
@@ -46,7 +36,7 @@ func NewCommands(p cqrs.Publisher, pp Provider, year types.YearSlug) Commands {
 // request cannot look like the same payment being renamed.
 func (c *commander) Request(amount Amount, desc string, phone types.PhoneNumber, email types.EmailAddress, returnUrl string, orderForeignKey string, orderType string) (string, error) {
 	reference := uuid.New().String()
-	resp, err := c.pp.CreatePayment(PaymentRequest{
+	resp, err := c.r.provider.CreatePayment(PaymentRequest{
 		IdempotencyKey: uuid.New().String(),
 		Reference:      reference,
 		Amount:         amount,
@@ -84,7 +74,7 @@ func (c *commander) Request(amount Amount, desc string, phone types.PhoneNumber,
 // can reload — so it must be safe to repeat: nothing is captured and nothing
 // published once the authorisation is exhausted.
 func (c *commander) Capture(reference string) error {
-	auth, err := c.pp.GetAuthorization(reference)
+	auth, err := c.r.provider.GetAuthorization(reference)
 	if err != nil {
 		return err
 	}
@@ -113,7 +103,7 @@ func (c *commander) Capture(reference string) error {
 		return err
 	}
 
-	if err := c.pp.CapturePayment(reference, available); err != nil {
+	if err := c.r.provider.CapturePayment(reference, available); err != nil {
 		return err
 	}
 

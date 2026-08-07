@@ -46,7 +46,24 @@ func (f *fakeProvider) CapturePayment(reference string, amount Amount) error {
 
 func newTestCommander(p *fakeProvider) (*commander, *cqrstest.Publisher) {
 	pub := &cqrstest.Publisher{}
-	return &commander{p: pub, pp: p, year: "2026"}, pub
+	return &commander{p: pub, r: NewRepository(WithProvider(p)), year: "2026"}, pub
+}
+
+// An unwired provider must report itself rather than panic on a nil interface
+// in the middle of a payment attempt.
+func TestCommandsWithoutAProviderFailLoudly(t *testing.T) {
+	pub := &cqrstest.Publisher{}
+	c := &commander{p: pub, r: NewRepository(), year: "2026"}
+
+	if _, err := c.Request(Amount{}, "d", "40733886", "a@b.dk", "u", "o", "order"); !errors.Is(err, ErrNoProvider) {
+		t.Errorf("Request err = %v, want ErrNoProvider", err)
+	}
+	if err := c.Capture("ref-1"); !errors.Is(err, ErrNoProvider) {
+		t.Errorf("Capture err = %v, want ErrNoProvider", err)
+	}
+	if len(pub.Messages) != 0 {
+		t.Errorf("nothing should be published, got %v", pub.Subjects())
+	}
 }
 
 func TestRequestAuthorisesAndPublishes(t *testing.T) {

@@ -199,7 +199,16 @@ func main() {
 		logger.PrintFatal(err, nil)
 	}
 
-	tablePayment := payments.New(writer, reader)
+	// The MobilePay client is built here, ahead of the entities, because the
+	// payment entity's commander needs it: the client is adapted to the
+	// payments.Provider port (see mobilepayprovider.go) so the entity never
+	// names a specific provider.
+	paymentClient, err := mobilepay.New(cfg.payment.dsn)
+	if err != nil {
+		logger.PrintFatal(err, nil)
+	}
+
+	tablePayment := payments.New(publisher, writer, reader, cfg.year, payments.WithProvider(newMobilepayProvider(paymentClient, cfg.baseurl)))
 	tableStaff := personnel.New(publisher, writer, reader)
 	tablePatrulje := patrulje.New(publisher, writer, reader)
 	tableSpejder := spejder.New(writer, reader)
@@ -297,10 +306,6 @@ func main() {
 	expvar.NewInt("timestamp").Set(time.Now().Unix())
 	expvar.NewInt("goroutines").Set(int64(runtime.NumGoroutine()))
 
-	paymentClient, err := mobilepay.New(cfg.payment.dsn)
-	if err != nil {
-		logger.PrintFatal(err, nil)
-	}
 	app := &application{
 		JsonApi: app.JsonApi{
 			Logger: logger,
@@ -311,14 +316,11 @@ func main() {
 		db:        reader,
 		publisher: publisher,
 		commands: commands{
-			Signup:    tableSignup,
-			Klan:      tableKlan,
-			Patrulje:  tablePatrulje,
-			Personnel: tableStaff,
-			// The payment commands speak payments.Provider; the MobilePay
-			// client is adapted to it here (see mobilepayprovider.go) so the
-			// entity never names a specific provider.
-			Payment:    payments.NewCommands(publisher, newMobilepayProvider(paymentClient, cfg.baseurl), cfg.year),
+			Signup:     tableSignup,
+			Klan:       tableKlan,
+			Patrulje:   tablePatrulje,
+			Personnel:  tableStaff,
+			Payment:    tablePayment,
 			Order:      tableOrder,
 			Section:    tableSection,
 			Crewmember: tableCrewmember,

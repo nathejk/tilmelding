@@ -112,19 +112,26 @@ type Payment struct {
 	Operations      OperationList       `json:"operations" db:"operations"`
 }
 
-// table is the entity: read API plus projector.
+// table is the entity: read API, write API and projector.
 type table struct {
-	querier
+	commander
 	consumer
+	querier
 }
 
 // New wires the payment entity and ensures its table exists.
 //
+// year is the season the published events belong to and appears in their
+// subjects; the projector reads it back off the subject. Both merged copies
+// hard-coded "2026" in three places instead.
+//
 // r is a cqrs.Reader rather than a *sql.DB so the read side stays mockable;
 // cqrs.Reader happens to cover goqu's SQLDatabase method set exactly, so goqu
 // can be built straight from it.
-func New(w cqrs.Writer, r cqrs.Reader) *table {
-	table := &table{querier: querier{db: goqu.New("mysql", r)}, consumer: consumer{w: w}}
+func New(p cqrs.Publisher, w cqrs.Writer, r cqrs.Reader, year types.YearSlug, es ...external) *table {
+	q := querier{db: goqu.New("mysql", r)}
+	c := commander{p: p, r: NewRepository(es...), year: year}
+	table := &table{commander: c, consumer: consumer{w: w}, querier: q}
 	if err := w.Consume(table.CreateTableSql()); err != nil {
 		log.Fatalf("Error creating table %q", err)
 	}
@@ -152,3 +159,12 @@ var tableSchema string
 func (t *table) CreateTableSql() string {
 	return tableSchema
 }
+
+// One value fills all three roles, which is what lets the composition root wire
+// the same *table into the read models, the command bus and the consumer mux —
+// and why there is no separate command constructor to get out of step with it.
+var (
+	_ Queries       = (*table)(nil)
+	_ Commands      = (*table)(nil)
+	_ cqrs.Consumer = (*table)(nil)
+)
