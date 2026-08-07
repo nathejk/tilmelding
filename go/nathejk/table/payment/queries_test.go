@@ -170,7 +170,7 @@ func TestAmountsAreNotConvertedToDKK(t *testing.T) {
 	for name, got := range map[string]string{
 		"GetAll":         sqlOf(t, q.allDataset(Filter{})),
 		"GetByReference": sqlOf(t, q.byReferenceDataset("ref-1")),
-		"AmountPaid":     sqlOf(t, q.amountPaidDataset("t-1")),
+		"AmountPaid":     sqlOf(t, q.amountPaidDataset(Filter{})),
 	} {
 		if strings.Contains(strings.ToUpper(got), "FLOOR") {
 			t.Errorf("%s divides the amount; minor units are the contract:\n%s", name, got)
@@ -179,7 +179,7 @@ func TestAmountsAreNotConvertedToDKK(t *testing.T) {
 }
 
 func TestAmountPaidCountsOnlySecuredPayments(t *testing.T) {
-	ds := newTestQuerier().amountPaidDataset("t-1")
+	ds := newTestQuerier().amountPaidDataset(Filter{TeamIDs: []types.TeamID{"t-1"}})
 	got := sqlOf(t, ds)
 	if !strings.Contains(got, "COALESCE(SUM(`p`.`amount`), ?)") {
 		t.Errorf("expected a COALESCEd sum (the 0 is a placeholder in prepared mode), got:\n%s", got)
@@ -195,6 +195,35 @@ func TestAmountPaidCountsOnlySecuredPayments(t *testing.T) {
 	// Must consider both linkage shapes, like GetAll.
 	if !strings.Contains(got, "LEFT JOIN `orders`") {
 		t.Errorf("order-owned payments would be missed:\n%s", got)
+	}
+}
+
+// A team id is a UUID, not year-scoped, so a team that signs up in two seasons
+// collects payments under the same id. AmountPaid must therefore be able to
+// narrow by year, and its filter must behave identically to GetAll's — the bug
+// this replaces was precisely that the two disagreed.
+func TestAmountPaidNarrowsByYearAndTeamLikeGetAll(t *testing.T) {
+	q := newTestQuerier()
+	f := Filter{Year: types.YearSlug("2026"), TeamIDs: []types.TeamID{"t-1"}}
+
+	paid := sqlOf(t, q.amountPaidDataset(f))
+	for _, want := range []string{
+		"(`p`.`year` = ?)",
+		"`p`.`orderForeignKey` IN (?)",
+		"`o`.`ownerId` IN (?)",
+	} {
+		if !strings.Contains(paid, want) {
+			t.Errorf("missing %q in:\n%s", want, paid)
+		}
+	}
+	if args := argsOf(t, q.amountPaidDataset(f)); !contains(args, "2026") || !contains(args, "t-1") {
+		t.Errorf("year and team should travel as arguments, got %v", args)
+	}
+
+	// An empty Year still spans every season, which is what the admin totals
+	// want — but it must be an explicit choice, not the only behaviour.
+	if got := sqlOf(t, q.amountPaidDataset(Filter{TeamIDs: []types.TeamID{"t-1"}})); strings.Contains(got, "`p`.`year`") {
+		t.Errorf("an empty Year should not constrain the year:\n%s", got)
 	}
 }
 

@@ -381,7 +381,13 @@ func (app *application) assignNumberHandler(w http.ResponseWriter, r *http.Reque
 			continue
 		}
 
-		amountPaid, err := app.models.Payment.AmountPaidByTeamID(r.Context(), team.TeamID)
+		// Scoped to the same year as the team list above. Without that, a team
+		// that also signed up in an earlier season would be judged on that
+		// season's payment and handed a number it has not paid for this year.
+		amountPaid, err := app.models.Payment.AmountPaid(r.Context(), payments.Filter{
+			Year:    app.config.year,
+			TeamIDs: []types.TeamID{team.TeamID},
+		})
 		if err != nil {
 			// Do not treat a failed read as "unpaid": that would hand out no
 			// number to a team that has in fact paid, and the loop would look

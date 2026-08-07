@@ -30,7 +30,7 @@ const queryTimeout = 3 * time.Second
 type Queries interface {
 	GetAll(context.Context, Filter) ([]Payment, error)
 	GetByReference(context.Context, string) (*Payment, error)
-	AmountPaidByTeamID(context.Context, types.TeamID) (int, error)
+	AmountPaid(context.Context, Filter) (int, error)
 }
 
 type querier struct {
@@ -65,6 +65,20 @@ var paymentColumns = []any{
 	goqu.I("p.orderType"), goqu.I("p.operations"),
 }
 
+// narrow applies a Filter to a dataset. Shared by GetAll and AmountPaid so the
+// two cannot drift into disagreeing about what "this team, this year" means —
+// which is how AmountPaidByTeamID came to have no year predicate at all while
+// GetAll had one.
+func narrow(ds *goqu.SelectDataset, f Filter) *goqu.SelectDataset {
+	if f.Year != "" {
+		ds = ds.Where(goqu.I("p.year").Eq(string(f.Year)))
+	}
+	if len(f.TeamIDs) > 0 {
+		ds = ds.Where(teamOwned(f.TeamIDs))
+	}
+	return ds
+}
+
 // GetAll returns payments matching the filter, oldest first.
 //
 // An empty Filter matches everything, which is what the admin list wants; the
@@ -85,18 +99,11 @@ func (q *querier) GetAll(ctx context.Context, f Filter) ([]Payment, error) {
 // the dialect being registered, and the team predicate is easy to get subtly
 // wrong.
 func (q *querier) allDataset(f Filter) *goqu.SelectDataset {
-	ds := q.db.
+	ds := narrow(q.db.
 		From(goqu.T("payment").As("p")).
 		LeftJoin(goqu.T("orders").As("o"), goqu.On(goqu.I("o.orderId").Eq(goqu.I("p.orderForeignKey")))).
 		Select(paymentColumns...).
-		Prepared(true)
-
-	if f.Year != "" {
-		ds = ds.Where(goqu.I("p.year").Eq(string(f.Year)))
-	}
-	if len(f.TeamIDs) > 0 {
-		ds = ds.Where(teamOwned(f.TeamIDs))
-	}
+		Prepared(true), f)
 	// The join can duplicate a payment row only if two orders shared an id,
 	// which the primary key forbids — so no DISTINCT is needed.
 	return ds.Order(goqu.I("p.createdAt").Asc())
@@ -130,33 +137,38 @@ func (q *querier) byReferenceDataset(ref string) *goqu.SelectDataset {
 		Where(goqu.I("p.reference").Eq(ref))
 }
 
-// AmountPaidByTeamID sums the payments actually secured for a team — reserved
-// or received — in the currency's minor unit.
+// AmountPaid sums the payments actually secured — reserved or received — for
+// whatever the filter selects, in the currency's minor unit.
+//
+// Takes a Filter rather than a bare team id, which is the fix for a real bug:
+// the previous AmountPaidByTeamID had no year predicate, and team ids are UUIDs
+// rather than year-scoped, so a team that signed up in two seasons had both
+// seasons' payments summed together. One team in the live data already did, and
+// its 2025 payment would have won it a 2026 team number. Callers must now say
+// which year they mean; leaving Year empty still spans all of them, deliberately,
+// for the admin totals.
 //
 // It returns an error rather than swallowing one as a zero: the caller uses the
 // result to decide whether a team has paid (see assignNumberHandler), so a
 // failed query reported as 0 is a team silently treated as unpaid.
-func (q *querier) AmountPaidByTeamID(ctx context.Context, teamID types.TeamID) (int, error) {
+func (q *querier) AmountPaid(ctx context.Context, f Filter) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
 
 	var paid sql.NullInt64
-	if _, err := q.amountPaidDataset(teamID).ScanValContext(ctx, &paid); err != nil {
+	if _, err := q.amountPaidDataset(f).ScanValContext(ctx, &paid); err != nil {
 		return 0, err
 	}
 	return int(paid.Int64), nil
 }
 
-func (q *querier) amountPaidDataset(teamID types.TeamID) *goqu.SelectDataset {
-	return q.db.
+func (q *querier) amountPaidDataset(f Filter) *goqu.SelectDataset {
+	return narrow(q.db.
 		From(goqu.T("payment").As("p")).
 		LeftJoin(goqu.T("orders").As("o"), goqu.On(goqu.I("o.orderId").Eq(goqu.I("p.orderForeignKey")))).
 		Select(goqu.COALESCE(goqu.SUM(goqu.I("p.amount")), 0)).
 		Prepared(true).
-		Where(
-			goqu.I("p.status").In(string(types.PaymentStatusReserved), string(types.PaymentStatusReceived)),
-			teamOwned([]types.TeamID{teamID}),
-		)
+		Where(goqu.I("p.status").In(string(types.PaymentStatusReserved), string(types.PaymentStatusReceived))), f)
 }
 
 // ConfirmBySecret is deliberately absent. shared-go's copy read a `confirm`
