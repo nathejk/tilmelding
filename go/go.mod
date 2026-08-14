@@ -12,7 +12,7 @@ require (
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/lib/pq v1.12.3
 	github.com/moul/http2curl v1.0.0
-	github.com/nathejk/shared-go v0.0.0-20260807121644-fcd8271b48bf
+	github.com/nathejk/shared-go v0.0.0-20260813144842-d598b7d310ea
 	github.com/tdewolff/minify/v2 v2.23.3
 	github.com/wneessen/go-mail v0.6.2
 )

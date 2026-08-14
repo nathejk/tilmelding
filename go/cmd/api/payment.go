@@ -9,6 +9,7 @@ import (
 
 	"github.com/jrgensen/stream/subject"
 	"github.com/nathejk/shared-go/messages"
+	payments "github.com/nathejk/shared-go/tables/payment"
 	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 	"nathejk.dk/internal/data"
@@ -60,7 +61,7 @@ func (app *application) mobilepayCallbackHandler(w http.ResponseWriter, r *http.
 			"friend":
 			body.MemberID = types.MemberID(payment.OrderForeignKey)
 
-		case "order":
+		case payments.OrderTypeOrder:
 			// New flow: payment.OrderForeignKey is an order.orderId. Look up
 			// the order to recover the owner identity for the receipt event.
 			if o, oerr := app.models.Order.GetByID(r.Context(), payment.OrderForeignKey); oerr == nil {

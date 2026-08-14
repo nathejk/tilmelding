@@ -242,7 +242,12 @@ func main() {
 
 	// Saga that bridges payment events into NathejkOrderPaid, which the
 	// order projector then projects into status=paid on the orders table.
-	orderSaga := order.NewSaga(publisher, tableOrder, tablePayment, 0)
+	//
+	// Scoped to the configured season: earlier seasons are closed, so
+	// re-deriving them on every replay is wasted work, and their payments name a
+	// team rather than an order — which the saga would otherwise have to treat
+	// as an order it cannot find.
+	orderSaga := order.NewSaga(publisher, tableOrder, tablePayment, cfg.year, 0)
 
 	// Startup DDL and seeding are done: from here on a failing statement is
 	// dead-lettered and the consumer loop keeps running instead of exiting.
