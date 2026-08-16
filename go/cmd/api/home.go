@@ -29,7 +29,7 @@ func (app *application) homeHandler(w http.ResponseWriter, r *http.Request) {
 		}{
 			{Label: "Tilmeld spejderpatrulje", URL: "/indskrivning/patrulje", Status: "OPEN"},
 			{Label: "Tilmeld seniorklan", URL: "/indskrivning/klan", Status: klanStatus},
-			{Label: "Tilmeld gøgler", URL: "/indskrivning/badut", Status: "OPEN"},
+			{Label: "Tilmeld gøgler", URL: "/indskrivning/badut", Status: "CLOSED"},
 		},
 	}
 	err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"config": config}, nil)
