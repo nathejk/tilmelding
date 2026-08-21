@@ -8,6 +8,27 @@
 **Shipped:** 2026-08-01
 **Target users:** team leader (patrulje/klan contact person), organizer
 
+> **Amended by PRD 002.** This PRD is correct on money and its seat model still
+> stands. It was, however, silent on *representation*: it specified that a t-shirt
+> size change is free, and the implementation delivered "free" as "absent", so a
+> size changed after payment left no trace in the order at all and fulfillment
+> would ship the old size. PRD 002 ("Size-aware paid offset and zero-sum credit
+> lines", also shared-go PRD 001) fixes that: a free size change is now recorded
+> as a zero-sum pair of lines, `−1` of the size handed back and `+1` of the size
+> now wanted.
+>
+> Two clarifications from PRD 002 apply when reading this document:
+>
+> - **The order is authoritative for size.** The roster is where a size is
+>   *entered*; the order is where it is *true*. Read `ShippableByVariant`, not the
+>   roster, to know which shirt to hand over — and when the two disagree, the
+>   roster is the stale side.
+> - **"as long as the chosen size is in stock"** (§1 below, and the t-shirt
+>   requirements) is **not implemented and never was.** Stock is a single number
+>   per SKU; there is no per-size inventory to check against. Per-size inventory
+>   is a planned feature, and PRD 002 keeps the size on every line so it can be
+>   layered on.
+
 ---
 
 ## 1. Summary
