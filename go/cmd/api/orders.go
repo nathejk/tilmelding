@@ -72,6 +72,90 @@ func (app *application) syncNeeded(ctx context.Context, o *order.Order, desired 
 	return need
 }
 
+// settleIfFree freezes an order that records an agreement costing nothing,
+// so it stops being an editable cart and joins the owner's paid history.
+//
+// The case that needs it: a t-shirt size change on an already-paid shirt is
+// free, and is recorded as a zero-sum pair of lines (−1 of the size handed
+// back, +1 of the size now wanted). No money is owed, so no payment will ever
+// arrive, so the payment saga — which reacts to money — never closes the order.
+// Left open it stays mutable, and the next edit would silently rewrite what an
+// exchange the warehouse may already have acted on said.
+//
+// Only ever called from a save handler, never from a show handler: settling is
+// a response to the user saying "this is what I want", and a GET must not
+// transition anything. It is also deliberately not wired into the member
+// add/update/delete endpoints — those recompute the order as a side effect of a
+// roster edit, which is not the same as agreeing to it.
+//
+// o must be the order as the commands just returned it, i.e. their in-memory
+// view of their own effect. order.Settle re-reads through the projection, which
+// the order projector has not necessarily caught up with, so it can see an
+// order that still looks empty (ErrEmptyOrder) or still looks payable
+// (ErrOrderNotFree) a few milliseconds after the lines were published. Since
+// the conditions were already checked against o, either error means projection
+// lag rather than a real refusal, so both are retried on the same budget as
+// setDerivedLinesAfterCreate.
+//
+// If the budget runs out the unsettled order is returned and the user's save
+// still succeeds — the lines are written, only the freeze is missing, and their
+// next save settles it.
+func (app *application) settleIfFree(ctx context.Context, o *order.Order) *order.Order {
+	if o == nil || o.Status != order.StatusOpen || len(o.Lines) == 0 || o.TotalAmount != 0 {
+		return o
+	}
+	const (
+		attempts = 10
+		backoff  = 50 * time.Millisecond
+	)
+	var lastErr error
+	for i := 0; i < attempts; i++ {
+		settled, err := app.commands.Order.Settle(ctx, o.OrderID)
+		if err == nil {
+			return settled
+		}
+		lastErr = err
+		if !errors.Is(err, order.ErrEmptyOrder) && !errors.Is(err, order.ErrOrderNotFree) {
+			break
+		}
+		time.Sleep(backoff)
+	}
+	log.Printf("Settle %s: %v", o.OrderID, lastErr)
+	return o
+}
+
+// ordersForResponse assembles the {order, paidOrders} pair a save handler
+// replies with, given the order it just wrote.
+//
+// The order it just wrote is used as-is rather than re-read, because the
+// commands return an in-memory projection of their own effect: the read model
+// is updated by a separate consumer and may not reflect the event yet. Re-
+// reading here would sometimes hand the page a pre-save order, which is exactly
+// the race setDerivedLinesAfterCreate exists to absorb.
+//
+// A settled order is not an open order, so it moves to the history slot. It is
+// prepended — ListByOwner is newest-first — and only if the projection has not
+// already picked it up, so it cannot appear twice.
+//
+// Returning paidOrders at all is new for the save endpoints. The frontend has
+// always read the key (`putState` in every view), so until now a save left the
+// paid history showing whatever the last full page load fetched.
+func (app *application) ordersForResponse(ctx context.Context, o *order.Order, ownerType types.TeamType, ownerID string) (*order.Order, []order.Order) {
+	_, paid := app.loadOrders(ctx, ownerType, ownerID)
+	if o == nil {
+		return nil, paid
+	}
+	if o.Status != order.StatusPaid {
+		return o, paid
+	}
+	for _, p := range paid {
+		if p.OrderID == o.OrderID {
+			return nil, paid
+		}
+	}
+	return nil, append([]order.Order{*o}, paid...)
+}
+
 // setDerivedLinesAfterCreate wraps Order.SetDerivedLines with a bounded
 // retry on tables.ErrRecordNotFound. EnsureOpenOrder publishes
 // NathejkOrderCreated through NATS asynchronously; the projector

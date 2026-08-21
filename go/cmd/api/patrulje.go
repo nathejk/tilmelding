@@ -130,6 +130,7 @@ type showPatruljeResponse struct {
 type updatePatruljeResponse struct {
 	Team         *patruljeTeamResponse `json:"team"`
 	Order        *orderResponse        `json:"order"`
+	PaidOrders   []orderResponse       `json:"paidOrders"`
 	PaymentLink  string                `json:"paymentLink"`
 	PaymentError string                `json:"paymentError"`
 }
@@ -417,12 +418,12 @@ func (app *application) assignNumberHandler(w http.ResponseWriter, r *http.Reque
 // updatePatruljeHandler saves team and contact details, then re-derives the order.
 //
 // @Summary      Update a patrulje team
-// @Description  Saves team and contact fields only — members are managed through the dedicated member endpoints, so this can never create or delete a member. Recomputes the open order from the member projection and, when something is due and the team meets the minimum size, issues a payment link.
+// @Description  Saves team and contact fields only — members are managed through the dedicated member endpoints, so this can never create or delete a member. Recomputes the open order from the member projection and, when something is due and the team meets the minimum size, issues a payment link. When settle=true and the resulting order costs nothing but is not empty, the order is frozen into the paid history and `order` comes back null with `paidOrders` refreshed.
 // @Tags         patrulje
 // @Accept       json
 // @Produce      json
 // @Param        id    path  string  true  "Team ID"
-// @Param        body  body  object{team=patrulje.Team,contact=patrulje.Contact}  true  "Team and contact fields"
+// @Param        body  body  object{team=patrulje.Team,contact=patrulje.Contact,settle=bool}  true  "Team and contact fields. Set settle=true on an explicit user save: it allows an order that costs nothing (a free t-shirt size change, recorded as a zero-sum pair of lines) to be frozen into the paid history. Omit it for background recomputes."
 // @Success      200   {object}  updatePatruljeResponse
 // @Failure      400   {object}  object{error=string}
 // @Failure      500   {object}  object{error=string}
@@ -432,6 +433,9 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 	var input struct {
 		Team    patrulje.Team    `json:"team"`
 		Contact patrulje.Contact `json:"contact"`
+		// Settle marks this PUT as the user's explicit save, which is what
+		// allows a free order to be frozen. See updatePersonnelHandler.
+		Settle bool `json:"settle"`
 	}
 	if err := app.ReadJSON(w, r, &input); err != nil {
 		log.Printf("ReadJSON %q", err)
@@ -474,6 +478,10 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	if input.Settle {
+		openOrder = app.settleIfFree(r.Context(), openOrder)
+	}
+
 	due := 0
 	orderID := ""
 	if openOrder != nil {
@@ -513,9 +521,11 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 		})
 	}
 	team, _ := app.models.Patrulje.GetByID(r.Context(), teamID)
+	currentOrder, paidOrders := app.ordersForResponse(r.Context(), openOrder, types.TeamTypePatrulje, string(teamID))
 	resp := updatePatruljeResponse{
 		Team:         newPatruljeTeamResponse(team),
-		Order:        newOrderResponse(openOrder),
+		Order:        newOrderResponse(currentOrder),
+		PaidOrders:   newOrderResponses(paidOrders),
 		PaymentLink:  paymentLink,
 		PaymentError: paymentError,
 	}

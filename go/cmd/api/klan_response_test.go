@@ -113,16 +113,20 @@ func TestRequestSeatResponseWireShape(t *testing.T) {
 	assertJSON(t, resp, want)
 }
 
+// Mirrors the handler, which always sends paidOrders through
+// newOrderResponses: [] rather than null, matching the show response and the
+// frontend's `data.paidOrders ? [...] : []`.
 func TestUpdateKlanResponseWireShape(t *testing.T) {
 	resp := updateKlanResponse{
 		Team:         newKlanTeamResponse(&klan.Klan{ID: "t-1", Name: "Banditterne"}),
 		Order:        nil,
+		PaidOrders:   newOrderResponses(nil),
 		PaymentLink:  "",
 		PaymentError: "en klan skal have mindst 1 seniorer for at kunne betale",
 	}
 	const want = `{` +
 		`"team":{"id":"t-1","status":"","name":"Banditterne","group":"","korps":"","memberCount":0},` +
-		`"order":null,"paymentLink":"",` +
+		`"order":null,"paidOrders":[],"paymentLink":"",` +
 		`"paymentError":"en klan skal have mindst 1 seniorer for at kunne betale"}`
 	assertJSON(t, resp, want)
 }

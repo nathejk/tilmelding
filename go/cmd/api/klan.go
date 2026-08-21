@@ -114,6 +114,7 @@ type requestSeatResponse struct {
 type updateKlanResponse struct {
 	Team         *klanTeamResponse `json:"team"`
 	Order        *orderResponse    `json:"order"`
+	PaidOrders   []orderResponse   `json:"paidOrders"`
 	PaymentLink  string            `json:"paymentLink"`
 	PaymentError string            `json:"paymentError"`
 }
@@ -382,12 +383,12 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 // updateKlanHandler saves the team details and re-prices the open order.
 //
 // @Summary      Update a klan team
-// @Description  Saves the team-level fields only — seniors are managed through the dedicated member endpoints, so this can never create or delete a senior. Re-derives the open order from the senior projection and returns a payment link when there is something due and the team meets the minimum size.
+// @Description  Saves the team-level fields only — seniors are managed through the dedicated member endpoints, so this can never create or delete a senior. Re-derives the open order from the senior projection and returns a payment link when there is something due and the team meets the minimum size. When settle=true and the resulting order costs nothing but is not empty, the order is frozen into the paid history and `order` comes back null with `paidOrders` refreshed.
 // @Tags         klan
 // @Accept       json
 // @Produce      json
 // @Param        id    path  string                    true  "Team ID"
-// @Param        body  body  object{team=klan.Team}    true  "Team fields"
+// @Param        body  body  object{team=klan.Team,settle=bool}    true  "Team fields. Set settle=true on an explicit user save: it allows an order that costs nothing (a free t-shirt size change, recorded as a zero-sum pair of lines) to be frozen into the paid history. Omit it for background recomputes."
 // @Success      200   {object}  updateKlanResponse
 // @Failure      400   {object}  object{error=string}
 // @Failure      500   {object}  object{error=string}
@@ -396,6 +397,9 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 	teamID := types.TeamID(app.ReadNamedParam(r, "id"))
 	var input struct {
 		Team klan.Team `json:"team"`
+		// Settle marks this PUT as the user's explicit save, which is what
+		// allows a free order to be frozen. See updatePersonnelHandler.
+		Settle bool `json:"settle"`
 	}
 	if err := app.ReadJSON(w, r, &input); err != nil {
 		log.Printf("ReadJSON %q", err)
@@ -435,6 +439,10 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		} else {
 			log.Printf("setDerivedLinesAfterCreate %s: %v", openOrder.OrderID, err)
 		}
+	}
+
+	if input.Settle {
+		openOrder = app.settleIfFree(r.Context(), openOrder)
 	}
 
 	due := 0
@@ -477,9 +485,11 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		})
 	}
 	team, _ := app.models.Klan.GetByID(r.Context(), teamID)
+	currentOrder, paidOrders := app.ordersForResponse(r.Context(), openOrder, types.TeamTypeKlan, string(teamID))
 	err = app.WriteJSON(w, http.StatusOK, updateKlanResponse{
 		Team:         newKlanTeamResponse(team),
-		Order:        newOrderResponse(openOrder),
+		Order:        newOrderResponse(currentOrder),
+		PaidOrders:   newOrderResponses(paidOrders),
 		PaymentLink:  paymentLink,
 		PaymentError: paymentError,
 	}, nil)

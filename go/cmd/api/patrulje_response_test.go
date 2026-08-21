@@ -109,16 +109,20 @@ func TestShowPatruljeResponseNilAndEmptySemantics(t *testing.T) {
 	assertJSON(t, resp, want)
 }
 
+// Mirrors the handler, which always sends paidOrders through
+// newOrderResponses: [] rather than null, matching the show response and the
+// frontend's `data.paidOrders ? [...] : []`.
 func TestUpdatePatruljeResponseWireShape(t *testing.T) {
 	resp := updatePatruljeResponse{
 		Team:         newPatruljeTeamResponse(&patrulje.Patrulje{TeamID: "t-1", Name: "Ulvene"}),
 		Order:        nil,
+		PaidOrders:   newOrderResponses(nil),
 		PaymentLink:  "",
 		PaymentError: "en patrulje skal have mindst 3 spejdere for at kunne betale",
 	}
 	const want = `{` +
 		`"team":{"id":"t-1","number":"","status":"","name":"Ulvene","group":"","korps":"","liga":"","memberCount":0},` +
-		`"order":null,"paymentLink":"",` +
+		`"order":null,"paidOrders":[],"paymentLink":"",` +
 		`"paymentError":"en patrulje skal have mindst 3 spejdere for at kunne betale"}`
 	assertJSON(t, resp, want)
 }

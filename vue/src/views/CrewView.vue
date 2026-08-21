@@ -106,7 +106,7 @@ const mobilepay = ref('')
 
 const save = async () => {
   try {
-    const data = await putState()
+    const data = await putState({ settle: true })
     if (data.paymentLink && data.paymentLink != '') {
       location.href = data.paymentLink
     } else {
@@ -120,9 +120,9 @@ const save = async () => {
 // Shared HTTP PUT helper used by both syncOrder (silent background save
 // when the t-shirt/section changes) and save (final "Gem" button which
 // redirects to MobilePay if there's anything to pay).
-const putState = async () => {
+const putState = async ({ settle = false } = {}) => {
   const headers = { 'Content-Type': 'application/json' }
-  const body = JSON.stringify({ member: staffer.value })
+  const body = JSON.stringify({ member: staffer.value, settle })
   const response = await fetch('/api/crew/' + props.userId, {
     method: 'PUT',
     body: body,
@@ -133,7 +133,9 @@ const putState = async () => {
   }
   const data = await response.json()
   if (data.member) staffer.value = data.member
-  if (data.order) order.value = data.order
+  // `|| null` rather than a truthiness guard: order:null is now a real outcome
+  // — settling a free change moves the order to the paid history.
+  order.value = data.order || null
   if (data.paidOrders) paidOrders.value = [...data.paidOrders]
   return data
 }

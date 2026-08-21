@@ -110,6 +110,10 @@ func (app *application) updateCrewHandler(w http.ResponseWriter, r *http.Request
 	}
 	var input struct {
 		Member crewMemberView `json:"member"`
+		// Settle marks this PUT as the user's explicit save rather than the
+		// silent background sync the t-shirt picker fires on every selection.
+		// See updatePersonnelHandler.
+		Settle bool `json:"settle"`
 	}
 	if err := app.ReadJSON(w, r, &input); err != nil {
 		app.BadRequestResponse(w, r, err)
@@ -164,6 +168,10 @@ func (app *application) updateCrewHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if input.Settle {
+		o = app.settleIfFree(ctx, o)
+	}
+
 	paymentLink := ""
 	if o.DueAmount > 0 {
 		amount := payments.Amount{Value: int64(o.DueAmount), Currency: types.CurrencyDKK}
@@ -184,9 +192,11 @@ func (app *application) updateCrewHandler(w http.ResponseWriter, r *http.Request
 		app.ServerErrorResponse(w, r, err)
 		return
 	}
+	openOrder, paidOrders := app.ordersForResponse(ctx, o, crewOwnerType, string(userID))
 	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{
 		"member":      crewMemberToView(updated),
-		"order":       o,
+		"order":       openOrder,
+		"paidOrders":  paidOrders,
 		"paymentLink": paymentLink,
 	}, nil)
 	if err != nil {

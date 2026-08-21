@@ -136,7 +136,7 @@ const mobilepay = ref('')
 
 const save = async () => {
   try {
-    const data = await putState()
+    const data = await putState({ settle: true })
     if (data.paymentLink && data.paymentLink != '') {
       location.href = data.paymentLink
     } else {
@@ -150,9 +150,15 @@ const save = async () => {
 // putState is the shared HTTP PUT helper used by both syncOrder (silent
 // background save when the t-shirt size changes) and save (the final
 // "Gem" button which redirects to MobilePay if there's anything to pay).
-const putState = async () => {
+//
+// `settle` is sent only by save. It tells the server this is the user
+// committing, which is what allows an order that costs nothing — a free
+// t-shirt size change, recorded as a zero-sum pair of lines — to be frozen
+// into the paid history. The background sync must not settle: browsing
+// through sizes would freeze each one in passing. See PRD 002.
+const putState = async ({ settle = false } = {}) => {
   const headers = { 'Content-Type': 'application/json' }
-  const body = JSON.stringify({ person: staffer.value })
+  const body = JSON.stringify({ person: staffer.value, settle })
   const response = await fetch('/api/personnel/' + props.userId, {
     method: 'PUT',
     body: body,
@@ -163,7 +169,11 @@ const putState = async () => {
   }
   const data = await response.json()
   if (data.person) staffer.value = data.person
-  if (data.order) order.value = data.order
+  // `|| null` rather than a truthiness guard: the server sends order:null when
+  // there is no open order, which is now a real outcome — settling a free
+  // change moves it to the paid history. A guard would keep the frozen order
+  // in the cart.
+  order.value = data.order || null
   if (data.paidOrders) paidOrders.value = [...data.paidOrders]
   return data
 }

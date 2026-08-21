@@ -145,7 +145,7 @@ const requestSeat = async () => {
 const save = async () => {
   paymentError.value = ''
   try {
-    const data = await putState()
+    const data = await putState({ settle: true })
     if (data.team && data.team.status == 'HOLD') {
       router.push({ name: 'onhold' })
       return
@@ -167,13 +167,19 @@ const save = async () => {
 // putState saves the team + contact fields via the team PUT and returns a
 // payment link (or paymentError when payment is blocked). Member add/edit/
 // delete no longer go through here — they use the dedicated member endpoints.
-const putState = async () => {
+//
+// `settle` tells the server this is the user committing, which is what allows
+// an order that costs nothing — a free t-shirt size change, recorded as a
+// zero-sum pair of lines — to be frozen into the paid history. Only save passes
+// it; a background recompute must not settle. See PRD 002.
+const putState = async ({ settle = false } = {}) => {
   team.value.memberCount = Math.floor(team.value.memberCount)
   team.value.diet = team.value.vegitarian ? 'vegetar' : ''
   const headers = { 'Content-Type': 'application/json' }
   const body = JSON.stringify({
     team: team.value,
-    contact: contact.value
+    contact: contact.value,
+    settle
   })
   const response = await fetch('/api/klan/' + props.teamId, {
     method: 'PUT',
@@ -185,7 +191,9 @@ const putState = async () => {
   }
   const data = await response.json()
   if (data.team) team.value = data.team
-  if (data.order) order.value = data.order
+  // `|| null` rather than a truthiness guard: order:null is now a real outcome
+  // — settling a free change moves the order to the paid history.
+  order.value = data.order || null
   if (data.paidOrders) paidOrders.value = [...data.paidOrders]
   return data
 }

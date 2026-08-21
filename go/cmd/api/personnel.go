@@ -64,6 +64,13 @@ func (app *application) updatePersonnelHandler(w http.ResponseWriter, r *http.Re
 	userID := types.UserID(app.ReadNamedParam(r, "id"))
 	var input struct {
 		Person personnel.Person `json:"person"`
+		// Settle marks this PUT as the user's explicit save rather than the
+		// silent background sync the t-shirt picker fires on every selection.
+		// Only an explicit save may freeze a free order — otherwise browsing
+		// sizes would settle each one in passing and litter the paid history
+		// with exchanges the user never committed to. Absent means "just
+		// recompute".
+		Settle bool `json:"settle"`
 	}
 	if err := app.ReadJSON(w, r, &input); err != nil {
 		log.Printf("ReadJSON %q", err)
@@ -94,13 +101,25 @@ func (app *application) updatePersonnelHandler(w http.ResponseWriter, r *http.Re
 		app.ServerErrorResponse(w, r, err)
 		return
 	}
-	o, err = app.commands.Order.SetDerivedLines(r.Context(), o.OrderID, desired)
+	// setDerivedLinesAfterCreate, not SetDerivedLines: EnsureOpenOrder may have
+	// just created this order, and SetDerivedLines reads it back through the
+	// projection, which the order projector has not necessarily written yet.
+	// Settling makes that the common path rather than a rare one — a settled
+	// order is no longer open, so the next edit always creates a fresh one — and
+	// without the retry the user's save fails with a 400 they did nothing to
+	// deserve. The klan, patrulje and crew handlers already go through the
+	// wrapper.
+	o, err = app.setDerivedLinesAfterCreate(r.Context(), o.OrderID, desired)
 	if err != nil {
-		log.Printf("SetDerivedLines %q", err)
+		log.Printf("setDerivedLinesAfterCreate %s: %v", o.OrderID, err)
 		app.BadRequestResponse(w, r, err)
 		return
 	}
 	log.Printf("personnel order %s total=%d paid=%d due=%d", o.OrderID, o.TotalAmount, o.PaidAmount, o.DueAmount)
+
+	if input.Settle {
+		o = app.settleIfFree(r.Context(), o)
+	}
 
 	paymentLink := ""
 	if o.DueAmount > 0 {
@@ -129,7 +148,8 @@ func (app *application) updatePersonnelHandler(w http.ResponseWriter, r *http.Re
 		})
 	}
 	updated, _ := app.models.Personnel.GetByID(ctx, userID)
-	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"person": updated, "order": o, "paymentLink": paymentLink}, nil)
+	openOrder, paidOrders := app.ordersForResponse(r.Context(), o, personnelOrderOwnerType(person), string(userID))
+	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"person": updated, "order": openOrder, "paidOrders": paidOrders, "paymentLink": paymentLink}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
