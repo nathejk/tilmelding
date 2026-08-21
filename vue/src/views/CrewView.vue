@@ -51,8 +51,16 @@ const payableAmount = computed(() => orderDueDkk(order.value))
 // orderStatus is "OPEN" or "PAID" — see order.MarshalJSON on the
 // backend.
 const orderStatus = computed(() => (order.value && order.value.status) || 'OPEN')
-// showOpenOrder gates the open-order block. Hidden when nothing's due.
-const showOpenOrder = computed(() => payableAmount.value > 0)
+// showOpenOrder gates the open-order block: the status badge, the itemised
+// lines and the "I alt" total. Shown whenever the open order has any lines,
+// not only when money is due — a free t-shirt size change produces a zero-sum
+// pair of lines (−1 of the size handed back, +1 of the size now wanted) with
+// nothing to pay, and gating on the amount due would hide exactly the rows
+// that tell the user their new size was registered. See PRD 002.
+const showOpenOrder = computed(() => payableAmount.value > 0 || expenses.value.length > 0)
+// showPayable gates the "At betale" total and the no-refund notice, which are
+// about owing money rather than about having an order.
+const showPayable = computed(() => payableAmount.value > 0)
 // showPaymentsSection gates the entire Betalinger fieldset.
 const showPaymentsSection = computed(() => showOpenOrder.value || paidOrders.value.length > 0)
 
@@ -357,14 +365,14 @@ const tshirtSizeLabel = (slug) => {
           </template>
           <div class="col-start-1 col-span-3 font-bold">Indbetalt</div>
           <div class="col-end-7 font-bold text-right">{{ paymentsTotal }},-</div>
-          <template v-if="showOpenOrder">
+          <template v-if="showPayable">
             <Divider class="col-start-1 col-end-7" />
             <div class="col-start-1 col-span-5 font-bold">At betale</div>
             <div class="font-bold text-right">{{ payableAmount }},-</div>
           </template>
           <Divider class="col-end-7" />
         </div>
-        <p v-if="showOpenOrder">
+        <p v-if="showPayable">
           Deltagerbetalingen bliver ikke refunderet ved afbud uanset grund - vi kan have brugt
           pengene ud fra en forventning om, at du kommer.
         </p>

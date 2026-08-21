@@ -194,7 +194,7 @@ func newKlanMemberResponse(s klan.Senior) klanMemberResponse {
 // showKlanHandler returns everything the klan page needs in one call.
 //
 // @Summary      Show a klan team
-// @Description  Returns the server-side config (member bounds, prices, corps and t-shirt options), the team, its senior roster, the open order and any paid orders. Re-derives the open order from the senior projection on every call, so the page is self-healing against drift.
+// @Description  Returns the server-side config (member bounds, prices, corps and t-shirt options), the team, its senior roster, the open order and any paid orders. Re-derives the open order from the senior projection on every call, so the page is self-healing against drift. Order line quantities and lineTotals may be negative: a free t-shirt size change is recorded as a zero-sum pair of lines (one negative for the size handed back, one positive for the size now wanted), so clients must sum them rather than assume positive values.
 // @Tags         klan
 // @Produce      json
 // @Param        id   path      string  true  "Team ID"
@@ -240,7 +240,7 @@ func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) 
 			openOrder = o
 		}
 	}
-	if openOrder != nil && app.derivedLinesNeedSync(r.Context(), openOrder, desired) {
+	if openOrder != nil && app.syncNeeded(r.Context(), openOrder, desired) {
 		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder.OrderID, desired); err == nil {
 			openOrder = o
 		} else {
@@ -429,7 +429,7 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 			openOrder = o
 		}
 	}
-	if openOrder != nil && app.derivedLinesNeedSync(r.Context(), openOrder, desired) {
+	if openOrder != nil && app.syncNeeded(r.Context(), openOrder, desired) {
 		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder.OrderID, desired); err == nil {
 			openOrder = o
 		} else {
@@ -692,9 +692,10 @@ func derivedLinesForKlanSeniore(members []*senior.Senior) []order.DesiredLine {
 	return lines
 }
 
-// klanLinesNeedSync was the per-handler diff helper; it has moved to
-// orders.go as derivedLinesNeedSync, shared with the patrulje and
-// personnel show handlers.
+// klanLinesNeedSync was the per-handler diff helper; the comparison now
+// lives in shared-go as order.Commands.SyncNeeded, reached through
+// app.syncNeeded in orders.go and shared with the patrulje, crew and
+// personnel handlers.
 
 // reservationLineID is the deterministic LineID used for the placeholder
 // klan participation lines created by requestSeatHandler before any

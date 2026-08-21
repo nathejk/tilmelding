@@ -38,7 +38,7 @@ func (app *application) showPersonnelHandler(w http.ResponseWriter, r *http.Requ
 	// order and the projection (e.g. a t-shirt size edited out of band).
 	// Also creates the order on the first visit for users who signed up
 	// before the order system was introduced. SetDerivedLines is
-	// idempotent for unchanged input — see derivedLinesNeedSync.
+	// idempotent for unchanged input — see syncNeeded.
 	openOrder, paidOrders := app.loadOrders(r.Context(), personnelOrderOwnerType(person), string(userID))
 	desired := derivedLinesForPersonnel(person, personnel.Person{TshirtSize: person.TshirtSize})
 	if openOrder == nil && len(desired) > 0 {
@@ -46,7 +46,7 @@ func (app *application) showPersonnelHandler(w http.ResponseWriter, r *http.Requ
 			openOrder = o
 		}
 	}
-	if openOrder != nil && app.derivedLinesNeedSync(r.Context(), openOrder, desired) {
+	if openOrder != nil && app.syncNeeded(r.Context(), openOrder, desired) {
 		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder.OrderID, desired); err == nil {
 			openOrder = o
 		} else {

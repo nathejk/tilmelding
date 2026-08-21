@@ -95,6 +95,99 @@ func TestPaymentLinesFromOrderEmptyCases(t *testing.T) {
 	}
 }
 
+// A free t-shirt size change is stored as a credit/charge pair. Both halves
+// belong on the order — it is the fulfillment record — but neither belongs on
+// the receipt, so the pair nets out entirely and there is nothing left to show.
+func TestPaymentLinesFromOrderNetsOutAFreeSizeChange(t *testing.T) {
+	o := &order.Order{Lines: []order.Line{
+		{ProductSKU: "tshirt.adult", ProductName: "T-shirt", UnitPrice: 17500, Quantity: -1, LineTotal: -17500, Attributes: map[string]any{"size": "xxl"}},
+		{ProductSKU: "tshirt.adult", ProductName: "T-shirt", UnitPrice: 17500, Quantity: 1, LineTotal: 17500, Attributes: map[string]any{"size": "3xl"}},
+	}}
+
+	if got := paymentLinesFromOrder(o); got != nil {
+		t.Errorf("a wholly zero-sum order should give no receipt, got %+v", got)
+	}
+}
+
+// The case that actually reaches a payment provider: one size changed for free
+// *and* one genuinely new shirt bought. The credit must cancel a paid-for unit
+// rather than the new one's price, leaving a receipt whose sum is still the
+// order's total — which is what Charge.linesReconcile checks.
+func TestPaymentLinesFromOrderKeepsTheChargeBesideACredit(t *testing.T) {
+	o := &order.Order{Lines: []order.Line{
+		{ProductSKU: "tshirt.adult", ProductName: "T-shirt", UnitPrice: 17500, Quantity: 1, LineTotal: 17500, Attributes: map[string]any{"size": "m"}},
+		{ProductSKU: "tshirt.adult", ProductName: "T-shirt", UnitPrice: 17500, Quantity: -1, LineTotal: -17500, Attributes: map[string]any{"size": "xl"}},
+		{ProductSKU: "tshirt.adult", ProductName: "T-shirt", UnitPrice: 17500, Quantity: 1, LineTotal: 17500, Attributes: map[string]any{"size": "3xl"}},
+	}}
+
+	got := paymentLinesFromOrder(o)
+
+	if len(got) != 1 {
+		t.Fatalf("got %d rows, want 1: %+v", len(got), got)
+	}
+	if got[0].UnitCount != 1 || got[0].Amount != 17500 {
+		t.Errorf("row = %+v, want 1 unit at 17500", got[0])
+	}
+	for _, l := range got {
+		if l.UnitCount < 0 || l.Amount < 0 {
+			t.Errorf("receipt still carries a negative row: %+v", l)
+		}
+	}
+	assertReceiptReconciles(t, o, got)
+}
+
+// A credit may only cancel units of its own product. A reclaimed t-shirt must
+// never discount a participation seat.
+func TestPaymentLinesFromOrderCreditDoesNotCrossSKUs(t *testing.T) {
+	o := &order.Order{Lines: []order.Line{
+		{ProductSKU: "participation.patrulje", ProductName: "Patrulje-deltagelse", UnitPrice: 25000, Quantity: 1, LineTotal: 25000},
+		{ProductSKU: "tshirt.adult", ProductName: "T-shirt", UnitPrice: 17500, Quantity: 1, LineTotal: 17500, Attributes: map[string]any{"size": "m"}},
+		{ProductSKU: "tshirt.adult", ProductName: "T-shirt", UnitPrice: 17500, Quantity: -1, LineTotal: -17500, Attributes: map[string]any{"size": "xl"}},
+	}}
+
+	got := paymentLinesFromOrder(o)
+
+	want := []payments.Line{{Label: "Patrulje-deltagelse", UnitCount: 1, UnitPrice: 25000, Amount: 25000}}
+	if len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+	assertReceiptReconciles(t, o, got)
+}
+
+// An unpaired credit means the pairing invariant was broken upstream. Rather
+// than quietly shipping a receipt that disagrees with the amount charged, the
+// rows are passed through untouched: the provider rejecting a negative line is
+// a failure someone can see.
+func TestPaymentLinesFromOrderPassesThroughAnUnpairedCredit(t *testing.T) {
+	o := &order.Order{Lines: []order.Line{
+		{ProductSKU: "tshirt.adult", ProductName: "T-shirt", UnitPrice: 17500, Quantity: -1, LineTotal: -17500, Attributes: map[string]any{"size": "xl"}},
+	}}
+
+	got := paymentLinesFromOrder(o)
+
+	if len(got) != 1 {
+		t.Fatalf("got %d rows, want the unfiltered 1: %+v", len(got), got)
+	}
+	assertReceiptReconciles(t, o, got)
+}
+
+// assertReceiptReconciles is the invariant netting must never break: the rows
+// sum to the order's total, so a receipt that reconciled before still does.
+func assertReceiptReconciles(t *testing.T, o *order.Order, lines []payments.Line) {
+	t.Helper()
+	total := 0
+	for _, l := range o.Lines {
+		total += l.LineTotal
+	}
+	sum := 0
+	for _, l := range lines {
+		sum += l.Amount
+	}
+	if sum != total {
+		t.Errorf("receipt sums to %d, order total is %d", sum, total)
+	}
+}
+
 func TestReceiptLabelSizeHandling(t *testing.T) {
 	for _, tc := range []struct {
 		name string

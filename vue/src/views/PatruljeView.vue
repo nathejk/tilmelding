@@ -43,11 +43,17 @@ const payableAmount = computed(() => orderDueDkk(order.value))
 // backend. Used by the template to render a status badge and to disable
 // the form once the order is locked.
 const orderStatus = computed(() => (order.value && order.value.status) || 'OPEN')
-// showOpenOrder gates the open-order block (status badge, expense
-// rows, "I alt", "At betale", refund text). When the open order has
-// nothing due there's no actionable content there — only the paid
-// history (if any) is worth showing.
-const showOpenOrder = computed(() => payableAmount.value > 0)
+// showOpenOrder gates the open-order block: the status badge, the expense rows
+// and "I alt". Shown whenever the open order has any lines, not only when money
+// is due. An earlier version gated on the amount due, on the reasoning that an
+// order with nothing due holds no actionable content — no longer true: a free
+// t-shirt size change is recorded as a zero-sum pair of lines (−1 of the size
+// handed back, +1 of the size now wanted) that owes nothing but is the only
+// on-page confirmation the new size was registered. See PRD 002.
+const showOpenOrder = computed(() => payableAmount.value > 0 || expenses.value.length > 0)
+// showPayable gates the "At betale" total and the no-refund notice, which are
+// about owing money rather than about having an order.
+const showPayable = computed(() => payableAmount.value > 0)
 // showPaymentsSection gates the entire Betalinger fieldset: render it
 // when there's either a current bill (open order with due > 0) or any
 // historical paid orders to display.
@@ -529,14 +535,14 @@ const birthdayLabel = (value) => {
           </template>
           <div class="col-start-1 col-span-3 font-bold">Indbetalt i alt</div>
           <div class="col-end-7 font-bold text-right">{{ paymentsTotal }},-</div>
-          <template v-if="showOpenOrder">
+          <template v-if="showPayable">
             <Divider class="col-start-1 col-end-7" />
             <div class="col-start-1 col-span-5 font-bold">At betale</div>
             <div class="font-bold text-right">{{ payableAmount }},-</div>
           </template>
           <Divider class="col-end-7" />
         </div>
-        <p v-if="showOpenOrder">
+        <p v-if="showPayable">
           Deltagerbetalingen bliver ikke refunderet ved afbud uanset grund - vi kan have brugt
           pengene ud fra en forventning om, at du kommer. Det er dog helt frem til ganske kort før
           løbsstart muligt at skifte ud blandt deltagerne. Betalingen bliver naturligvis refunderet,

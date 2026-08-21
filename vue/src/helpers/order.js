@@ -21,6 +21,12 @@
  *     ...
  *   }
  *
+ * `quantity` and `lineTotal` are non-zero and may be **negative**: a free
+ * t-shirt size change on an already-paid shirt is recorded as a pair of lines,
+ * one negative for the size handed back and one positive for the size now
+ * wanted, summing to zero (see PRD 002). Sum these fields rather than assuming
+ * they are positive.
+ *
  * `order` is null when the team / person hasn't saved any state yet (the
  * server returns it as null in that case). All helpers handle null safely.
  */

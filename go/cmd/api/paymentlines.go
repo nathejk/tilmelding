@@ -24,6 +24,9 @@ import (
 // Aggregation preserves the sum, so a reconciled set stays reconciled — see
 // Charge.linesReconcile.
 //
+// Zero-sum credit/charge pairs are netted out before the receipt is built — see
+// netOutCredits.
+//
 // Returns nil for a nil or empty order rather than an empty slice, so callers
 // pass "no receipt" rather than "a receipt of nothing".
 func paymentLinesFromOrder(o *order.Order) []payments.Line {
@@ -35,7 +38,7 @@ func paymentLinesFromOrder(o *order.Order) []payments.Line {
 	// the order itself does, not in map-iteration order, or two runs of the same
 	// order produce different receipts.
 	var keys []string
-	byKey := map[string]*payments.Line{}
+	byKey := map[string]*receiptGroup{}
 
 	for _, l := range o.Lines {
 		key := l.ProductSKU
@@ -43,22 +46,108 @@ func paymentLinesFromOrder(o *order.Order) []payments.Line {
 			key += "|" + size
 		}
 		if existing, ok := byKey[key]; ok {
-			existing.UnitCount += l.Quantity
-			existing.Amount += l.LineTotal
+			existing.line.UnitCount += l.Quantity
+			existing.line.Amount += l.LineTotal
 			continue
 		}
 		keys = append(keys, key)
-		byKey[key] = &payments.Line{
-			Label:     receiptLabel(l),
-			UnitCount: l.Quantity,
-			UnitPrice: l.UnitPrice,
-			Amount:    l.LineTotal,
+		byKey[key] = &receiptGroup{
+			sku: l.ProductSKU,
+			line: payments.Line{
+				Label:     receiptLabel(l),
+				UnitCount: l.Quantity,
+				UnitPrice: l.UnitPrice,
+				Amount:    l.LineTotal,
+			},
 		}
 	}
 
-	lines := make([]payments.Line, 0, len(keys))
+	groups := make([]receiptGroup, 0, len(keys))
 	for _, k := range keys {
-		lines = append(lines, *byKey[k])
+		groups = append(groups, *byKey[k])
+	}
+	return netOutCredits(groups)
+}
+
+// receiptGroup is one aggregated receipt row plus the SKU it came from. The SKU
+// is not on payments.Line (a receipt row is just words and numbers to the payer)
+// but netOutCredits needs it: a credit may only cancel units of the same product.
+type receiptGroup struct {
+	sku  string
+	line payments.Line
+}
+
+// netOutCredits removes zero-sum credit/charge pairs from the receipt.
+//
+// A free t-shirt size change is recorded on the open order as a pair of derived
+// lines — one negative for the size handed back, one positive for the size now
+// wanted (see shared-go PRD 001). Both belong on the order, which is the
+// fulfillment record. Neither belongs on the receipt: the payment provider's
+// line-item API is not expected to accept a negative quantity, and a payer shown
+// a credit they will never receive is being misinformed.
+//
+// The pair sums to zero, so dropping *both* halves leaves the total untouched and
+// a reconciled set stays reconciled. Dropping only one half would not, which is
+// why the cancellation is by unit count per SKU rather than by simply filtering
+// negative rows: for each credited unit, one paid-for unit of the same product is
+// removed too. Both halves carry the same catalogue unit price, so the amounts
+// cancel exactly.
+//
+// Which positive row absorbs a credit is not recoverable from the aggregated rows
+// — a credit records the size returned, not the charge it was paired with — so
+// rows are consumed in receipt order. Any choice yields the same total; only the
+// surviving row's size label differs.
+//
+// If credits remain unmatched after every positive row of that SKU is exhausted,
+// the pairing invariant has been broken upstream. The receipt is then returned
+// unfiltered: a receipt the provider may reject is a visible failure, while one
+// that silently disagrees with the amount charged is not.
+func netOutCredits(groups []receiptGroup) []payments.Line {
+	cancel := map[string]int{}
+	for _, g := range groups {
+		if g.line.UnitCount < 0 {
+			cancel[g.sku] -= g.line.UnitCount
+		}
+	}
+	if len(cancel) == 0 {
+		return receiptLines(groups)
+	}
+
+	kept := make([]receiptGroup, 0, len(groups))
+	for _, g := range groups {
+		if g.line.UnitCount < 0 {
+			continue // the credit half of a pair
+		}
+		if n := cancel[g.sku]; n > 0 {
+			take := min(n, g.line.UnitCount)
+			cancel[g.sku] -= take
+			g.line.UnitCount -= take
+			g.line.Amount -= take * g.line.UnitPrice
+			if g.line.UnitCount == 0 {
+				continue
+			}
+		}
+		kept = append(kept, g)
+	}
+
+	for _, n := range cancel {
+		if n > 0 {
+			return receiptLines(groups) // unpaired credit; keep the sum honest
+		}
+	}
+	if len(kept) == 0 {
+		return nil
+	}
+	return receiptLines(kept)
+}
+
+func receiptLines(groups []receiptGroup) []payments.Line {
+	if len(groups) == 0 {
+		return nil
+	}
+	lines := make([]payments.Line, 0, len(groups))
+	for _, g := range groups {
+		lines = append(lines, g.line)
 	}
 	return lines
 }

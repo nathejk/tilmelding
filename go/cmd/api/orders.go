@@ -6,7 +6,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/nathejk/shared-go/messages"
 	"github.com/nathejk/shared-go/tables"
 	"github.com/nathejk/shared-go/tables/order"
 	"github.com/nathejk/shared-go/types"
@@ -45,58 +44,32 @@ func (app *application) loadOrders(ctx context.Context, ownerType types.TeamType
 	return open, paid
 }
 
-// derivedLinesNeedSync reports whether the open order's derived lines
-// diverge from the desired set computed off the current owner projection
-// (members for klan/patrulje, the person record for badut/crew). Returns
-// true when the show handler should call SetDerivedLines to bring them
-// back into agreement, false when the order already matches — in which
-// case the GET stays a pure read with no event publication.
+// syncNeeded asks the order entity whether the open order's derived lines
+// already say what the desired set (computed off the current owner
+// projection — members for klan/patrulje, the person record for
+// badut/crew) implies. True means the show handler should call
+// SetDerivedLines; false keeps the GET a pure read with no event
+// publication.
 //
-// It applies the same paid-unit offset that SetDerivedLines will apply
-// (via order.ApplyPaidOffset), so the comparison is against the set that
-// would actually be persisted. Without this an order still carrying
-// already-paid units (e.g. participations paid under old member IDs) would
-// look "in sync" and never self-heal to the count-based bill.
+// The comparison deliberately lives in shared-go rather than here. It has
+// to apply the same paid-unit offset SetDerivedLines applies, and that
+// offset now depends on per-variant paid counts and on catalogue size
+// order; a second implementation on this side would drift from the
+// command and republish the order's lines on every page load. Commands.
+// SyncNeeded and SetDerivedLines share one offset function, so they
+// cannot disagree. See shared-go PRD 001 §8.1a (this repo's PRD 002).
 //
-// The comparison ignores manual lines (only derived lines are recomputed)
-// and is keyed on (productSku, memberId, t-shirt size) — the same
-// dimensions every derivedLinesFor* helper varies on. Quantity drift would
-// not be detected, but the read-path helpers always emit quantity=1 so
-// any difference there indicates a manual edit we shouldn't clobber.
-func (app *application) derivedLinesNeedSync(ctx context.Context, o *order.Order, desired []order.DesiredLine) bool {
-	paidQty, err := app.models.Order.PaidQuantityBySKU(ctx, app.config.year, o.OwnerType, o.OwnerID)
+// An error is logged and reported as "no sync needed": it means the paid
+// counts or the catalogue could not be read, in which case SetDerivedLines
+// would fail on the same read anyway. Rendering the order as it stands is
+// better than writing lines computed from a half-known offset.
+func (app *application) syncNeeded(ctx context.Context, o *order.Order, desired []order.DesiredLine) bool {
+	need, err := app.commands.Order.SyncNeeded(ctx, o, desired)
 	if err != nil {
-		log.Printf("PaidQuantityBySKU %q", err)
+		log.Printf("SyncNeeded %s: %v", o.OrderID, err)
+		return false
 	}
-	desired = order.ApplyPaidOffset(desired, paidQty)
-
-	type key struct {
-		sku      string
-		memberID string
-		size     string
-	}
-	current := map[key]bool{}
-	for _, l := range o.Lines {
-		if l.Origin != string(messages.LineOriginDerived) {
-			continue
-		}
-		size, _ := l.Attributes["size"].(string)
-		current[key{l.ProductSKU, l.MemberID, size}] = true
-	}
-	want := map[key]bool{}
-	for _, d := range desired {
-		size, _ := d.Attributes["size"].(string)
-		want[key{d.ProductSKU, d.MemberID, size}] = true
-	}
-	if len(current) != len(want) {
-		return true
-	}
-	for k := range want {
-		if !current[k] {
-			return true
-		}
-	}
-	return false
+	return need
 }
 
 // setDerivedLinesAfterCreate wraps Order.SetDerivedLines with a bounded

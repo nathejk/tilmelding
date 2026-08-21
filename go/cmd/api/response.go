@@ -58,9 +58,16 @@ type orderLineResponse struct {
 	ProductName string `json:"productName"`
 	MemberID    string `json:"memberId"`
 	UnitPrice   int    `json:"unitPrice"`
-	Quantity    int    `json:"quantity"`
-	LineTotal   int    `json:"lineTotal"`
-	Origin      string `json:"origin"`
+	// Quantity and LineTotal are non-zero and may be **negative**. A t-shirt
+	// size change on an already-paid shirt is free but not invisible: it is
+	// recorded as a pair of lines, one negative for the size handed back and
+	// one positive for the size now wanted, which sum to zero. Clients must
+	// therefore sum these fields rather than assume they are positive — see
+	// shared-go PRD 001 (this repo's PRD 002). UnitPrice stays positive; the
+	// sign lives on the quantity.
+	Quantity  int    `json:"quantity"`
+	LineTotal int    `json:"lineTotal"`
+	Origin    string `json:"origin"`
 	// Omitted entirely when the line carries no attributes, matching the
 	// previous `map[string]any` with omitempty.
 	Attributes *orderLineAttributesResponse `json:"attributes,omitempty"`
