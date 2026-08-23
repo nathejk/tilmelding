@@ -48,6 +48,17 @@ var (
 	crewParticipationSKU = "participation.crew"
 )
 
+// showCrewHandler returns everything the crew page needs in one call.
+//
+// @Summary      Show a crew member
+// @Description  Returns the server-side config (prices, t-shirt options and the SKUs closed for sale), the first-level sections, the crew member, the open order and any paid orders. Re-derives the open order from the crew member record on every call, so the page is self-healing against drift. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered.
+// @Tags         crew
+// @Produce      json
+// @Param        id   path      string  true  "Crew member user ID"
+// @Success      200  {object}  object{config=TeamConfig,sections=[]object,member=crewMemberView,order=order.Order,paidOrders=[]order.Order}
+// @Failure      404  {object}  object{error=string}
+// @Failure      500  {object}  object{error=string}
+// @Router       /api/crew/{id} [get]
 func (app *application) showCrewHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := types.UserID(app.ReadNamedParam(r, "id"))

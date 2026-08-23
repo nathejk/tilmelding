@@ -14,6 +14,18 @@ import (
 	"nathejk.dk/nathejk/table/personnel"
 )
 
+// showPersonnelHandler returns everything the gøgler / personnel page needs in
+// one call.
+//
+// @Summary      Show a personnel record (gøgler)
+// @Description  Returns the server-side config (prices, t-shirt options and the SKUs closed for sale), the person, the open order and any paid orders. Re-derives the open order from the person record on every call, so the page is self-healing against drift, and creates the order on first visit for users who signed up before the order system existed. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered.
+// @Tags         personnel
+// @Produce      json
+// @Param        id   path      string  true  "Person user ID"
+// @Success      200  {object}  object{config=TeamConfig,person=personnel.Staff,order=order.Order,paidOrders=[]order.Order}
+// @Failure      404  {object}  object{error=string}
+// @Failure      500  {object}  object{error=string}
+// @Router       /api/personnel/{id} [get]
 func (app *application) showPersonnelHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	userID := types.UserID(app.ReadNamedParam(r, "id"))

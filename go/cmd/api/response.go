@@ -33,8 +33,9 @@ type slugLabelResponse struct {
 }
 
 // teamConfigResponse tells the UI the server's own rules — member bounds,
-// prices in DKK, and the permitted corps / t-shirt sizes — so both sides agree
-// on what is valid rather than the frontend hard-coding it.
+// prices in DKK, the permitted corps / t-shirt sizes, and which products are
+// closed for sale — so both sides agree on what is valid rather than the
+// frontend hard-coding it.
 type teamConfigResponse struct {
 	MinMemberCount int                 `json:"minMemberCount"`
 	MaxMemberCount int                 `json:"maxMemberCount"`
@@ -42,6 +43,13 @@ type teamConfigResponse struct {
 	TShirtPrice    int                 `json:"tshirtPrice"`
 	Korps          []slugLabelResponse `json:"korps"`
 	TShirtSizes    []slugLabelResponse `json:"tshirtSizes"`
+	// ClosedProducts names the SKUs that may no longer be bought — the year
+	// t-shirt once the shirts are in production. Their price and sizes stay in
+	// this config, because what somebody already bought still has to be
+	// rendered; what changes is that the frontend must offer no way to buy or
+	// re-size one. Never null: an empty list means everything is for sale, so
+	// the client can test membership without a nil check.
+	ClosedProducts []string `json:"closedProducts"`
 }
 
 // orderLineAttributesResponse is the typed replacement for the line's
@@ -92,6 +100,10 @@ type orderResponse struct {
 }
 
 func newTeamConfigResponse(c TeamConfig) teamConfigResponse {
+	closed := c.ClosedProducts
+	if closed == nil {
+		closed = []string{}
+	}
 	return teamConfigResponse{
 		MinMemberCount: c.MinMemberCount,
 		MaxMemberCount: c.MaxMemberCount,
@@ -99,6 +111,7 @@ func newTeamConfigResponse(c TeamConfig) teamConfigResponse {
 		TShirtPrice:    c.TShirtPrice,
 		Korps:          newSlugLabelResponses(c.Korps),
 		TShirtSizes:    newSlugLabelResponses(c.TShirtSizes),
+		ClosedProducts: closed,
 	}
 }
 

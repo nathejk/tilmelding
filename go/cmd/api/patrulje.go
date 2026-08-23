@@ -31,6 +31,9 @@ type TeamConfig struct {
 	TShirtPrice    int               `json:"tshirtPrice"`
 	Korps          []types.SlugLabel `json:"korps"`
 	TShirtSizes    []types.SlugLabel `json:"tshirtSizes"`
+	// ClosedProducts names the SKUs that may no longer be bought. The frontend
+	// offers no picker for them and renders what was already bought read-only.
+	ClosedProducts []string `json:"closedProducts"`
 }
 
 // ----------------------------------------------------------------------------
@@ -278,12 +281,18 @@ func tshirtSizesFor(slugs []string) []types.SlugLabel {
 // zero value: handlers degrade to "price unknown" rather than failing
 // the whole show request, which mirrors how the legacy code handled
 // missing data.
+//
+// A closed product keeps its price and its sizes here. Both are still needed to
+// render what somebody already bought — the size labels come from this list — so
+// closing a product removes the ability to buy it, not the vocabulary for
+// describing it. ClosedProducts is what tells the frontend which is which.
 func (app *application) buildTeamConfig(ctx context.Context, participationSKU string, min, max int) TeamConfig {
 	cfg := TeamConfig{
 		MinMemberCount: min,
 		MaxMemberCount: max,
 		Korps:          types.CorpsSlugs.AsObjects(),
 		TShirtSizes:    []types.SlugLabel{{Slug: "", Label: "Ingen"}},
+		ClosedProducts: app.closedProducts(),
 	}
 	if p, err := app.models.Product.GetBySKU(ctx, app.config.year, participationSKU); err == nil && p != nil {
 		cfg.MemberPrice = p.UnitPrice / 100
@@ -298,7 +307,7 @@ func (app *application) buildTeamConfig(ctx context.Context, participationSKU st
 // showPatruljeHandler returns everything the patrulje page needs in one call.
 //
 // @Summary      Show a patrulje team
-// @Description  Returns the server-side config (member bounds, prices, corps and t-shirt options), the team, its contact, the member roster, the open order and any paid orders. Re-derives the open order from the member projection on every call, so the page is self-healing against drift. Order line quantities and lineTotals may be negative: a free t-shirt size change is recorded as a zero-sum pair of lines (one negative for the size handed back, one positive for the size now wanted), so clients must sum them rather than assume positive values.
+// @Description  Returns the server-side config (member bounds, prices, corps, t-shirt options and the SKUs closed for sale), the team, its contact, the member roster, the open order and any paid orders. Re-derives the open order from the member projection on every call, so the page is self-healing against drift. Order line quantities and lineTotals may be negative: a free t-shirt size change is recorded as a zero-sum pair of lines (one negative for the size handed back, one positive for the size now wanted), so clients must sum them rather than assume positive values. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered.
 // @Tags         patrulje
 // @Produce      json
 // @Param        id   path      string  true  "Team ID"

@@ -195,7 +195,7 @@ func newKlanMemberResponse(s klan.Senior) klanMemberResponse {
 // showKlanHandler returns everything the klan page needs in one call.
 //
 // @Summary      Show a klan team
-// @Description  Returns the server-side config (member bounds, prices, corps and t-shirt options), the team, its senior roster, the open order and any paid orders. Re-derives the open order from the senior projection on every call, so the page is self-healing against drift. Order line quantities and lineTotals may be negative: a free t-shirt size change is recorded as a zero-sum pair of lines (one negative for the size handed back, one positive for the size now wanted), so clients must sum them rather than assume positive values.
+// @Description  Returns the server-side config (member bounds, prices, corps, t-shirt options and the SKUs closed for sale), the team, its senior roster, the open order and any paid orders. Re-derives the open order from the senior projection on every call, so the page is self-healing against drift. Order line quantities and lineTotals may be negative: a free t-shirt size change is recorded as a zero-sum pair of lines (one negative for the size handed back, one positive for the size now wanted), so clients must sum them rather than assume positive values. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered.
 // @Tags         klan
 // @Produce      json
 // @Param        id   path      string  true  "Team ID"

@@ -58,6 +58,17 @@ type config struct {
 	payment struct {
 		dsn string
 	}
+	// shop carries the catalogue-adjacent selling rules. closedSKUs names the
+	// products that may no longer be bought: their sizes are frozen, their
+	// unpaid units are dropped from open orders, and no payment request may
+	// include them. See roadmap/prd/doing/003.
+	//
+	// It is a set of SKUs rather than a single "shop closed" switch because
+	// closing is per product: the 2026 year t-shirt is closed while any other
+	// merchandise the catalogue grows stays sellable.
+	shop struct {
+		closedSKUs map[string]bool
+	}
 	db struct {
 		dsn          string
 		maxOpenConns int
@@ -127,6 +138,12 @@ func main() {
 	flag.StringVar(&cfg.countdown.time, "countdown", getEnv("COUNTDOWN", ""), "Time for countdown")
 	flag.StringVar(&cfg.payment.dsn, "payment-dsn", getEnv("PAYMENT_DSN", ""), "DSN specifing a valid payment provider")
 	cfg.countdown.videos = getEnvAsSlice("COUNTDOWN_VIDEOS", []string{}, "\n")
+
+	// Closed for sale, defaulting to the 2026 year t-shirt: the shirts are in
+	// production, so the sizes are final. The default is "closed" so that a
+	// deployment which forgets the variable fails safe; CLOSED_PRODUCT_SKUS=""
+	// re-opens the sale.
+	cfg.shop.closedSKUs = closedSKUsFromEnv()
 
 	flag.Parse()
 	cfg.year = types.YearSlug(year)
