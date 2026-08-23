@@ -459,6 +459,9 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 	}
 	// Team + contact only. Members are managed through the dedicated member
 	// endpoints, so this save can never create or delete a member identity.
+	// It also carries no t-shirt size — the size lock lives on the member
+	// endpoints, and the derived lines below read sizes from the projection
+	// rather than from this body.
 	err = app.commands.Patrulje.Update(r.Context(), teamID, input.Team, input.Contact)
 	if err != nil {
 		log.Printf("UpdatePatrulje  %q", err)
@@ -587,7 +590,7 @@ func (app *application) rederivePatruljeOrder(ctx context.Context, teamID types.
 // addPatruljeMemberHandler adds a single member to a patrulje team.
 //
 // @Summary      Add a member to a patrulje team
-// @Description  Issues a server-side memberId, persists the member (one create event), recomputes the open order, and returns the created member (with its memberId) plus the order.
+// @Description  Issues a server-side memberId, persists the member (one create event), recomputes the open order, and returns the created member (with its memberId) plus the order. `tshirtSize` is ignored while the year t-shirt is closed for sale: a member added then gets no shirt.
 // @Tags         patrulje
 // @Accept       json
 // @Produce      json
@@ -629,6 +632,10 @@ func (app *application) addPatruljeMemberHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// A member added while the shirt is closed for sale gets no shirt: there is
+	// nothing stored to keep, and the sale is shut.
+	app.lockPatruljeMemberSize(r.Context(), teamID, &input.Member)
+
 	memberID, err := app.commands.Patrulje.AddMember(r.Context(), teamID, input.Member)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
@@ -652,7 +659,7 @@ func (app *application) addPatruljeMemberHandler(w http.ResponseWriter, r *http.
 // updatePatruljeMemberHandler updates a single existing member.
 //
 // @Summary      Update a patrulje member
-// @Description  Publishes one update event for the member (never creates an identity) and recomputes the open order.
+// @Description  Publishes one update event for the member (never creates an identity) and recomputes the open order. `tshirtSize` is ignored while the year t-shirt is closed for sale: the stored size is persisted and returned instead, so the size of a shirt already ordered cannot change.
 // @Tags         patrulje
 // @Accept       json
 // @Produce      json
@@ -679,6 +686,12 @@ func (app *application) updatePatruljeMemberHandler(w http.ResponseWriter, r *ht
 	}
 	input.Member.MemberID = memberID // path is authoritative
 
+	// The stored size wins while the shirt is closed for sale, so a stale page or
+	// a hand-made request cannot re-size a shirt that is already being printed.
+	// Applied before the update is published, and the response carries the value
+	// that was actually persisted.
+	app.lockPatruljeMemberSize(r.Context(), teamID, &input.Member)
+
 	if err := app.commands.Patrulje.UpdateMember(r.Context(), teamID, input.Member); err != nil {
 		app.ServerErrorResponse(w, r, err)
 		return
@@ -694,6 +707,42 @@ func (app *application) updatePatruljeMemberHandler(w http.ResponseWriter, r *ht
 	if err := app.WriteJSON(w, http.StatusOK, resp, nil); err != nil {
 		app.ServerErrorResponse(w, r, err)
 	}
+}
+
+// storedPatruljeSize is the t-shirt size the projection currently holds for a
+// member, or "" when the member or their size is not there.
+//
+// Read through the roster because the spejder read API exposes no by-id lookup.
+// Only called while sizes are locked, so the extra query is not on the open-shop
+// path.
+func (app *application) storedPatruljeSize(ctx context.Context, teamID types.TeamID, memberID types.MemberID) string {
+	members, _, err := app.models.Spejder.GetAll(ctx, spejder.Filter{TeamID: teamID})
+	if err != nil {
+		// Fail closed: an unreadable roster must not become licence to write the
+		// requested size. "" keeps whatever the member already had for an update
+		// that carries no size, which is the safer of the two wrong answers.
+		log.Printf("storedPatruljeSize %q", err)
+		return ""
+	}
+	for _, m := range members {
+		if m != nil && m.MemberID == memberID {
+			return m.TShirtSize
+		}
+	}
+	return ""
+}
+
+// lockPatruljeMemberSize replaces the requested t-shirt size with the stored one
+// while the shirt is closed for sale. A new member (no stored size) gets no shirt.
+func (app *application) lockPatruljeMemberSize(ctx context.Context, teamID types.TeamID, member *patrulje.Spejder) {
+	if !app.tshirtLocked() {
+		return
+	}
+	stored := ""
+	if member.MemberID != "" {
+		stored = app.storedPatruljeSize(ctx, teamID, member.MemberID)
+	}
+	member.TShirtSize = app.lockedSize(tshirtSKU, stored, member.TShirtSize)
 }
 
 // deletePatruljeMemberHandler removes a single member.

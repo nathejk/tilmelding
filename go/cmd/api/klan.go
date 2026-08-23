@@ -425,6 +425,9 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 	}
 	// Team + status only. Seniors are managed through the dedicated member
 	// endpoints, so this save can never create or delete a senior identity.
+	// It also carries no t-shirt size — the size lock lives on the member
+	// endpoints, and the derived lines below read sizes from the projection
+	// rather than from this body.
 	err = app.commands.Klan.UpdateTeam(r.Context(), teamID, input.Team)
 	if err != nil {
 		log.Printf("UpdateKlan  %q", err)
@@ -533,7 +536,7 @@ func (app *application) rederiveKlanOrder(ctx context.Context, teamID types.Team
 // addKlanMemberHandler adds a single member (senior) to a klan team.
 //
 // @Summary      Add a member to a klan team
-// @Description  Issues a server-side memberId, persists the member (one create event), recomputes the open order, and returns the created member (with its memberId) plus the order.
+// @Description  Issues a server-side memberId, persists the member (one create event), recomputes the open order, and returns the created member (with its memberId) plus the order. `tshirtSize` is ignored while the year t-shirt is closed for sale: a member added then gets no shirt.
 // @Tags         klan
 // @Accept       json
 // @Produce      json
@@ -573,6 +576,10 @@ func (app *application) addKlanMemberHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// A senior added while the shirt is closed for sale gets no shirt: there is
+	// nothing stored to keep, and the sale is shut.
+	app.lockKlanMemberSize(r.Context(), teamID, &input.Member)
+
 	memberID, err := app.commands.Klan.AddMember(r.Context(), teamID, input.Member)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
@@ -592,10 +599,44 @@ func (app *application) addKlanMemberHandler(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// storedKlanSize is the t-shirt size the projection currently holds for a senior,
+// or "" when the senior or their size is not there.
+//
+// Read through the roster because the senior read API exposes no by-id lookup.
+// Only called while sizes are locked.
+func (app *application) storedKlanSize(ctx context.Context, teamID types.TeamID, memberID types.MemberID) string {
+	members, err := app.models.Senior.GetAll(ctx, senior.Filter{TeamIDs: []types.TeamID{teamID}})
+	if err != nil {
+		// Fail closed: an unreadable roster must not become licence to write the
+		// requested size.
+		log.Printf("storedKlanSize %q", err)
+		return ""
+	}
+	for _, m := range members {
+		if m != nil && m.MemberID == memberID {
+			return m.TshirtSize
+		}
+	}
+	return ""
+}
+
+// lockKlanMemberSize replaces the requested t-shirt size with the stored one while
+// the shirt is closed for sale. A new senior (no stored size) gets no shirt.
+func (app *application) lockKlanMemberSize(ctx context.Context, teamID types.TeamID, member *klan.Senior) {
+	if !app.tshirtLocked() {
+		return
+	}
+	stored := ""
+	if member.MemberID != "" {
+		stored = app.storedKlanSize(ctx, teamID, member.MemberID)
+	}
+	member.TShirtSize = app.lockedSize(tshirtSKU, stored, member.TShirtSize)
+}
+
 // updateKlanMemberHandler updates a single existing member (senior).
 //
 // @Summary      Update a klan member
-// @Description  Publishes one update event for the member (never creates an identity) and recomputes the open order.
+// @Description  Publishes one update event for the member (never creates an identity) and recomputes the open order. `tshirtSize` is ignored while the year t-shirt is closed for sale: the stored size is persisted and returned instead, so the size of a shirt already ordered cannot change.
 // @Tags         klan
 // @Accept       json
 // @Produce      json
@@ -621,6 +662,12 @@ func (app *application) updateKlanMemberHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 	input.Member.MemberID = memberID // path is authoritative
+
+	// The stored size wins while the shirt is closed for sale, so a stale page or
+	// a hand-made request cannot re-size a shirt that is already being printed.
+	// Applied before the update is published, and the response carries the value
+	// that was actually persisted.
+	app.lockKlanMemberSize(r.Context(), teamID, &input.Member)
 
 	if err := app.commands.Klan.UpdateMember(r.Context(), teamID, input.Member); err != nil {
 		app.ServerErrorResponse(w, r, err)

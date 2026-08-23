@@ -140,6 +140,42 @@ func (app *application) closedLines(o *order.Order) bool {
 	return false
 }
 
+// lockedSize returns the t-shirt size a write should persist.
+//
+// While the product is closed for sale the stored size wins and the requested one
+// is discarded: a shirt already ordered cannot be re-sized, because the shirts are
+// being printed. While it is open the request wins, as always.
+//
+// This is the half of closing that protects units somebody has already **paid**
+// for. Excluding the line from the desired set (see sellable) cancels an unpaid
+// shirt, but a paid shirt still has a size on the member's projection, and a size
+// change on a paid shirt is free today — recorded as a zero-sum credit/charge pair
+// — so without this lock a user could still move a shirt that is already in the
+// print run.
+//
+// The frontend also hides the picker, but that is an affordance, not a guarantee:
+// a stale page or a hand-made request must not be able to change a size, which is
+// why the rule lives here.
+//
+// stored must come from the projection, never from the request.
+func (app *application) lockedSize(sku, stored, requested string) string {
+	if app.skuClosed(sku) {
+		return stored
+	}
+	return requested
+}
+
+// tshirtSKU is the product a t-shirt size belongs to. The size fields on members,
+// seniors, crew and personnel all describe a unit of this SKU, so the lock and the
+// derived lines name the same product.
+const tshirtSKU = "tshirt.adult"
+
+// tshirtLocked reports whether t-shirt sizes are currently frozen. Handlers use it
+// to skip a projection read they would only need in order to lock.
+func (app *application) tshirtLocked() bool {
+	return app.skuClosed(tshirtSKU)
+}
+
 // chargeClosedProduct is what the user is told when their order cannot be turned
 // into a payment request because it still contains something no longer for sale.
 //
