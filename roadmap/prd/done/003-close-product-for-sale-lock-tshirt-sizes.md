@@ -445,10 +445,13 @@ of the two goes first introduces the shared `lockedSize` helper. 035 owns the wh
 `vue/` scope and is best done last, so the cancelled-line and `paymentError`
 behaviour can be seen rather than imagined.
 
-Phase 2 (follow-up, catalogue as source of truth):
+Phase 2 (follow-up, catalogue as source of truth) — created as tasks 036-037:
 
-- [ ] Task: shared-go — allow an inactive product on a re-derived line that already exists or is paid
-- [ ] Task: Mark `tshirt.adult` inactive in `Seeds2026`, derive `closedProducts` from `Product.Active`, retire `CLOSED_PRODUCT_SKUS`
+- [ ] Task 036: shared-go — allow an inactive product on a re-derived line that already exists or is paid
+- [ ] Task 037: Mark `tshirt.adult` inactive in `Seeds2026`, derive `closedProducts` from `Product.Active`, retire `CLOSED_PRODUCT_SKUS`
+
+036 must land first: task 037 on its own breaks every save for an owner holding a
+t-shirt line, which is the whole reason phase 1 did not use the catalogue flag.
 
 ### Closing procedure
 
