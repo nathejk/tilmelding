@@ -61,13 +61,19 @@ type config struct {
 	// shop carries the catalogue-adjacent selling rules. closedSKUs names the
 	// products that may no longer be bought: their sizes are frozen, their
 	// unpaid units are dropped from open orders, and no payment request may
-	// include them. See roadmap/prd/doing/003.
+	// include them. See roadmap/prd/done/003.
 	//
 	// It is a set of SKUs rather than a single "shop closed" switch because
 	// closing is per product: the 2026 year t-shirt is closed while any other
 	// merchandise the catalogue grows stays sellable.
 	shop struct {
 		closedSKUs map[string]bool
+	}
+	// signup names the team types that may no longer sign up. A seat is claimed
+	// at signup, before any order exists, so this cannot be sourced from the
+	// product catalogue — see closedSignupTypesFromEnv.
+	signup struct {
+		closedTypes map[string]bool
 	}
 	db struct {
 		dsn          string
@@ -144,6 +150,9 @@ func main() {
 	// deployment which forgets the variable fails safe; CLOSED_PRODUCT_SKUS=""
 	// re-opens the sale.
 	cfg.shop.closedSKUs = closedSKUsFromEnv()
+	// Closed for signup, defaulting to gøgler. Same fail-safe reasoning:
+	// CLOSED_SIGNUP_TYPES="" re-opens.
+	cfg.signup.closedTypes = closedSignupTypesFromEnv()
 
 	flag.Parse()
 	cfg.year = types.YearSlug(year)

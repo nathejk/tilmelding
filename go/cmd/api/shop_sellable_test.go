@@ -10,7 +10,7 @@ import (
 // set, which is all sellable / closedLines read.
 func closedApp(skus ...string) *application {
 	app := &application{}
-	app.config.shop.closedSKUs = skuSet(skus)
+	app.config.shop.closedSKUs = stringSet(skus)
 	return app
 }
 

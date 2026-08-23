@@ -74,6 +74,20 @@ const signup = async (next) => {
     })
     const response = await fetch('/api/signup', { method: 'POST', body: body, headers: headers })
     if (!response.ok) {
+      // A refused signup type (422) is a real outcome, not a transport failure:
+      // the server closes a signup and this is where a stale page finds out. Show
+      // what it said, otherwise the button just silently does nothing.
+      if (response.status === 422) {
+        const data = await response.json()
+        const detail = Object.values(data.error || {}).join(' ')
+        toast.add({
+          severity: 'error',
+          summary: 'Tilmelding ikke mulig',
+          detail: detail || 'Tilmeldingen er lukket.',
+          life: 8000
+        })
+        return
+      }
       throw new Error('HTTP status ' + response.status)
     }
     const data = await response.json()

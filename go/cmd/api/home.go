@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/nathejk/shared-go/types"
 	jsonapi "nathejk.dk/cmd/api/app"
 )
 
@@ -27,9 +28,12 @@ func (app *application) homeHandler(w http.ResponseWriter, r *http.Request) {
 			URL    string `json:"url"`
 			Status string `json:"status"`
 		}{
-			{Label: "Tilmeld spejderpatrulje", URL: "/indskrivning/patrulje", Status: "OPEN"},
+			{Label: "Tilmeld spejderpatrulje", URL: "/indskrivning/patrulje", Status: app.signupStatus(types.TeamTypePatrulje)},
 			{Label: "Tilmeld seniorklan", URL: "/indskrivning/klan", Status: klanStatus},
-			{Label: "Tilmeld gøgler", URL: "/indskrivning/badut", Status: "CLOSED"},
+			// Derived from the same closed set the create endpoint enforces, so a
+			// disabled button and a refused POST cannot disagree. Closing the
+			// gøgler signup is CLOSED_SIGNUP_TYPES, not an edit here.
+			{Label: "Tilmeld gøgler", URL: "/indskrivning/badut", Status: app.signupStatus(types.TeamTypeBadut)},
 		},
 	}
 	err := app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{"config": config}, nil)

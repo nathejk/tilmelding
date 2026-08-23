@@ -21,7 +21,11 @@ import (
 // sellable while the year shirt is closed, so the switch names products rather
 // than describing a shop.
 //
-// See roadmap/prd/doing/003-close-product-for-sale-lock-tshirt-sizes.md.
+// See roadmap/prd/done/003-close-product-for-sale-lock-tshirt-sizes.md.
+//
+// Closing a *signup type* is a related but separate switch, and lives in
+// signup.go: a seat is claimed at signup, before any order exists, so the
+// catalogue cannot gate it.
 
 // closedProductsEnv is the environment variable naming the closed SKUs, comma
 // separated.
@@ -43,18 +47,19 @@ var defaultClosedSKUs = []string{"tshirt.adult"}
 func closedSKUsFromEnv() map[string]bool {
 	raw, ok := os.LookupEnv(closedProductsEnv)
 	if !ok {
-		return skuSet(defaultClosedSKUs)
+		return stringSet(defaultClosedSKUs)
 	}
-	return skuSet(strings.Split(raw, ","))
+	return stringSet(strings.Split(raw, ","))
 }
 
-// skuSet builds a lookup set from a list of SKUs, trimming whitespace and
-// dropping empties so that "a, b," and "a,b" mean the same thing.
-func skuSet(skus []string) map[string]bool {
-	set := make(map[string]bool, len(skus))
-	for _, sku := range skus {
-		if sku = strings.TrimSpace(sku); sku != "" {
-			set[sku] = true
+// stringSet builds a lookup set from a list of values, trimming whitespace and
+// dropping empties so that "a, b," and "a,b" mean the same thing. Shared by the
+// closed-product and closed-signup switches.
+func stringSet(values []string) map[string]bool {
+	set := make(map[string]bool, len(values))
+	for _, v := range values {
+		if v = strings.TrimSpace(v); v != "" {
+			set[v] = true
 		}
 	}
 	return set

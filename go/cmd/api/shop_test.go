@@ -5,13 +5,13 @@ import (
 	"testing"
 )
 
-func TestSkuSetTrimsAndDropsEmpties(t *testing.T) {
-	set := skuSet([]string{" tshirt.adult ", "", "mug ", "   "})
+func TestStringSetTrimsAndDropsEmpties(t *testing.T) {
+	set := stringSet([]string{" tshirt.adult ", "", "mug ", "   "})
 	if len(set) != 2 {
-		t.Fatalf("skuSet size = %d, want 2 (%v)", len(set), set)
+		t.Fatalf("stringSet size = %d, want 2 (%v)", len(set), set)
 	}
 	if !set["tshirt.adult"] || !set["mug"] {
-		t.Errorf("skuSet = %v, want trimmed tshirt.adult and mug", set)
+		t.Errorf("stringSet = %v, want trimmed tshirt.adult and mug", set)
 	}
 }
 
@@ -82,7 +82,7 @@ func TestClosedSKUsFromEnv(t *testing.T) {
 
 func TestSkuClosed(t *testing.T) {
 	app := &application{}
-	app.config.shop.closedSKUs = skuSet([]string{"tshirt.adult"})
+	app.config.shop.closedSKUs = stringSet([]string{"tshirt.adult"})
 
 	if !app.skuClosed("tshirt.adult") {
 		t.Error("tshirt.adult should be closed")
@@ -98,7 +98,7 @@ func TestSkuClosed(t *testing.T) {
 
 func TestSkuClosedWithEmptySet(t *testing.T) {
 	app := &application{}
-	app.config.shop.closedSKUs = skuSet(nil)
+	app.config.shop.closedSKUs = stringSet(nil)
 	if app.skuClosed("tshirt.adult") {
 		t.Error("an empty closed set must leave every product open")
 	}
@@ -106,7 +106,7 @@ func TestSkuClosedWithEmptySet(t *testing.T) {
 
 func TestClosedProductsIsSortedAndNeverNil(t *testing.T) {
 	app := &application{}
-	app.config.shop.closedSKUs = skuSet([]string{"mug.enamel", "tshirt.adult", "cap"})
+	app.config.shop.closedSKUs = stringSet([]string{"mug.enamel", "tshirt.adult", "cap"})
 
 	got := app.closedProducts()
 	want := []string{"cap", "mug.enamel", "tshirt.adult"}
