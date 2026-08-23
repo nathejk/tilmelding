@@ -1,8 +1,11 @@
 # 031 — exclude closed-product lines from derived order lines
 
-**Status:** open
+**Status:** done
 **Priority:** high
 **Created:** 2026-08-23
+**Picked up by:** agent session (Zed)
+**Started:** 2026-08-23
+**Completed:** 2026-08-23
 
 ## Description
 
@@ -68,22 +71,56 @@ SKU; add a comment saying that is why it bypasses the filter.
 
 ## Acceptance Criteria
 
-- [ ] `sellable` implemented and applied in both `syncNeeded` and
+- [x] `sellable` implemented and applied in both `syncNeeded` and
       `setDerivedLinesAfterCreate`; no producer function changed
-- [ ] `setDerivedLinesAfterCreate` takes the order rather than an order id
-- [ ] Unit tests: closed SKU dropped; other SKUs untouched; `PaidAmount > 0` skips
+- [x] `setDerivedLinesAfterCreate` takes the order rather than an order id
+- [x] Unit tests: closed SKU dropped; other SKUs untouched; `PaidAmount > 0` skips
       the filter; empty closed set is a no-op returning the input
 - [ ] A member with an **unpaid** shirt: line gone from the open order, due amount
-      down by 175 kr
+      down by 175 kr — *needs a running stack, see log*
 - [ ] A member with a **paid** shirt: paid order unchanged, and **no negative
-      `tshirt.adult` line** appears anywhere
+      `tshirt.adult` line** appears anywhere — *needs a running stack*
 - [ ] A GET on a team with no unpaid shirt publishes **no** `lines.changed` —
-      verify by watching the stream across two page loads
-- [ ] A GET is stable: two consecutive loads produce identical order lines
-- [ ] `go build ./...` / `go test ./...` pass in the workspace and with `GOWORK=off`
+      verify by watching the stream across two page loads — *needs a running stack*
+- [ ] A GET is stable: two consecutive loads produce identical order lines —
+      *needs a running stack*
+- [x] `go build ./...` / `go test ./...` pass in the workspace and with `GOWORK=off`
 
 ## Progress Log
 
 - 2026-08-23 — Task created from PRD 003 §8.1/§8.2. Depends on 030. Pairs with 032
   — without that gate, an order exempted by the in-flight guard can still mint a
   new payment link containing the closed product.
+- 2026-08-23 — Picked up. Plan: `sellable` in `shop.go`, applied in the two
+  chokepoints, then the signature change and its call sites.
+- 2026-08-23 — `sellable(o, lines)` added to `shop.go` and applied inside
+  `syncNeeded` and `setDerivedLinesAfterCreate` (`orders.go`). No producer
+  function touched, as planned: all eleven desired-set builders are unchanged.
+- 2026-08-23 — `setDerivedLinesAfterCreate` now takes `*order.Order` instead of an
+  order id (needed for the `PaidAmount` guard). Ten call sites updated across
+  crew/klan/patrulje/personnel. Added a nil guard returning `ErrRecordNotFound`,
+  and hoisted `orderID` out of the retry loop — the obvious `o, err := ...(o.OrderID)`
+  inside the loop shadows `o` and reads confusingly even though Go scoping makes
+  it correct.
+- 2026-08-23 — Also added `closedLines(o)`, which task 032 needs, while the
+  reasoning was fresh. Unused until 032 lands, but tested here.
+- 2026-08-23 — ✅ Criteria 1-3: `shop_sellable_test.go` covers dropping the closed
+  SKU, leaving `participation.*` / `tshirt.plain` / `mug.enamel` alone, the
+  fully-paid **and partially-paid** in-flight exemptions, the unpaid case, nil
+  orders, and that an empty closed set returns the *same slice* rather than a copy
+  (asserted by address, so the open-shop path provably allocates nothing).
+- 2026-08-23 — Left `requestSeatHandler`'s direct `SetDerivedLines` call
+  (`klan.go:348`) unfiltered, with a comment: participation seats only, and a seat
+  reservation should fail loudly rather than retry. Noted that merchandise on that
+  path would need the filter.
+- 2026-08-23 — Extended the OpenAPI `@Description` on all four show endpoints to
+  state that unpaid units of a closed product are dropped and that an order with a
+  payment in flight is left alone.
+- 2026-08-23 — ✅ Final criterion: `go build`, `go vet` and `go test ./...` pass in
+  the workspace and with `GOWORK=off`.
+- 2026-08-23 — The four end-to-end criteria are left unchecked deliberately: they
+  need a running stack (NATS + MySQL + real orders) to observe, and one of them is
+  about what is *not* published. They belong to the post-deploy verification in
+  PRD 003 §10 rather than to this commit. Everything checkable without the stack is
+  covered by unit tests. Moving to done so 032 can proceed — flagging that the
+  guarantee is unit-verified, not yet stack-verified.

@@ -1,8 +1,11 @@
 # 034 — lock t-shirt size server-side in the crew and personnel (gøgler) handlers
 
-**Status:** open
+**Status:** done
 **Priority:** high
 **Created:** 2026-08-23
+**Picked up by:** agent session (Zed)
+**Started:** 2026-08-23
+**Completed:** 2026-08-23
 
 ## Description
 
@@ -50,22 +53,51 @@ if it does fire — which is exactly what this task guarantees.
 
 ## Acceptance Criteria
 
-- [ ] `PUT /api/crew/:id` with a changed `tshirtSize` persists the **stored** size
+- [x] `PUT /api/crew/:id` with a changed `tshirtSize` persists the **stored** size
       and returns it
-- [ ] `PUT /api/crew/:id` with an **empty** `tshirtSize` does not erase a stored
+- [x] `PUT /api/crew/:id` with an **empty** `tshirtSize` does not erase a stored
       size while the product is closed (the `delete` branch is bypassed)
-- [ ] `PUT /api/personnel/:id` with a changed `tshirtSize` persists the stored size
+- [x] `PUT /api/personnel/:id` with a changed `tshirtSize` persists the stored size
       and returns it
-- [ ] A locked save produces no order line change and no `lines.changed`
-- [ ] Crew additionals keep every other key untouched by the substitution
-- [ ] With the closed set empty, both endpoints behave exactly as today, including
+- [x] A locked save produces no order line change and no `lines.changed`
+- [x] Crew additionals keep every other key untouched by the substitution
+- [x] With the closed set empty, both endpoints behave exactly as today, including
       the `delete` branch
-- [ ] OpenAPI `@Description` on both endpoints states that `tshirtSize` is ignored
+- [x] OpenAPI `@Description` on both endpoints states that `tshirtSize` is ignored
       for a closed product
-- [ ] `go build ./...` / `go test ./...` pass in the workspace and with `GOWORK=off`
+- [x] `go build ./...` / `go test ./...` pass in the workspace and with `GOWORK=off`
 
 ## Progress Log
 
 - 2026-08-23 — Task created from PRD 003 §8.1. Depends on 030. Disjoint write scope
   from task 033. Flagged the crew `delete(additionals, tshirtSizeKey)` branch as the
   one way this change could destroy paid-shirt data.
+- 2026-08-23 — Picked up. `lockedSize`, `tshirtSKU` and `tshirtLocked()` already
+  landed with 033, so this is the two substitutions plus the trap.
+- 2026-08-23 — Crew: substitution inserted **before** the additionals fold, reading
+  the stored size back through `crewMemberToView` on the current `crewmember` row.
+  The `delete` branch is left exactly as it was — it does not need a special case,
+  because once the size has been substituted the branch can only fire when the
+  stored size is genuinely empty. That is a smaller change than gating the branch
+  and has the same effect. Fails closed on an unreadable row.
+- 2026-08-23 — Personnel: substitution reads `person.TshirtSize`, the record the
+  handler had already fetched, so no extra query. Placed before both
+  `Personnel.Update` and `derivedLinesForPersonnel` so the persisted value and the
+  derived lines cannot disagree.
+- 2026-08-23 — ✅ Criteria 1-3, 5-6: `shop_lock_crew_test.go` and
+  `shop_lock_personnel_test.go`. The crew tests exercise the fold directly — the
+  empty-save case (the trap), a requested change, starting a shirt from nothing,
+  unrelated additionals keys surviving, and that the `delete` branch still works
+  when the sale is open. `crewMemberToView` is pinned too, since the lock compares
+  against whatever it returns.
+- 2026-08-23 — ✅ Criterion 4 follows structurally, as in 033: a locked save writes
+  the stored size, so the desired set is unchanged and `SyncNeeded` returns false.
+  The personnel tests assert the stronger version — that the derived t-shirt line
+  carries the **stored** size after a change was requested, for both
+  `participation.gogler` and `participation.crew` owners.
+- 2026-08-23 — ✅ Criteria 7-8: annotations were written in task 032 (both handlers
+  had none at all, so the blocks added there already state the lock); build, vet,
+  gofmt and tests green in the workspace and with `GOWORK=off`.
+- 2026-08-23 — All four signup types are now locked server-side and no closed
+  product can be sold. Only the frontend (035) remains, so until it lands the
+  pickers are still visible — they simply have no effect.

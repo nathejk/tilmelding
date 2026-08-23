@@ -1,12 +1,46 @@
 # PRD 003 — Close a product for sale: lock t-shirt sizes and cancel unpaid t-shirts
 
-**Status:** doing
+**Status:** done
 **Author:** agent session (Zed)
 **Created:** 2026-08-23
 **Last updated:** 2026-08-23
 **Approved:** 2026-08-23
-**Shipped:**
+**Shipped:** 2026-08-23
 **Target users:** participant, team leader (patrulje / klan), crew, gøgler — all signup types
+
+---
+
+## 0. Implementation status
+
+Shipped 2026-08-23 as tasks 030-035. Deviations from the plan above, all recorded
+in the task logs:
+
+- **Line exclusion moved to a chokepoint.** The plan named eleven call sites; the
+  implementation filters inside `app.syncNeeded` and
+  `app.setDerivedLinesAfterCreate` instead, the only two places a desired set is
+  consumed. This makes "the sync check and the write see the same set" structural
+  rather than a convention — if they diverge, every page load republishes the
+  order's lines. Cost: `setDerivedLinesAfterCreate` takes the order rather than an
+  order id, so it can read `PaidAmount`.
+- **The payment gate is explicit, not a consequence.** §8.1 originally said no
+  payment request could include a closed product "structurally", because a charge
+  is built from the order. That is false for an order exempted by the in-flight
+  guard, which still carries its line: a save on one would have minted a fresh link
+  selling the closed product. `chargeable` refuses it, at all five
+  `Payment.Request` call sites.
+- **The flag is not read via `getEnvAsSlice`.** That helper cannot distinguish an
+  unset variable from one set to `""`, which would have left no way to re-open the
+  sale without a code change.
+- **`Shop.vue` shows no "you ordered nothing" line.** The team views render one
+  `Shop` for a whole roster, so that sentence would have told a patrulje holding
+  six paid shirts that it had bought none.
+- **Rollout gained a fourth step:** draw production numbers from paid orders. The
+  exclusion is lazy, so unpaid lines linger on orders nobody has visited yet.
+
+Verified against the running dev stack, not just unit tests: an unpaid selection
+leaves the open order on the first GET, `changedAt` is stable across repeated GETs
+(no republish), paid orders and their zero-sum pairs are untouched, and the only
+negative `tshirt.adult` lines in the database predate the change.
 
 ---
 
@@ -390,14 +424,15 @@ blocker: production cannot wait on a two-repo change.
 
 ## 10. Rollout / Task Breakdown
 
-Phase 1 (this PRD, no shared-go release needed) — created as tasks 030-035:
+Phase 1 (this PRD, no shared-go release needed) — created as tasks 030-035, all
+complete:
 
-- [ ] Task 030: Add `CLOSED_PRODUCT_SKUS` config and expose `config.closedProducts` on the four show endpoints
-- [ ] Task 031: Exclude closed-SKU derived lines from the desired set, with the `PaidAmount > 0` in-flight guard
-- [ ] Task 032: Refuse to issue a payment request for an order holding a closed-SKU line (`chargeable` gate at the five call sites)
-- [ ] Task 033: Lock t-shirt size server-side in the patrulje and klan write handlers
-- [ ] Task 034: Lock t-shirt size server-side in the crew and personnel (gøgler) write handlers
-- [ ] Task 035: Closed state for `Shop.vue`; read-only, order-derived size in the four member dialogs
+- [x] Task 030: Add `CLOSED_PRODUCT_SKUS` config and expose `config.closedProducts` on the four show endpoints
+- [x] Task 031: Exclude closed-SKU derived lines from the desired set, with the `PaidAmount > 0` in-flight guard
+- [x] Task 032: Refuse to issue a payment request for an order holding a closed-SKU line (`chargeable` gate at the five call sites)
+- [x] Task 033: Lock t-shirt size server-side in the patrulje and klan write handlers
+- [x] Task 034: Lock t-shirt size server-side in the crew and personnel (gøgler) write handlers
+- [x] Task 035: Closed state for `Shop.vue`; read-only, order-derived size in the four member dialogs
 
 OpenAPI annotation updates and the two wire-shape test fixes are folded into the
 task that changes the contract in question, rather than trailing as a separate
@@ -432,6 +467,12 @@ outcome.
 3. **Wait 15 minutes before drawing the production numbers.** Every link issued
    before the deploy has settled or expired by then, so the per-size counts stop
    moving. This is the one timing rule that matters.
+4. **Draw the numbers from paid orders, not open ones.** The exclusion is lazy: an
+   unpaid t-shirt line leaves an open order when a request next recomputes it, so
+   until a team loads their page the line is still in `order_line`. Paid orders are
+   frozen and are the print run; open orders drain over the following days. (Found
+   during task 035's stack verification, where 85 unpaid lines were still sitting on
+   unvisited orders.)
 
 Diagnostic — which payments were still live at closing time, and what became of
 them:
