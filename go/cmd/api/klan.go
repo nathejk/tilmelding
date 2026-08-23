@@ -358,19 +358,25 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 		orderEnvelope = o
 
 		if o.DueAmount > 0 {
-			amount := payments.Amount{Value: int64(o.DueAmount), Currency: types.CurrencyDKK}
-			teamUrl := app.config.baseurl + "/klan/" + string(teamID)
-			paymentLink, _ = app.commands.Payment.Request(payments.Charge{
-				Amount:      amount,
-				Description: "Nathejk tilmelding",
-				Phone:       *signup.Phone,
-				Email:       *signup.Email,
-				ReturnUrl:   teamUrl,
-				OrderID:     o.OrderID,
-				// The reserved seats, so the wallet receipt reads
-				// "Senior-deltagelse ×N" rather than a bare total.
-				Lines: paymentLinesFromOrder(o),
-			})
+			// Gated like every other Payment.Request call site, so the rule has no
+			// exceptions to remember. These are participation seats only, so it
+			// cannot refuse in practice — but a merchandise line reaching this
+			// path must not become a payment request.
+			if ok, _ := app.chargeable(o); ok {
+				amount := payments.Amount{Value: int64(o.DueAmount), Currency: types.CurrencyDKK}
+				teamUrl := app.config.baseurl + "/klan/" + string(teamID)
+				paymentLink, _ = app.commands.Payment.Request(payments.Charge{
+					Amount:      amount,
+					Description: "Nathejk tilmelding",
+					Phone:       *signup.Phone,
+					Email:       *signup.Email,
+					ReturnUrl:   teamUrl,
+					OrderID:     o.OrderID,
+					// The reserved seats, so the wallet receipt reads
+					// "Senior-deltagelse ×N" rather than a bare total.
+					Lines: paymentLinesFromOrder(o),
+				})
+			}
 		}
 	}
 	team, _ := app.models.Klan.GetByID(r.Context(), teamID)
@@ -388,7 +394,7 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 // updateKlanHandler saves the team details and re-prices the open order.
 //
 // @Summary      Update a klan team
-// @Description  Saves the team-level fields only — seniors are managed through the dedicated member endpoints, so this can never create or delete a senior. Re-derives the open order from the senior projection and returns a payment link when there is something due and the team meets the minimum size. When settle=true and the resulting order costs nothing but is not empty, the order is frozen into the paid history and `order` comes back null with `paidOrders` refreshed.
+// @Description  Saves the team-level fields only — seniors are managed through the dedicated member endpoints, so this can never create or delete a senior. Re-derives the open order from the senior projection and returns a payment link when there is something due and the team meets the minimum size. No link is issued while the open order still holds a line for a product closed for sale (only possible when a payment is already in flight against it): `paymentLink` is empty and `paymentError` says so. When settle=true and the resulting order costs nothing but is not empty, the order is frozen into the paid history and `order` comes back null with `paidOrders` refreshed.
 // @Tags         klan
 // @Accept       json
 // @Produce      json
@@ -459,9 +465,14 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 
 	paymentLink := ""
 	paymentError := ""
+	chargeable, chargeRefusal := app.chargeable(openOrder)
 	switch {
 	case due <= 0:
 		// nothing to pay
+	case !chargeable:
+		// The order still holds a line for a product that is closed for sale, so
+		// no link may be issued: it would sell one. See app.chargeable.
+		paymentError = chargeRefusal
 	case len(members) < klanMinMembers:
 		paymentError = fmt.Sprintf("en klan skal have mindst %d seniorer for at kunne betale", klanMinMembers)
 	default:

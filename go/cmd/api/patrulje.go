@@ -427,7 +427,7 @@ func (app *application) assignNumberHandler(w http.ResponseWriter, r *http.Reque
 // updatePatruljeHandler saves team and contact details, then re-derives the order.
 //
 // @Summary      Update a patrulje team
-// @Description  Saves team and contact fields only — members are managed through the dedicated member endpoints, so this can never create or delete a member. Recomputes the open order from the member projection and, when something is due and the team meets the minimum size, issues a payment link. When settle=true and the resulting order costs nothing but is not empty, the order is frozen into the paid history and `order` comes back null with `paidOrders` refreshed.
+// @Description  Saves team and contact fields only — members are managed through the dedicated member endpoints, so this can never create or delete a member. Recomputes the open order from the member projection and, when something is due and the team meets the minimum size, issues a payment link. No link is issued while the open order still holds a line for a product closed for sale (only possible when a payment is already in flight against it): `paymentLink` is empty and `paymentError` says so. When settle=true and the resulting order costs nothing but is not empty, the order is frozen into the paid history and `order` comes back null with `paidOrders` refreshed.
 // @Tags         patrulje
 // @Accept       json
 // @Produce      json
@@ -500,9 +500,14 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 
 	paymentLink := ""
 	paymentError := ""
+	chargeable, chargeRefusal := app.chargeable(openOrder)
 	switch {
 	case due <= 0:
 		// nothing to pay
+	case !chargeable:
+		// The order still holds a line for a product that is closed for sale, so
+		// no link may be issued: it would sell one. See app.chargeable.
+		paymentError = chargeRefusal
 	case len(members) < patruljeMinMembers:
 		// Block payment for a team below the minimum size: no link is issued.
 		paymentError = fmt.Sprintf("en patrulje skal have mindst %d spejdere for at kunne betale", patruljeMinMembers)

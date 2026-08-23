@@ -127,8 +127,7 @@ func (app *application) sellable(o *order.Order, lines []order.DesiredLine) []or
 }
 
 // closedLines reports whether an order carries any line for a product that is
-// closed for sale. Used by chargeable (task 032) to refuse minting a payment
-// request that would sell one.
+// closed for sale.
 func (app *application) closedLines(o *order.Order) bool {
 	if o == nil || len(app.config.shop.closedSKUs) == 0 {
 		return false
@@ -139,4 +138,36 @@ func (app *application) closedLines(o *order.Order) bool {
 		}
 	}
 	return false
+}
+
+// chargeClosedProduct is what the user is told when their order cannot be turned
+// into a payment request because it still contains something no longer for sale.
+//
+// It names a wait rather than a fault, because that is what it is: the order is
+// holding a line for a closed product only because a payment is already in flight
+// against it, and MobilePay drops an unapproved request after ten minutes. Either
+// that payment lands or it expires; either way the next save issues a link.
+const chargeClosedProduct = "afventer en igangværende betaling — prøv igen om 10 minutter"
+
+// chargeable reports whether an order may be turned into a payment request, and
+// if not, the Danish explanation to show the user.
+//
+// This is the invariant the whole closing mechanism rests on: **no new payment
+// request may include a product that is closed for sale.** sellable gets that
+// almost for free — with the line off the order, neither the charged amount
+// (DueAmount) nor the receipt (paymentLinesFromOrder) can contain it — but not
+// quite. An order with money already in flight is exempted from sellable and does
+// still carry its line, and a save on such an order would otherwise mint a fresh
+// link whose amount includes the closed product. That is a new sale of something
+// withdrawn from sale, which is exactly what must not happen, so it is refused
+// here rather than left to follow from a filter elsewhere.
+//
+// Refusing is not an error: the caller returns an empty payment link and this
+// message. The state clears itself, since the exemption that caused it ends when
+// the in-flight payment settles or expires and the next recompute drops the line.
+func (app *application) chargeable(o *order.Order) (bool, string) {
+	if app.closedLines(o) {
+		return false, chargeClosedProduct
+	}
+	return true, ""
 }

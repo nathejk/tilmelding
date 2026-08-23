@@ -112,6 +112,19 @@ func (app *application) showCrewHandler(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// updateCrewHandler saves the crew member and re-prices their open order.
+//
+// @Summary      Update a crew member
+// @Description  Saves the crew member (the t-shirt size is folded into the additionals blob, which has no dedicated column) and re-derives the open order from the saved record. `tshirtSize` is ignored while the year t-shirt is closed for sale: the stored size is persisted and returned instead, so the size of a shirt already ordered cannot change. No payment link is issued while the open order still holds a line for a product closed for sale (only possible when a payment is already in flight against it): `paymentLink` is empty and `paymentError` says so. When settle=true and the resulting order costs nothing but is not empty, the order is frozen into the paid history.
+// @Tags         crew
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string  true  "Crew member user ID"
+// @Param        body  body  object{member=crewMemberView,settle=bool}  true  "Crew member fields. Set settle=true on an explicit user save; omit it for the background recompute the t-shirt picker fires."
+// @Success      200   {object}  object{member=crewMemberView,order=order.Order,paidOrders=[]order.Order,paymentLink=string,paymentError=string}
+// @Failure      400   {object}  object{error=string}
+// @Failure      500   {object}  object{error=string}
+// @Router       /api/crew/{id} [put]
 func (app *application) updateCrewHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := types.UserID(app.ReadNamedParam(r, "id"))
@@ -184,18 +197,25 @@ func (app *application) updateCrewHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	paymentLink := ""
+	paymentError := ""
 	if o.DueAmount > 0 {
-		amount := payments.Amount{Value: int64(o.DueAmount), Currency: types.CurrencyDKK}
-		teamURL := app.config.baseurl + "/crew/" + string(userID)
-		paymentLink, _ = app.commands.Payment.Request(payments.Charge{
-			Amount:      amount,
-			Description: "Nathejk crewtilmelding",
-			Phone:       input.Member.Phone,
-			Email:       input.Member.Email,
-			ReturnUrl:   teamURL,
-			OrderID:     o.OrderID,
-			Lines:       paymentLinesFromOrder(o),
-		})
+		if ok, refusal := app.chargeable(o); !ok {
+			// The order still holds a line for a product that is closed for sale,
+			// so no link may be issued: it would sell one. See app.chargeable.
+			paymentError = refusal
+		} else {
+			amount := payments.Amount{Value: int64(o.DueAmount), Currency: types.CurrencyDKK}
+			teamURL := app.config.baseurl + "/crew/" + string(userID)
+			paymentLink, _ = app.commands.Payment.Request(payments.Charge{
+				Amount:      amount,
+				Description: "Nathejk crewtilmelding",
+				Phone:       input.Member.Phone,
+				Email:       input.Member.Email,
+				ReturnUrl:   teamURL,
+				OrderID:     o.OrderID,
+				Lines:       paymentLinesFromOrder(o),
+			})
+		}
 	}
 
 	updated, err := app.models.Crewmember.GetByID(ctx, userID)
@@ -205,10 +225,14 @@ func (app *application) updateCrewHandler(w http.ResponseWriter, r *http.Request
 	}
 	openOrder, paidOrders := app.ordersForResponse(ctx, o, crewOwnerType, string(userID))
 	err = app.WriteJSON(w, http.StatusOK, jsonapi.Envelope{
-		"member":      crewMemberToView(updated),
-		"order":       openOrder,
-		"paidOrders":  paidOrders,
-		"paymentLink": paymentLink,
+		"member":     crewMemberToView(updated),
+		"order":      openOrder,
+		"paidOrders": paidOrders,
+		// paymentLink is empty and paymentError explains why when the order
+		// cannot be charged — same contract as the patrulje and klan saves, so
+		// the page can tell "nothing to pay" from "cannot pay yet".
+		"paymentLink":  paymentLink,
+		"paymentError": paymentError,
 	}, nil)
 	if err != nil {
 		app.ServerErrorResponse(w, r, err)
