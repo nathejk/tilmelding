@@ -118,6 +118,46 @@ export function orderDateShort(order) {
 }
 
 /**
+ * orderedSize answers "which size of this product does this member actually
+ * have?", by reading the orders rather than the member's own record.
+ *
+ * The distinction matters once a product is closed for sale. The backend keeps a
+ * member's `tshirtSize` on their projection even when the unpaid line was
+ * cancelled off the open order — nothing is deleted, so a re-open or an audit can
+ * recover it — which means the member record answers "what did they once pick",
+ * not "what will they be given". Only the orders answer the second question, and
+ * that is the one a page should show.
+ *
+ * Pass every order that counts: the open one and the paid history.
+ *
+ * Quantities are summed per size rather than short-circuiting on the first match,
+ * because a free size change is recorded as a zero-sum pair — one negative line
+ * for the size handed back, one positive for the size now wanted (PRD 002). Only a
+ * size with a positive net belongs on screen; the credited one has been given up.
+ *
+ * Returns '' when the member has no unit of that product.
+ */
+export function orderedSize(orders, memberId, sku = 'tshirt.adult') {
+  if (!memberId) return ''
+
+  const list = (Array.isArray(orders) ? orders : [orders]).filter(Boolean)
+  const bySize = new Map()
+  for (const order of list) {
+    if (!order || !Array.isArray(order.lines)) continue
+    for (const line of order.lines) {
+      if (!line || line.productSku !== sku || line.memberId !== memberId) continue
+      const size = (line.attributes && line.attributes.size) || ''
+      bySize.set(size, (bySize.get(size) || 0) + (line.quantity || 0))
+    }
+  }
+
+  for (const [size, quantity] of bySize) {
+    if (quantity > 0) return size
+  }
+  return ''
+}
+
+/**
  * totalPaidDkk sums paidAmount across the open order (if any) and every
  * paid order in the history list. Used by the "Indbetalt" total which
  * spans the full payment history, not just the currently-open cart.

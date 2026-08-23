@@ -13,7 +13,8 @@ import {
   orderDueDkk,
   orderShortLines,
   orderDateShort,
-  totalPaidDkk
+  totalPaidDkk,
+  orderedSize
 } from '@/helpers/order'
 
 const props = defineProps({
@@ -24,7 +25,10 @@ const router = useRouter()
 
 const config = ref({
   memberPrice: 0,
-  tshirtPrice: 175
+  tshirtPrice: 175,
+  // Closed until the server says otherwise, so a slow first load cannot flash a
+  // t-shirt picker that would have no effect.
+  closedProducts: ['tshirt.adult']
 })
 // First-level sections (crew functions/units), fetched from the server and
 // used for the "function" selector below. Replaces the previously
@@ -103,10 +107,20 @@ const teamSubmitted = ref(false)
 const memberSubmitted = ref(false)
 
 const mobilepay = ref('')
+// Why the server refused to issue a payment link, if it did. Empty means "no
+// refusal" — which is not the same as "nothing to pay", hence a field of its own.
+const paymentError = ref('')
 
 const save = async () => {
+  paymentError.value = ''
   try {
     const data = await putState({ settle: true })
+    if (data.paymentError) {
+      // Server blocked payment — e.g. the order still holds a line for a product
+      // closed for sale because a payment is already in flight against it.
+      paymentError.value = data.paymentError
+      return
+    }
     if (data.paymentLink && data.paymentLink != '') {
       location.href = data.paymentLink
     } else {
@@ -169,6 +183,26 @@ const tshirtSizeLabel = (slug) => {
   }
   return ''
 }
+
+// Whether the year t-shirt can still be bought. The server owns this: closing is
+// enforced in the BFF, and hiding the picker is only an affordance so the user is
+// not offered a control whose input would be discarded.
+const tshirtOpen = computed(() => !(config.value.closedProducts || []).includes('tshirt.adult'))
+
+// The size this crew member actually has on an order. While the sale is closed
+// this is what the page shows, rather than staffer.tshirtSize: an unpaid selection
+// has been cancelled off the open order, and the stored size would keep promising
+// a shirt nobody will produce.
+const orderedTshirtSize = computed(() => {
+  if (!props.userId) return ''
+  return orderedSize([order.value, ...paidOrders.value], props.userId)
+})
+
+// What to render as "your size": the order while the sale is closed, the live
+// selection while it is open.
+const displayTshirtSize = computed(() =>
+  tshirtOpen.value ? staffer.value.tshirtSize : orderedTshirtSize.value
+)
 </script>
 
 <template>
@@ -327,7 +361,12 @@ const tshirtSizeLabel = (slug) => {
       </Fieldset>
     </div>
 
-    <Shop v-model="staffer.tshirtSize" :options="config.tshirtSizes" />
+    <Shop
+      v-model="staffer.tshirtSize"
+      :options="config.tshirtSizes"
+      :open="tshirtOpen"
+      :orderedSize="orderedTshirtSize"
+    />
 
     <Fieldset class="mt-3" legend="Betalinger" v-if="showPaymentsSection">
       <div class="card">
@@ -381,6 +420,7 @@ const tshirtSizeLabel = (slug) => {
       </div>
     </Fieldset>
 
+    <Message v-if="paymentError" severity="error" :closable="false">{{ paymentError }}</Message>
     <div class="card flex justify-end">
       <Button
         class="my-5"
@@ -461,7 +501,7 @@ const tshirtSizeLabel = (slug) => {
       </FloatLabel>
     </div>
     <div class="flex flex-col">
-      <FloatLabel class="mt-7">
+      <FloatLabel class="mt-7" v-if="tshirtOpen">
         <Dropdown
           v-model="member.tshirtSize"
           inputId="member-tshirt"
@@ -472,6 +512,15 @@ const tshirtSizeLabel = (slug) => {
         />
         <label for="member-tshirt">Vælg t-shirt</label>
       </FloatLabel>
+      <!--
+        Closed for sale: the size is shown as text, never as a control. The
+        server discards a submitted size anyway, so offering one would only
+        mislead.
+      -->
+      <div class="mt-7" v-else>
+        <span class="text-sm text-surface-500">T-shirt</span>
+        <div>{{ tshirtSizeLabel(member.tshirtSize) || 'Ingen' }}</div>
+      </div>
     </div>
 
     <template #footer>

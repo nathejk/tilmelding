@@ -13,7 +13,8 @@ import {
   orderDueDkk,
   orderShortLines,
   orderDateShort,
-  totalPaidDkk
+  totalPaidDkk,
+  orderedSize
 } from '@/helpers/order'
 
 const props = defineProps({
@@ -276,6 +277,25 @@ const tshirtSizeLabel = (slug) => {
   }
   return ''
 }
+
+// Whether the year t-shirt can still be bought. The server owns this: closing is
+// enforced in the BFF, and hiding the picker is only an affordance so the user is
+// not offered a control whose input would be discarded.
+const tshirtOpen = computed(() => !(config.value.closedProducts || []).includes('tshirt.adult'))
+
+// memberTshirtLabel is what a member's t-shirt cell or dialog should read.
+//
+// While the shirt is for sale, the member record is the answer. Once it is closed
+// the orders are: an unpaid selection has been cancelled off the open order, and
+// the member record still carries the size the backend deliberately did not
+// delete. Showing it then would promise a shirt nobody will produce.
+const memberTshirtLabel = (member) => {
+  if (!member) return ''
+  if (tshirtOpen.value) return tshirtSizeLabel(member.tshirtSize)
+  return tshirtSizeLabel(
+    orderedSize([order.value, ...paidOrders.value], member.memberId || member.id)
+  )
+}
 // birthdayLabel renders a stored ISO-8601 birthday as "d/m yyyy" (local date),
 // e.g. 2010-03-05T00:00:00Z → "5/3 2010".
 const birthdayLabel = (value) => {
@@ -433,7 +453,12 @@ const birthdayLabel = (value) => {
       </Fieldset>
     </div>
 
-    <Shop />
+    <!--
+      Informational here: per-member sizes are set in the member dialog, not
+      through this component, so it gets no v-model. It still needs :open so the
+      copy tells the truth about whether the year shirt can still be bought.
+    -->
+    <Shop :open="tshirtOpen" />
 
     <Fieldset class="mt-3" legend="Spejdere">
       <div class="card">
@@ -467,7 +492,7 @@ const birthdayLabel = (value) => {
           </Column>
           <Column field="tshirt" header="T-Shirt">
             <template #body="row" style="font-size: 0.8rem">
-              {{ tshirtSizeLabel(row.data.tshirtSize) }}
+              {{ memberTshirtLabel(row.data) }}
             </template>
           </Column>
           <Column style="min-width: 3rem">
@@ -650,7 +675,7 @@ const birthdayLabel = (value) => {
       </FloatLabel>
     </div>
     <div class="flex flex-col">
-      <FloatLabel class="mt-7">
+      <FloatLabel class="mt-7" v-if="tshirtOpen">
         <Dropdown
           v-model="member.tshirtSize"
           inputId="member-tshirt"
@@ -661,6 +686,16 @@ const birthdayLabel = (value) => {
         />
         <label for="member-tshirt">Vælg t-shirt</label>
       </FloatLabel>
+      <!--
+        Closed for sale: the size is shown as text, never as a control. The server
+        discards a submitted size anyway, so offering one would only mislead. The
+        value comes from the order, so a cancelled unpaid selection reads as
+        "Ingen" rather than promising a shirt.
+      -->
+      <div class="mt-7" v-else>
+        <span class="text-sm text-surface-500">T-shirt</span>
+        <div>{{ memberTshirtLabel(member) || 'Ingen' }}</div>
+      </div>
     </div>
 
     <Message v-if="memberError" severity="error" :closable="false">{{ memberError }}</Message>
