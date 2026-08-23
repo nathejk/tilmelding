@@ -4,6 +4,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/nathejk/shared-go/tables/order"
 )
 
 // Closing a product for sale.
@@ -79,4 +81,62 @@ func (app *application) closedProducts() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// sellable drops desired lines for products that are closed for sale.
+//
+// This is what cancels an unpaid t-shirt: the size stays on the member's
+// projection (nothing is deleted), but the line stops being derived, so it leaves
+// the open order and the amount due falls by its price. A unit that has already
+// been paid for is unaffected — it lives on an immutable paid order, and
+// ApplyPaidOffset produces nothing for a paid unit with no desired counterpart
+// ("a reduction is not a size change, and this mechanism does not refund"), so
+// filtering here cannot emit a credit line for a shirt somebody owns.
+//
+// It also means no payment request can include a closed product, because a charge
+// is built from the order's own lines and amount. `chargeable` covers the one case
+// this does not: an order exempted below, which still carries its line.
+//
+// The exemption: an order with money in flight is left exactly as its payer saw
+// it. PaidAmount counts payments in ('reserved','received') for that order — money
+// the payer has actually committed — so a shrinking order can never undercut a
+// payment on its way to settling. Merely 'requested' payments are not counted, and
+// must not be: every save with something due issues one, so treating a request as
+// in flight would exempt nearly every order and cancel nothing. Nor could we tell
+// a live request from an abandoned one — nothing writes 'timedout' or 'rejected',
+// so an abandoned link stays 'requested' forever. MobilePay expires links after
+// ten minutes, which is what bounds the exposure instead. See PRD 003 §8.2b.
+//
+// Returns the input unchanged when nothing is closed, so the open-shop path
+// allocates nothing.
+func (app *application) sellable(o *order.Order, lines []order.DesiredLine) []order.DesiredLine {
+	if len(app.config.shop.closedSKUs) == 0 || len(lines) == 0 {
+		return lines
+	}
+	if o != nil && o.PaidAmount > 0 {
+		return lines
+	}
+	out := make([]order.DesiredLine, 0, len(lines))
+	for _, l := range lines {
+		if app.skuClosed(l.ProductSKU) {
+			continue
+		}
+		out = append(out, l)
+	}
+	return out
+}
+
+// closedLines reports whether an order carries any line for a product that is
+// closed for sale. Used by chargeable (task 032) to refuse minting a payment
+// request that would sell one.
+func (app *application) closedLines(o *order.Order) bool {
+	if o == nil || len(app.config.shop.closedSKUs) == 0 {
+		return false
+	}
+	for _, l := range o.Lines {
+		if app.skuClosed(l.ProductSKU) {
+			return true
+		}
+	}
+	return false
 }

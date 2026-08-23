@@ -195,7 +195,7 @@ func newKlanMemberResponse(s klan.Senior) klanMemberResponse {
 // showKlanHandler returns everything the klan page needs in one call.
 //
 // @Summary      Show a klan team
-// @Description  Returns the server-side config (member bounds, prices, corps, t-shirt options and the SKUs closed for sale), the team, its senior roster, the open order and any paid orders. Re-derives the open order from the senior projection on every call, so the page is self-healing against drift. Order line quantities and lineTotals may be negative: a free t-shirt size change is recorded as a zero-sum pair of lines (one negative for the size handed back, one positive for the size now wanted), so clients must sum them rather than assume positive values. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered.
+// @Description  Returns the server-side config (member bounds, prices, corps, t-shirt options and the SKUs closed for sale), the team, its senior roster, the open order and any paid orders. Re-derives the open order from the senior projection on every call, so the page is self-healing against drift. Order line quantities and lineTotals may be negative: a free t-shirt size change is recorded as a zero-sum pair of lines (one negative for the size handed back, one positive for the size now wanted), so clients must sum them rather than assume positive values. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered. Unpaid units of a closed product are dropped from the open order, so the amount due falls accordingly; an order with a payment already in flight is left exactly as its payer saw it.
 // @Tags         klan
 // @Produce      json
 // @Param        id   path      string  true  "Team ID"
@@ -242,7 +242,7 @@ func (app *application) showKlanHandler(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	if openOrder != nil && app.syncNeeded(r.Context(), openOrder, desired) {
-		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder.OrderID, desired); err == nil {
+		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder, desired); err == nil {
 			openOrder = o
 		} else {
 			log.Printf("setDerivedLinesAfterCreate %s: %v", openOrder.OrderID, err)
@@ -345,6 +345,11 @@ func (app *application) requestSeatHandler(w http.ResponseWriter, r *http.Reques
 			app.ServerErrorResponse(w, r, err)
 			return
 		}
+		// SetDerivedLines directly, and deliberately not through
+		// setDerivedLinesAfterCreate: these are participation seats only, so
+		// there is nothing here the sellable filter could ever drop, and the
+		// seat reservation must fail loudly rather than retry if the order is
+		// not there. Any merchandise added to this path would need the filter.
 		o, err = app.commands.Order.SetDerivedLines(r.Context(), o.OrderID, desired)
 		if err != nil {
 			app.BadRequestResponse(w, r, err)
@@ -434,7 +439,7 @@ func (app *application) updateKlanHandler(w http.ResponseWriter, r *http.Request
 		}
 	}
 	if openOrder != nil && app.syncNeeded(r.Context(), openOrder, desired) {
-		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder.OrderID, desired); err == nil {
+		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder, desired); err == nil {
 			openOrder = o
 		} else {
 			log.Printf("setDerivedLinesAfterCreate %s: %v", openOrder.OrderID, err)
@@ -511,7 +516,7 @@ func (app *application) rederiveKlanOrder(ctx context.Context, teamID types.Team
 	if err != nil {
 		return nil, err
 	}
-	return app.setDerivedLinesAfterCreate(ctx, o.OrderID, desired)
+	return app.setDerivedLinesAfterCreate(ctx, o, desired)
 }
 
 // addKlanMemberHandler adds a single member (senior) to a klan team.

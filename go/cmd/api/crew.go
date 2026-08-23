@@ -51,7 +51,7 @@ var (
 // showCrewHandler returns everything the crew page needs in one call.
 //
 // @Summary      Show a crew member
-// @Description  Returns the server-side config (prices, t-shirt options and the SKUs closed for sale), the first-level sections, the crew member, the open order and any paid orders. Re-derives the open order from the crew member record on every call, so the page is self-healing against drift. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered.
+// @Description  Returns the server-side config (prices, t-shirt options and the SKUs closed for sale), the first-level sections, the crew member, the open order and any paid orders. Re-derives the open order from the crew member record on every call, so the page is self-healing against drift. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered. Unpaid units of a closed product are dropped from the open order, so the amount due falls accordingly; an order with a payment already in flight is left exactly as its payer saw it.
 // @Tags         crew
 // @Produce      json
 // @Param        id   path      string  true  "Crew member user ID"
@@ -93,7 +93,7 @@ func (app *application) showCrewHandler(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	if openOrder != nil && app.syncNeeded(ctx, openOrder, desired) {
-		if o, err := app.setDerivedLinesAfterCreate(ctx, openOrder.OrderID, desired); err == nil {
+		if o, err := app.setDerivedLinesAfterCreate(ctx, openOrder, desired); err == nil {
 			openOrder = o
 		} else {
 			log.Printf("setDerivedLinesAfterCreate %s: %v", openOrder.OrderID, err)
@@ -172,7 +172,7 @@ func (app *application) updateCrewHandler(w http.ResponseWriter, r *http.Request
 		app.ServerErrorResponse(w, r, err)
 		return
 	}
-	o, err = app.setDerivedLinesAfterCreate(ctx, o.OrderID, desired)
+	o, err = app.setDerivedLinesAfterCreate(ctx, o, desired)
 	if err != nil {
 		log.Printf("crew setDerivedLines %q", err)
 		app.ServerErrorResponse(w, r, err)

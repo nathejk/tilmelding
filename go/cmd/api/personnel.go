@@ -18,7 +18,7 @@ import (
 // one call.
 //
 // @Summary      Show a personnel record (gøgler)
-// @Description  Returns the server-side config (prices, t-shirt options and the SKUs closed for sale), the person, the open order and any paid orders. Re-derives the open order from the person record on every call, so the page is self-healing against drift, and creates the order on first visit for users who signed up before the order system existed. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered.
+// @Description  Returns the server-side config (prices, t-shirt options and the SKUs closed for sale), the person, the open order and any paid orders. Re-derives the open order from the person record on every call, so the page is self-healing against drift, and creates the order on first visit for users who signed up before the order system existed. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered. Unpaid units of a closed product are dropped from the open order, so the amount due falls accordingly; an order with a payment already in flight is left exactly as its payer saw it.
 // @Tags         personnel
 // @Produce      json
 // @Param        id   path      string  true  "Person user ID"
@@ -59,7 +59,7 @@ func (app *application) showPersonnelHandler(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	if openOrder != nil && app.syncNeeded(r.Context(), openOrder, desired) {
-		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder.OrderID, desired); err == nil {
+		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder, desired); err == nil {
 			openOrder = o
 		} else {
 			log.Printf("setDerivedLinesAfterCreate %s: %v", openOrder.OrderID, err)
@@ -121,7 +121,7 @@ func (app *application) updatePersonnelHandler(w http.ResponseWriter, r *http.Re
 	// without the retry the user's save fails with a 400 they did nothing to
 	// deserve. The klan, patrulje and crew handlers already go through the
 	// wrapper.
-	o, err = app.setDerivedLinesAfterCreate(r.Context(), o.OrderID, desired)
+	o, err = app.setDerivedLinesAfterCreate(r.Context(), o, desired)
 	if err != nil {
 		log.Printf("setDerivedLinesAfterCreate %s: %v", o.OrderID, err)
 		app.BadRequestResponse(w, r, err)

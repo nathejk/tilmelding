@@ -307,7 +307,7 @@ func (app *application) buildTeamConfig(ctx context.Context, participationSKU st
 // showPatruljeHandler returns everything the patrulje page needs in one call.
 //
 // @Summary      Show a patrulje team
-// @Description  Returns the server-side config (member bounds, prices, corps, t-shirt options and the SKUs closed for sale), the team, its contact, the member roster, the open order and any paid orders. Re-derives the open order from the member projection on every call, so the page is self-healing against drift. Order line quantities and lineTotals may be negative: a free t-shirt size change is recorded as a zero-sum pair of lines (one negative for the size handed back, one positive for the size now wanted), so clients must sum them rather than assume positive values. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered.
+// @Description  Returns the server-side config (member bounds, prices, corps, t-shirt options and the SKUs closed for sale), the team, its contact, the member roster, the open order and any paid orders. Re-derives the open order from the member projection on every call, so the page is self-healing against drift. Order line quantities and lineTotals may be negative: a free t-shirt size change is recorded as a zero-sum pair of lines (one negative for the size handed back, one positive for the size now wanted), so clients must sum them rather than assume positive values. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered. Unpaid units of a closed product are dropped from the open order, so the amount due falls accordingly; an order with a payment already in flight is left exactly as its payer saw it.
 // @Tags         patrulje
 // @Produce      json
 // @Param        id   path      string  true  "Team ID"
@@ -352,7 +352,7 @@ func (app *application) showPatruljeHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	if openOrder != nil && app.syncNeeded(r.Context(), openOrder, desired) {
-		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder.OrderID, desired); err == nil {
+		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder, desired); err == nil {
 			openOrder = o
 		} else {
 			log.Printf("setDerivedLinesAfterCreate %s: %v", openOrder.OrderID, err)
@@ -480,7 +480,7 @@ func (app *application) updatePatruljeHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 	if openOrder != nil && app.syncNeeded(r.Context(), openOrder, desired) {
-		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder.OrderID, desired); err == nil {
+		if o, err := app.setDerivedLinesAfterCreate(r.Context(), openOrder, desired); err == nil {
 			openOrder = o
 		} else {
 			log.Printf("setDerivedLinesAfterCreate %s: %v", openOrder.OrderID, err)
@@ -576,7 +576,7 @@ func (app *application) rederivePatruljeOrder(ctx context.Context, teamID types.
 	if err != nil {
 		return nil, err
 	}
-	return app.setDerivedLinesAfterCreate(ctx, o.OrderID, desired)
+	return app.setDerivedLinesAfterCreate(ctx, o, desired)
 }
 
 // addPatruljeMemberHandler adds a single member to a patrulje team.

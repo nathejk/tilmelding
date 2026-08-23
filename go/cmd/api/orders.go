@@ -51,6 +51,13 @@ func (app *application) loadOrders(ctx context.Context, ownerType types.TeamType
 // SetDerivedLines; false keeps the GET a pure read with no event
 // publication.
 //
+// The desired set is filtered through app.sellable first, so a product closed
+// for sale is compared as absent. Both this and setDerivedLinesAfterCreate apply
+// that filter, which is the whole reason it lives here rather than at the eleven
+// places a desired set is built: if the check and the write disagreed about what
+// is desired, SyncNeeded would return true forever and every page load would
+// republish the order's lines.
+//
 // The comparison deliberately lives in shared-go rather than here. It has
 // to apply the same paid-unit offset SetDerivedLines applies, and that
 // offset now depends on per-variant paid counts and on catalogue size
@@ -64,7 +71,7 @@ func (app *application) loadOrders(ctx context.Context, ownerType types.TeamType
 // would fail on the same read anyway. Rendering the order as it stands is
 // better than writing lines computed from a half-known offset.
 func (app *application) syncNeeded(ctx context.Context, o *order.Order, desired []order.DesiredLine) bool {
-	need, err := app.commands.Order.SyncNeeded(ctx, o, desired)
+	need, err := app.commands.Order.SyncNeeded(ctx, o, app.sellable(o, desired))
 	if err != nil {
 		log.Printf("SyncNeeded %s: %v", o.OrderID, err)
 		return false
@@ -171,16 +178,26 @@ func (app *application) ordersForResponse(ctx context.Context, o *order.Order, o
 // This mirrors the time.Sleep(s.settle) pattern in the order saga: both
 // are read-after-write reconciliations against an eventually-consistent
 // projection.
-func (app *application) setDerivedLinesAfterCreate(ctx context.Context, orderID string, desired []order.DesiredLine) (*order.Order, error) {
+//
+// It takes the order rather than an order id because the sellable filter needs
+// the order's PaidAmount to decide whether the owner has money in flight, and
+// because handing it the same value syncNeeded was handed is what keeps the two
+// from disagreeing.
+func (app *application) setDerivedLinesAfterCreate(ctx context.Context, o *order.Order, desired []order.DesiredLine) (*order.Order, error) {
 	const (
 		attempts = 10
 		backoff  = 50 * time.Millisecond
 	)
+	if o == nil {
+		return nil, tables.ErrRecordNotFound
+	}
+	orderID := o.OrderID
+	desired = app.sellable(o, desired)
 	var lastErr error
 	for i := 0; i < attempts; i++ {
-		o, err := app.commands.Order.SetDerivedLines(ctx, orderID, desired)
+		updated, err := app.commands.Order.SetDerivedLines(ctx, orderID, desired)
 		if err == nil {
-			return o, nil
+			return updated, nil
 		}
 		if !errors.Is(err, tables.ErrRecordNotFound) {
 			return nil, err
