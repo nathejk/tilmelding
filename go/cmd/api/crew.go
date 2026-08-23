@@ -144,6 +144,26 @@ func (app *application) updateCrewHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// The stored size wins while the shirt is closed for sale, so neither a stale
+	// page nor a hand-made request can re-size a shirt that is already being
+	// printed. Read from the crewmember row, never from the request.
+	//
+	// This has to happen before the fold below, and it is what makes the fold's
+	// delete branch safe: a save carrying an empty tshirtSize — a stale client, or
+	// a form whose picker was removed — would otherwise erase the record of a
+	// shirt somebody has already paid for.
+	if app.tshirtLocked() {
+		stored := ""
+		if current, err := app.models.Crewmember.GetByID(ctx, userID); err == nil {
+			stored = crewMemberToView(current).TshirtSize
+		} else {
+			// Fail closed: an unreadable row must not become licence to write
+			// the requested size.
+			log.Printf("crew stored tshirt size %q", err)
+		}
+		input.Member.TshirtSize = app.lockedSize(tshirtSKU, stored, input.Member.TshirtSize)
+	}
+
 	// Fold the t-shirt size into additionals so it survives on the
 	// crewmember row (which has no dedicated t-shirt column).
 	additionals := input.Member.Additionals

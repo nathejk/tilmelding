@@ -111,6 +111,16 @@ func (app *application) updatePersonnelHandler(w http.ResponseWriter, r *http.Re
 		app.BadRequestResponse(w, r, err)
 		return
 	}
+
+	// The stored size wins while the shirt is closed for sale, so neither a stale
+	// page nor a hand-made request can re-size a shirt that is already being
+	// printed. person is the record as stored, read just above, so it is the
+	// authority here — not the request. Applied before the update is published and
+	// before the derived lines are built, so both see the locked value.
+	if app.tshirtLocked() {
+		input.Person.TshirtSize = app.lockedSize(tshirtSKU, person.TshirtSize, input.Person.TshirtSize)
+	}
+
 	err = app.commands.Personnel.Update(ctx, userID, person.Type, input.Person)
 	if err != nil {
 		log.Printf("UpdatePerson  %q", err)
