@@ -2,6 +2,10 @@
 /docker-compose.override.yml
 go.work.sum
 /attic/
+# Ad-hoc reports and data exports. Often contain personal data (names, phone
+# numbers, e-mails) from MobilePay or the database, which must never enter the
+# git history.
+/outputs/
 node_modules/
 vue/public/videos
 web/ui/public/config.js
