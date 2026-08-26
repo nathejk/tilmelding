@@ -244,7 +244,21 @@ const saveMember = async () => {
     console.log('saveMember failed', error)
   }
 }
-const initialSignup = computed(() => !order.value)
+// initialSignup gates the whole "reserve seats" step: the member-count radios,
+// the Tilmeld button, and — inverted — the roster, shop and payment sections.
+//
+// A paid order counts as being past signup, not just an open one. A klan pays
+// for its seats at reservation time, before any senior exists, so one that has
+// paid and not yet filled in its roster has a paid order and no open one
+// (nothing is due and there are no members to derive lines from). Gating on
+// `!order` alone sent those klans back to the signup form, where they could
+// neither reach the roster nor get past it — the seats were already bought, so
+// requesting again was the one thing that could not help.
+//
+// Teams on the waiting list are deliberately unaffected: HOLD means no seats
+// were reserved and no money changed hands, so there is no paid order and they
+// keep seeing the signup form.
+const initialSignup = computed(() => !order.value && paidOrders.value.length === 0)
 const activeMembers = computed(() => members.value.filter((i) => !i.deleted))
 const deleteMember = async () => {
   try {
