@@ -67,6 +67,17 @@ onBeforeUnmount(() => {
   if (timeInterval) clearInterval(timeInterval)
 })
 
+// allClosed: every signup this year is closed, so the heading must not announce an
+// open tilmelding above three dead buttons. WAITINGLIST does not count as closed —
+// that button still works. An empty list means the config never loaded; claiming
+// "lukket" on a failed fetch would be worse than leaving the heading as it was, so it
+// falls back to the open wording.
+const allClosed = computed(
+  () =>
+    (config.value.signups || []).length > 0 &&
+    config.value.signups.every((signup) => signup.status === 'CLOSED')
+)
+
 function buttonSeverity(status) {
   switch (status) {
     case 'OPEN':
@@ -134,7 +145,7 @@ function link(url) {
     <div v-else class="bg-slate-900">
       <div class="container mx-auto py-16 px-4">
         <h1 class="mb-10 font-nathejk font-bold text-4xl md:text-5xl text-yellow-500 text-center">
-          TILMELDING ER ÅBEN
+          {{ allClosed ? 'TILMELDINGEN ER LUKKET' : 'TILMELDING ER ÅBEN' }}
         </h1>
         <div class="flex flex-wrap justify-around gap-6">
           <div v-for="(signup, index) in config.signups" :key="index" class="relative">
