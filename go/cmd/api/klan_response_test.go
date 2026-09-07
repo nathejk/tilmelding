@@ -64,7 +64,7 @@ func TestShowKlanResponseWireShape(t *testing.T) {
 		`"config":{"minMemberCount":1,"maxMemberCount":4,"memberPrice":450,"tshirtPrice":175,` +
 		`"korps":[{"slug":"dds","label":"DDS"}],` +
 		`"tshirtSizes":[{"slug":"","label":"Ingen"},{"slug":"l","label":"Large"}],` +
-		`"closedProducts":["tshirt.adult"]},` +
+		`"closedProducts":["tshirt.adult"],"oversubscribed":false},` +
 		`"team":{"id":"t-1","status":"PAY","name":"Banditterne","group":"1. Aarhus","korps":"dds","memberCount":2},` +
 		`"members":[{"id":"m-1","memberId":"m-1","teamId":"t-1","name":"Bo","address":"Vej 2",` +
 		`"postalCode":"8000","city":"Aarhus","email":"bo@b.dk","phone":"11111111",` +
@@ -93,7 +93,7 @@ func TestShowKlanResponseNilAndEmptySemantics(t *testing.T) {
 	}
 
 	const want = `{` +
-		`"config":{"minMemberCount":0,"maxMemberCount":0,"memberPrice":0,"tshirtPrice":0,"korps":null,"tshirtSizes":null,"closedProducts":[]},` +
+		`"config":{"minMemberCount":0,"maxMemberCount":0,"memberPrice":0,"tshirtPrice":0,"korps":null,"tshirtSizes":null,"closedProducts":[],"oversubscribed":false},` +
 		`"team":null,"members":[],"order":null,"paidOrders":[]}`
 
 	assertJSON(t, resp, want)

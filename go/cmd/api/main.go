@@ -74,6 +74,15 @@ type config struct {
 	// product catalogue — see closedSignupTypesFromEnv.
 	signup struct {
 		closedTypes map[string]bool
+		// oversubscribedTypes are the team types that are full for the year. A
+		// superset of closedTypes in effect (see signupClosed) but a separate set,
+		// because being full is said differently and is also shown on an existing
+		// team's page.
+		oversubscribedTypes map[string]bool
+		// oversubscribedSince is when that happened. Teams whose signup predates it
+		// are the ones that made it in and are left alone; see teamOversubscribed.
+		// The zero time locks no team page.
+		oversubscribedSince time.Time
 	}
 	db struct {
 		dsn          string
@@ -153,6 +162,12 @@ func main() {
 	// Closed for signup, defaulting to gøgler. Same fail-safe reasoning:
 	// CLOSED_SIGNUP_TYPES="" re-opens.
 	cfg.signup.closedTypes = closedSignupTypesFromEnv()
+	// Full for the year, defaulting to patrulje (185 teams in 2026).
+	// OVERSUBSCRIBED_SIGNUP_TYPES="" re-opens.
+	cfg.signup.oversubscribedTypes = oversubscribedSignupTypesFromEnv()
+	// Which teams that applies to: those that signed up at or after the close. The
+	// teams already in keep their page in full.
+	cfg.signup.oversubscribedSince = oversubscribedSinceFromEnv()
 
 	flag.Parse()
 	cfg.year = types.YearSlug(year)

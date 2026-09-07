@@ -50,6 +50,14 @@ type teamConfigResponse struct {
 	// re-size one. Never null: an empty list means everything is for sale, so
 	// the client can test membership without a nil check.
 	ClosedProducts []string `json:"closedProducts"`
+	// Oversubscribed says this team arrived after the event filled up for its team
+	// type (OVERSUBSCRIBED_SIGNUP_TYPES / OVERSUBSCRIBED_SINCE). The team page
+	// renders itself read-only with a banner rather than pretending a place can
+	// still be secured. Teams that signed up before the close are never flagged,
+	// so they keep their roster, their edits and their payment button. Always
+	// present so the client can read it without a nil check; false unless a
+	// handler sets it.
+	Oversubscribed bool `json:"oversubscribed"`
 }
 
 // orderLineAttributesResponse is the typed replacement for the line's
@@ -112,6 +120,7 @@ func newTeamConfigResponse(c TeamConfig) teamConfigResponse {
 		Korps:          newSlugLabelResponses(c.Korps),
 		TShirtSizes:    newSlugLabelResponses(c.TShirtSizes),
 		ClosedProducts: closed,
+		Oversubscribed: c.Oversubscribed,
 	}
 }
 

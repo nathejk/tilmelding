@@ -75,7 +75,7 @@ func TestShowPatruljeResponseWireShape(t *testing.T) {
 		`"config":{"minMemberCount":3,"maxMemberCount":7,"memberPrice":450,"tshirtPrice":175,` +
 		`"korps":[{"slug":"dds","label":"DDS"}],` +
 		`"tshirtSizes":[{"slug":"","label":"Ingen"},{"slug":"l","label":"Large"}],` +
-		`"closedProducts":["tshirt.adult"]},` +
+		`"closedProducts":["tshirt.adult"],"oversubscribed":false},` +
 		`"team":{"id":"t-1","number":"42","status":"started","name":"Ulvene","group":"1. Aarhus","korps":"dds","liga":"a","memberCount":4},` +
 		`"contact":{"teamId":"t-1","name":"Anna","address":"","postal":"","email":"a@b.dk","phone":"40733886","role":"leder"},` +
 		`"members":[{"id":"m-1","memberId":"m-1","teamId":"t-1","activeTeamId":"t-1","status":"paid","name":"Bo",` +
@@ -105,7 +105,7 @@ func TestShowPatruljeResponseNilAndEmptySemantics(t *testing.T) {
 	}
 
 	const want = `{` +
-		`"config":{"minMemberCount":0,"maxMemberCount":0,"memberPrice":0,"tshirtPrice":0,"korps":null,"tshirtSizes":null,"closedProducts":[]},` +
+		`"config":{"minMemberCount":0,"maxMemberCount":0,"memberPrice":0,"tshirtPrice":0,"korps":null,"tshirtSizes":null,"closedProducts":[],"oversubscribed":false},` +
 		`"team":null,"contact":null,"members":[],"order":null,"paidOrders":[]}`
 
 	assertJSON(t, resp, want)

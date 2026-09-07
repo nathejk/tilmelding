@@ -70,6 +70,31 @@ services:
         https://nathejk-countdown.s3.eu-central-1.amazonaws.com/videos/sanne.mov
         https://nathejk-countdown.s3.eu-central-1.amazonaws.com/videos/signe.mov
       SENIOR_COUNT: 115
+      # ---------------------------------------------------------------------
+      # Signup closed because the event is full ("overtegnet").
+      #
+      # OVERSUBSCRIBED_SIGNUP_TYPES — which team types are full. A full type gets
+      # a disabled front-page button and a 422 from POST /api/signup carrying the
+      # "Nathejk er overtegnet for i år, tak for interessen" message.
+      #
+      # OVERSUBSCRIBED_SINCE — which *teams* that applies to, RFC 3339. A patrulje
+      # page locks itself read-only behind that banner only if its signup was
+      # created at or after this instant; teams that signed up earlier keep the
+      # page in full, roster, edits and payment included.
+      #
+      # Values here are set for testing the close locally:
+      #
+      #   - as written, every patrulje page in dev is locked (the cut-off predates
+      #     all dev signups), so the banner is visible on any /patrulje/<id>
+      #   - production runs the real close instant, 2026-09-07T00:00:00+02:00,
+      #     which is also the code default when the variable is unset
+      #   - OVERSUBSCRIBED_SINCE: "" locks no page, leaving only the front door shut
+      #   - OVERSUBSCRIBED_SIGNUP_TYPES: "" re-opens the signup entirely
+      #
+      # Both need an api restart to take effect.
+      # ---------------------------------------------------------------------
+      OVERSUBSCRIBED_SIGNUP_TYPES: patrulje
+      OVERSUBSCRIBED_SINCE: "2000-01-01T00:00:00+01:00"
       # Enables the /api/migrate/* endpoints, which refuse every request unless
       # this matches the X-Migrate-Token header. A fixed value is fine here
       # because this file only describes the local dev stack; production sets a

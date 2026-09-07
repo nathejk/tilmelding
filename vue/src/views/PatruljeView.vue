@@ -151,6 +151,9 @@ const putState = async ({ settle = false } = {}) => {
 }
 
 const save = async () => {
+  // Guard as well as grey out: `inert` is unsupported in older browsers, and this
+  // is the click that would take money for a place that no longer exists.
+  if (oversubscribed.value) return
   paymentError.value = ''
   try {
     const data = await putState({ settle: true })
@@ -171,6 +174,7 @@ const save = async () => {
 
 const mobilepay = ref('')
 const pay = async () => {
+  if (oversubscribed.value) return
   const headers = {
     'Content-Type': 'application/json'
   }
@@ -210,6 +214,7 @@ const pay = async () => {
 // comes back in the response. This is what stops members being recreated on
 // every save — identity is owned by the server and adopted here.
 const saveMember = async () => {
+  if (oversubscribed.value) return
   memberSubmitted.value = true
   if (!member.value.name || member.value.name.trim() == '') {
     return
@@ -296,6 +301,13 @@ const memberTshirtLabel = (member) => {
     orderedSize([order.value, ...paidOrders.value], member.memberId || member.id)
   )
 }
+// oversubscribed: this team arrived after the patrulje signup filled up. The server
+// owns the decision (OVERSUBSCRIBED_SIGNUP_TYPES / OVERSUBSCRIBED_SINCE in the BFF)
+// and it is per team, not per type — the teams that signed up before the close are
+// never flagged and keep the page in full, roster and payment included. When it is
+// set there is no place to secure, so the page locks read-only behind the banner.
+const oversubscribed = computed(() => !!config.value.oversubscribed)
+
 // birthdayLabel renders a stored ISO-8601 birthday as "d/m yyyy" (local date),
 // e.g. 2010-03-05T00:00:00Z → "5/3 2010".
 const birthdayLabel = (value) => {
@@ -309,7 +321,27 @@ const birthdayLabel = (value) => {
 <template>
   <Navigation class="dark" />
 
-  <div class="container mx-auto">
+  <!-- Overtegnet: the front-page button is disabled, but a team-page link handed
+       out earlier is a way past it, so the page says so itself and locks. Only
+       shown for teams that signed up after the close — the ones already in see
+       nothing of this. -->
+  <div v-if="oversubscribed" class="container mx-auto pt-5">
+    <div
+      class="rounded-md border-4 border-red-700 bg-red-600 px-6 py-8 text-center text-2xl font-bold text-white shadow-lg md:text-3xl"
+      role="alert"
+    >
+      Nathejk er overtegnet for i år, tak for interessen
+    </div>
+  </div>
+
+  <!-- `inert` and not just the greying-out: pointer-events alone still leaves
+       every field reachable by keyboard, so the form would look dead and remain
+       editable. -->
+  <div
+    class="container mx-auto"
+    :inert="oversubscribed"
+    :class="{ 'pointer-events-none select-none opacity-40': oversubscribed }"
+  >
     <div class="grid grid-cols-2 gap-4">
       <Fieldset class="mt-3" legend="Patruljeoplysninger">
         <p class="m-0">

@@ -34,6 +34,12 @@ type TeamConfig struct {
 	// ClosedProducts names the SKUs that may no longer be bought. The frontend
 	// offers no picker for them and renders what was already bought read-only.
 	ClosedProducts []string `json:"closedProducts"`
+	// Oversubscribed says this team type is full for the year *and* this team is
+	// one of the signups that arrived too late. Unlike ClosedProducts it is not
+	// about buying: it tells the team page to lock itself and show the
+	// "overtegnet" banner. Teams that signed up before the close are never
+	// flagged. Only the patrulje page sets it today.
+	Oversubscribed bool `json:"oversubscribed"`
 }
 
 // ----------------------------------------------------------------------------
@@ -307,7 +313,7 @@ func (app *application) buildTeamConfig(ctx context.Context, participationSKU st
 // showPatruljeHandler returns everything the patrulje page needs in one call.
 //
 // @Summary      Show a patrulje team
-// @Description  Returns the server-side config (member bounds, prices, corps, t-shirt options and the SKUs closed for sale), the team, its contact, the member roster, the open order and any paid orders. Re-derives the open order from the member projection on every call, so the page is self-healing against drift. Order line quantities and lineTotals may be negative: a free t-shirt size change is recorded as a zero-sum pair of lines (one negative for the size handed back, one positive for the size now wanted), so clients must sum them rather than assume positive values. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered. Unpaid units of a closed product are dropped from the open order, so the amount due falls accordingly; an order with a payment already in flight is left exactly as its payer saw it.
+// @Description  Returns the server-side config (member bounds, prices, corps, t-shirt options, the SKUs closed for sale and whether this team arrived after the patrulje signup filled up — `config.oversubscribed`, true only for signups created at or after OVERSUBSCRIBED_SINCE, so teams that were already in keep the page in full), the team, its contact, the member roster, the open order and any paid orders. Re-derives the open order from the member projection on every call, so the page is self-healing against drift. Order line quantities and lineTotals may be negative: a free t-shirt size change is recorded as a zero-sum pair of lines (one negative for the size handed back, one positive for the size now wanted), so clients must sum them rather than assume positive values. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered. Unpaid units of a closed product are dropped from the open order, so the amount due falls accordingly; an order with a payment already in flight is left exactly as its payer saw it.
 // @Tags         patrulje
 // @Produce      json
 // @Param        id   path      string  true  "Team ID"
@@ -339,6 +345,13 @@ func (app *application) showPatruljeHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	config := app.buildTeamConfig(r.Context(), "participation.patrulje", patruljeMinMembers, patruljeMaxMembers)
+	// The patrulje signup being full reaches further than the signup flow: a team
+	// page link handed out earlier is a way past the disabled front-page button,
+	// so the page has to say so itself. Per team, not per type: the teams that
+	// signed up before the close keep the page in full — roster, edits and payment
+	// — and only signups from the close onwards are turned away. See
+	// teamOversubscribed.
+	config.Oversubscribed = app.teamOversubscribed(r.Context(), types.TeamTypePatrulje, teamID)
 
 	// Re-derive the open order's lines from the current member projection
 	// on every GET so the page is self-healing against any drift between
