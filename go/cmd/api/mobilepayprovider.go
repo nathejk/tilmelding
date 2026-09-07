@@ -34,7 +34,7 @@ func newMobilepayProvider(client mobilepay.Client, baseURL string) mobilepayProv
 func (p mobilepayProvider) CreatePayment(req payments.PaymentRequest) (payments.PaymentCreated, error) {
 	resp, err := p.client.CreatePayment(req.IdempotencyKey, mobilepay.Payment{
 		Amount:        amountTo(req.Amount),
-		PaymentMethod: mobilepay.PaymentMethod{Type: mobilepay.PaymentMethodType("WALLET")},
+		PaymentMethod: mobilepay.PaymentMethod{Type: mobilepay.PaymentMethodTypeWallet},
 		Customer:      mobilepay.Customer{PhoneNumber: req.PhoneNumber},
 		Reference:     mobilepay.PaymentReference(req.Reference),
 		// Where MobilePay returns the payer after they approve/reject. This is

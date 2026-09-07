@@ -69,10 +69,10 @@ func (app *application) routes() http.Handler {
 		payment, err := app.payment.CreatePayment(key, mobilepay.Payment{
 			Customer:           mobilepay.Customer{PhoneNumber: "4540733886"},
 			Amount:             mobilepay.Amount{Currency: mobilepay.CurrencyDKK, Value: 1000},
-			PaymentMethod:      mobilepay.PaymentMethod{Type: "WALLET"},
+			PaymentMethod:      mobilepay.PaymentMethod{Type: mobilepay.PaymentMethodTypeWallet},
 			PaymentDescription: "Nathejk tilmelding",
 			Reference:          mobilepay.PaymentReference(key),
-			UserFlow:           "WEB_REDIRECT",
+			UserFlow:           mobilepay.UserFlowWeb,
 			ReturnUrl:          "https://nathejk.dk",
 			Receipt: mobilepay.Receipt{
 				OrderLines: []mobilepay.OrderLine{},

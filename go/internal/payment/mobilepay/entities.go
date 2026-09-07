@@ -84,6 +84,12 @@ const (
 )
 
 type PaymentMethodType string
+
+// PaymentMethodTypeWallet is the only method type this integration asks for: the
+// payer approves in the MobilePay app. Named rather than spelled inline so the
+// wire value lives in one place, next to the type it belongs to.
+const PaymentMethodTypeWallet PaymentMethodType = "WALLET"
+
 type PaymentMethodSource string
 type PaymentReference string
 
