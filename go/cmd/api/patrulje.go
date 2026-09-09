@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/nathejk/shared-go/tables"
@@ -182,6 +183,18 @@ func newPatruljeTeamResponse(p *patrulje.Patrulje) *patruljeTeamResponse {
 	}
 }
 
+// patruljeAdmitted reports whether a patrulje is in for certain, whatever its
+// signup timestamp says.
+//
+// A holdnummer is only assigned to a team that has paid and been given a place (see
+// assignNumberHandler, which skips unpaid teams), so having one is proof of
+// admission. It therefore beats the oversubscribed cut-off, which only guesses at
+// admission from when the signup arrived: a team admitted late would otherwise be
+// locked out of its own roster and out of buying the extra seats it is entitled to.
+func patruljeAdmitted(p *patrulje.Patrulje) bool {
+	return p != nil && strings.TrimSpace(p.TeamNumber) != ""
+}
+
 // newPatruljeContactResponse pulls the contact out of the team row. The contact
 // is four columns on `patrulje`, not a table of its own, so it comes from the
 // same read as the team rather than a second query.
@@ -313,7 +326,7 @@ func (app *application) buildTeamConfig(ctx context.Context, participationSKU st
 // showPatruljeHandler returns everything the patrulje page needs in one call.
 //
 // @Summary      Show a patrulje team
-// @Description  Returns the server-side config (member bounds, prices, corps, t-shirt options, the SKUs closed for sale and whether this team arrived after the patrulje signup filled up — `config.oversubscribed`, true only for signups created at or after OVERSUBSCRIBED_SINCE, so teams that were already in keep the page in full), the team, its contact, the member roster, the open order and any paid orders. Re-derives the open order from the member projection on every call, so the page is self-healing against drift. Order line quantities and lineTotals may be negative: a free t-shirt size change is recorded as a zero-sum pair of lines (one negative for the size handed back, one positive for the size now wanted), so clients must sum them rather than assume positive values. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered. Unpaid units of a closed product are dropped from the open order, so the amount due falls accordingly; an order with a payment already in flight is left exactly as its payer saw it.
+// @Description  Returns the server-side config (member bounds, prices, corps, t-shirt options, the SKUs closed for sale and whether this team arrived after the patrulje signup filled up — `config.oversubscribed`, true only for signups created at or after OVERSUBSCRIBED_SINCE and never for a team that has been assigned a holdnummer, so teams that were already in — or were admitted and numbered later — keep the page in full), the team, its contact, the member roster, the open order and any paid orders. Re-derives the open order from the member projection on every call, so the page is self-healing against drift. Order line quantities and lineTotals may be negative: a free t-shirt size change is recorded as a zero-sum pair of lines (one negative for the size handed back, one positive for the size now wanted), so clients must sum them rather than assume positive values. `config.closedProducts` names products that may no longer be bought — clients must offer no way to buy or re-size one, and their price and sizes remain in the config only so what was already bought can be rendered. Unpaid units of a closed product are dropped from the open order, so the amount due falls accordingly; an order with a payment already in flight is left exactly as its payer saw it.
 // @Tags         patrulje
 // @Produce      json
 // @Param        id   path      string  true  "Team ID"
@@ -351,7 +364,13 @@ func (app *application) showPatruljeHandler(w http.ResponseWriter, r *http.Reque
 	// signed up before the close keep the page in full — roster, edits and payment
 	// — and only signups from the close onwards are turned away. See
 	// teamOversubscribed.
-	config.Oversubscribed = app.teamOversubscribed(r.Context(), types.TeamTypePatrulje, teamID)
+	//
+	// A holdnummer overrides the timestamp: it is only handed out to teams that were
+	// admitted, so it is direct proof of admission where the signup time is merely
+	// evidence for it. Teams that paid and were numbered after the cut-off — a place
+	// freed up, a late admission by hand — must keep editing and buying extra seats.
+	config.Oversubscribed = !patruljeAdmitted(team) &&
+		app.teamOversubscribed(r.Context(), types.TeamTypePatrulje, teamID)
 
 	// Re-derive the open order's lines from the current member projection
 	// on every GET so the page is self-healing against any drift between
